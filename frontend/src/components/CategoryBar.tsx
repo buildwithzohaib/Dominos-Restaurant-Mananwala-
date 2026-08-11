@@ -1,0 +1,2 @@
+import type {Category} from "../types";
+export function CategoryBar({categories,selected,onChange}:{categories:Category[];selected:number|"all";onChange:(id:number|"all")=>void}){return <div className="category-bar"><button className={selected==="all"?"category active":"category"} onClick={()=>onChange("all")}>All</button>{categories.map(c=><button key={c.id} className={selected===c.id?"category active":"category"} onClick={()=>onChange(c.id)}>{c.name}</button>)}</div>}
