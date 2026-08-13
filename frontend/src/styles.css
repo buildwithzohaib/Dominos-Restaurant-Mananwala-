@@ -1576,3 +1576,54 @@ h2 {
   color: #059669;
   text-align: right;
 }
+
+/* === PRODUCTS PAGE (Phase 10) === */
+
+.products-page {
+  padding: 24px;
+  background: #f4f6f8;
+  min-height: 100vh;
+}
+
+.disabled-row {
+  opacity: 0.6;
+  background: #f9fafb;
+}
+
+.badge.disabled {
+  background: #dc2626;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.row-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.row-action-button:hover {
+  background: #f3f4f6;
+  color: #172033;
+  border-color: #9ca3af;
+}
+
+.row-action-button:active {
+  background: #e5e7eb;
+}

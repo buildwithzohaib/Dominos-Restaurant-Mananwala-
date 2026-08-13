@@ -6,10 +6,11 @@ import { POS } from "./pages/POS";
 import { Orders } from "./pages/Orders";
 import { Inventory } from "./pages/Inventory";
 import { Dashboard } from "./pages/Dashboard";
+import { Products } from "./pages/Products";
 import type { Category, Product } from "./types";
 
 function AppContent() {
-  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard">("pos");
+  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard" | "products">("pos");
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState("");
@@ -68,6 +69,13 @@ function AppContent() {
             <LayoutDashboard size={21} />
             <span>Overview</span>
           </button>
+          <button
+            className={page === "products" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("products")}
+          >
+            <Package size={21} />
+            <span>Products</span>
+          </button>
         </nav>
         <div className="sidebar-footer">v1.0</div>
       </aside>
@@ -87,6 +95,7 @@ function AppContent() {
         {page === "orders" && <Orders />}
         {page === "inventory" && <Inventory onChange={refreshProducts} />}
         {page === "dashboard" && <Dashboard />}
+        {page === "products" && <Products />}
       </div>
     </div>
   );

@@ -149,3 +149,26 @@ class DashboardOverviewOut(BaseModel):
     low_stock: int  # Count of products in LOW_STOCK status
     hourly_sales: list[HourlySaleItem]  # Hourly breakdown of today's sales
     top_products: list[TopProductItem]  # Top 5 selling products by quantity
+
+# --- Product Management (Phase 10) ---
+
+class ProductCreate(BaseModel):
+    category_id: int
+    name: str = Field(min_length=1, max_length=150)
+    price: Decimal = Field(gt=0)
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    stock: int = Field(default=0, ge=0)
+    min_stock: int = Field(default=5, ge=0)
+    sku: str | None = Field(default=None, max_length=50)
+    unit: str = Field(min_length=1, max_length=30)
+    image: str | None = Field(default=None, max_length=500)
+
+class ProductUpdate(BaseModel):
+    category_id: int | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    price: Decimal | None = Field(default=None, gt=0)
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    min_stock: int | None = Field(default=None, ge=0)
+    sku: str | None = Field(default=None, max_length=50)
+    unit: str | None = Field(default=None, min_length=1, max_length=30)
+    image: str | None = Field(default=None, max_length=500)

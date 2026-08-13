@@ -1,0 +1,151 @@
+import { useState } from "react";
+import { X } from "lucide-react";
+import { api } from "../services/api";
+import type { Category, Product, ProductUpdateInput } from "../types";
+
+export function EditProductModal({
+  product,
+  categories,
+  onClose,
+  onSaved,
+}: {
+  product: Product;
+  categories: Category[];
+  onClose: () => void;
+  onSaved: (product: Product) => void;
+}) {
+  const [formData, setFormData] = useState<ProductUpdateInput>({
+    name: product.name,
+    category_id: product.category_id,
+    sku: product.sku,
+    price: Number(product.price),
+    purchase_price: Number(product.purchase_price),
+    min_stock: product.min_stock,
+    unit: product.unit,
+  });
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit() {
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await api.updateProduct(product.id, formData);
+      onSaved(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update product");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="inventory-modal">
+        <button className="modal-close" onClick={onClose}>
+          <X />
+        </button>
+
+        <p className="eyebrow">PRODUCTS</p>
+        <h2>Edit Product</h2>
+
+        <div className="modal-field-grid">
+          <label className="modal-field">
+            Category ID
+            <input
+              type="number"
+              value={formData.category_id || product.category_id}
+              onChange={(e) =>
+                setFormData({ ...formData, category_id: Number(e.target.value) })
+              }
+            />
+          </label>
+
+          <label className="modal-field">
+            Product Name
+            <input
+              value={formData.name || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+            />
+          </label>
+
+          <label className="modal-field">
+            SKU
+            <input
+              value={formData.sku || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, sku: e.target.value })
+              }
+            />
+          </label>
+
+          <label className="modal-field">
+            Selling Price
+            <input
+              type="number"
+              step="0.01"
+              value={formData.price !== undefined ? formData.price : ""}
+              onChange={(e) =>
+                setFormData({ ...formData, price: Number(e.target.value) })
+              }
+            />
+          </label>
+
+          <label className="modal-field">
+            Purchase Price
+            <input
+              type="number"
+              step="0.01"
+              value={formData.purchase_price !== undefined ? formData.purchase_price : ""}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  purchase_price: e.target.value ? Number(e.target.value) : undefined,
+                })
+              }
+            />
+          </label>
+
+          <label className="modal-field">
+            Minimum Stock
+            <input
+              type="number"
+              value={formData.min_stock !== undefined ? formData.min_stock : ""}
+              onChange={(e) =>
+                setFormData({ ...formData, min_stock: Number(e.target.value) })
+              }
+            />
+          </label>
+
+          <label className="modal-field">
+            Unit
+            <input
+              value={formData.unit || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, unit: e.target.value })
+              }
+            />
+          </label>
+        </div>
+
+        <p className="muted" style={{ fontSize: "12px", marginTop: "12px" }}>
+          Note: Use Inventory page to modify stock quantity. Stock changes here create audit trail.
+        </p>
+
+        {error && <div className="error-box">{error}</div>}
+
+        <div className="modal-action-row">
+          <button className="secondary-button" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button className="pay-button" disabled={busy} onClick={submit}>
+            {busy ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

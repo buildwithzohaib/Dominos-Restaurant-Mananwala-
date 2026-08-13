@@ -1,4 +1,4 @@
-import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,RestaurantTable,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
+import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
 const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
  const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
@@ -7,7 +7,13 @@ async function request<T>(path:string,options?:RequestInit):Promise<T>{
 }
 export const api={
  getCategories:()=>request<Category[]>("/api/categories"),
- getProducts:()=>request<Product[]>("/api/products"),
+ getProducts:(search?:string,includeDisabled?:boolean)=>{
+  const q=new URLSearchParams();
+  if(search&&search.trim())q.set("search",search.trim());
+  if(includeDisabled)q.set("include_disabled","true");
+  const qs=q.toString();
+  return request<Product[]>(`/api/products${qs?`?${qs}`:""}`);
+ },
  getTables:()=>request<RestaurantTable[]>("/api/tables"),
  getOrders:(params?:{search?:string;status?:string})=>{
   const q=new URLSearchParams();
@@ -38,5 +44,11 @@ export const api={
   return request<StockMovement[]>(`/api/stock-movements${qs?`?${qs}`:""}`);
  },
  // Dashboard (Phase 9) — today's business metrics
- getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview")
+ getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview"),
+ // Product Management (Phase 10)
+ getProduct:(id:number)=>request<Product>(`/api/products/${id}`),
+ createProduct:(p:ProductCreateInput)=>request<Product>("/api/products",{method:"POST",body:JSON.stringify(p)}),
+ updateProduct:(id:number,p:ProductUpdateInput)=>request<Product>(`/api/products/${id}`,{method:"PUT",body:JSON.stringify(p)}),
+ disableProduct:(id:number)=>request<Product>(`/api/products/${id}/disable`,{method:"PATCH",body:JSON.stringify({})}),
+ enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})})
 };

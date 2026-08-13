@@ -9,7 +9,8 @@
       "Bash(python test_phase9.py)",
       "Bash(python test_phase9_simple.py)",
       "Bash(rm -f test_phase9*.db)",
-      "Bash(rm -f test_p9*.db)"
+      "Bash(rm -f test_p9*.db)",
+      "Bash(python -m py_compile app/services/product_service.py app/routes/products.py app/main.py)"
     ]
   }
 }

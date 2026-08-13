@@ -27,3 +27,6 @@ export interface Order { id:number; order_number:string; order_type:OrderType; t
 export interface HourlySale { hour:number; revenue:number; }
 export interface TopProduct { product_name:string; quantity_sold:number; revenue:number; }
 export interface DashboardOverview { sales:number; orders:number; cancelled:number; low_stock:number; hourly_sales:HourlySale[]; top_products:TopProduct[]; }
+// Product Management (Phase 10)
+export interface ProductCreateInput { category_id:number; name:string; price:number; purchase_price?:number; stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
+export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; purchase_price?:number; min_stock?:number; sku?:string; unit?:string; image?:string; }
