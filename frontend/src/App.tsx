@@ -1,7 +1,101 @@
-import{useCallback,useEffect,useState}from"react";import{ClipboardList,LayoutDashboard,Package,ShoppingCart}from"lucide-react";import{POSProvider}from"./context/POSContext";import{api}from"./services/api";import{POS}from"./pages/POS";import{Orders}from"./pages/Orders";import{Inventory}from"./pages/Inventory";import type{Category,Product}from"./types";
-function AppContent(){const[page,setPage]=useState<"pos"|"orders"|"inventory"|"dashboard">("pos");const[categories,setCategories]=useState<Category[]>([]);const[products,setProducts]=useState<Product[]>([]);const[error,setError]=useState("");useEffect(()=>{Promise.all([api.getCategories(),api.getProducts()]).then(([c,p])=>{setCategories(c);setProducts(p)}).catch(e=>setError(e instanceof Error?e.message:"Could not connect to backend"))},[]);
-// Products (price/stock) come from one backend source of truth. Re-fetch after a
-// completed order or an inventory edit so POS never sells against a stale stock count.
-const refreshProducts=useCallback(()=>{api.getProducts().then(setProducts).catch(()=>{})},[]);
-return <div className="app-shell"><aside className="sidebar"><div className="sidebar-logo">M</div><nav><button className={page==="pos"?"nav-item active":"nav-item"} onClick={()=>setPage("pos")}><ShoppingCart size={21}/><span>POS</span></button><button className={page==="orders"?"nav-item active":"nav-item"} onClick={()=>setPage("orders")}><ClipboardList size={21}/><span>Orders</span></button><button className={page==="inventory"?"nav-item active":"nav-item"} onClick={()=>setPage("inventory")}><Package size={21}/><span>Inventory</span></button><button className={page==="dashboard"?"nav-item active":"nav-item"} onClick={()=>setPage("dashboard")}><LayoutDashboard size={21}/><span>Overview</span></button></nav><div className="sidebar-footer">v1.0</div></aside><div className="main-shell">{error&&<div className="connection-banner">Backend connection failed: {error}</div>}{page==="pos"&&<POS categories={categories} products={products} onOrderComplete={refreshProducts}/>} {page==="orders"&&<Orders/>}{page==="inventory"&&<Inventory onChange={refreshProducts}/>}{page==="dashboard"&&<div className="dashboard-page"><p className="eyebrow">OVERVIEW</p><h1>Restaurant Dashboard</h1><p className="muted">Sales analytics will be added in the next phase.</p></div>}</div></div>}
-export default function App(){return <POSProvider><AppContent/></POSProvider>}
+import { useCallback, useEffect, useState } from "react";
+import { ClipboardList, LayoutDashboard, Package, ShoppingCart } from "lucide-react";
+import { POSProvider } from "./context/POSContext";
+import { api } from "./services/api";
+import { POS } from "./pages/POS";
+import { Orders } from "./pages/Orders";
+import { Inventory } from "./pages/Inventory";
+import { Dashboard } from "./pages/Dashboard";
+import type { Category, Product } from "./types";
+
+function AppContent() {
+  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard">("pos");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([api.getCategories(), api.getProducts()])
+      .then(([c, p]) => {
+        setCategories(c);
+        setProducts(p);
+      })
+      .catch((e) =>
+        setError(
+          e instanceof Error
+            ? e.message
+            : "Could not connect to backend"
+        )
+      );
+  }, []);
+
+  // Products (price/stock) come from one backend source of truth. Re-fetch after a
+  // completed order or an inventory edit so POS never sells against a stale stock count.
+  const refreshProducts = useCallback(() => {
+    api.getProducts().then(setProducts).catch(() => {});
+  }, []);
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-logo">M</div>
+        <nav>
+          <button
+            className={page === "pos" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("pos")}
+          >
+            <ShoppingCart size={21} />
+            <span>POS</span>
+          </button>
+          <button
+            className={page === "orders" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("orders")}
+          >
+            <ClipboardList size={21} />
+            <span>Orders</span>
+          </button>
+          <button
+            className={page === "inventory" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("inventory")}
+          >
+            <Package size={21} />
+            <span>Inventory</span>
+          </button>
+          <button
+            className={page === "dashboard" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("dashboard")}
+          >
+            <LayoutDashboard size={21} />
+            <span>Overview</span>
+          </button>
+        </nav>
+        <div className="sidebar-footer">v1.0</div>
+      </aside>
+      <div className="main-shell">
+        {error && (
+          <div className="connection-banner">
+            Backend connection failed: {error}
+          </div>
+        )}
+        {page === "pos" && (
+          <POS
+            categories={categories}
+            products={products}
+            onOrderComplete={refreshProducts}
+          />
+        )}
+        {page === "orders" && <Orders />}
+        {page === "inventory" && <Inventory onChange={refreshProducts} />}
+        {page === "dashboard" && <Dashboard />}
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <POSProvider>
+      <AppContent />
+    </POSProvider>
+  );
+}

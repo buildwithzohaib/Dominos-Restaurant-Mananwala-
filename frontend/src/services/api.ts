@@ -1,4 +1,4 @@
-import type {Category,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,RestaurantTable,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
+import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,RestaurantTable,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
 const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
  const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
@@ -36,5 +36,7 @@ export const api={
   if(params?.date)q.set("date",params.date);
   const qs=q.toString();
   return request<StockMovement[]>(`/api/stock-movements${qs?`?${qs}`:""}`);
- }
+ },
+ // Dashboard (Phase 9) — today's business metrics
+ getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview")
 };

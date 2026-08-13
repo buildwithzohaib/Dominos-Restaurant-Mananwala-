@@ -156,17 +156,21 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
 
 
 def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
-    """Phase 7: mark an order CANCELLED with a required reason. The order row is
-    never deleted — only its status/cancellation fields change — and cancellation
-    is a single atomic conditional UPDATE (WHERE status = 'PAID'), not a
-    read-then-write, so two concurrent cancel requests for the same order can't
-    both succeed: only the one that actually flips PAID -> CANCELLED wins, the
-    other gets a clean 400 instead of double-cancelling.
+    """Phase 7–8: mark an order CANCELLED with a required reason, then restore its inventory.
 
-    Phase 8 hook: inventory restoration (reversing the order's SALE StockMovements,
-    identifiable via StockMovement.reference == order.order_number) belongs right
-    here, before the commit below, so it lands in the same transaction as the
-    status change. Deliberately not implemented yet — see Phase 7 §15.
+    Phase 7: The order row is never deleted — only its status/cancellation fields change —
+    and cancellation is a single atomic conditional UPDATE (WHERE status = 'PAID'), not a
+    read-then-write, so two concurrent cancel requests for the same order can't both
+    succeed: only the one that actually flips PAID -> CANCELLED wins, the other gets a
+    clean 400 instead of double-cancelling.
+
+    Phase 8: Inventory restoration (reversing the order's SALE StockMovements, identifiable
+    via StockMovement.reference == order.order_number) now happens in the same transaction
+    as the status change. The original SALE movements remain untouched; new CANCELLATION
+    movements are created for the restored quantities. If the status change fails (order
+    already cancelled or not found), the entire transaction is rolled back and no inventory
+    is restored. If inventory restoration fails after the status change succeeded, the
+    entire transaction is rolled back, so the order remains PAID.
     """
     order = db.get(Order, order_id)
     if not order:
@@ -188,7 +192,45 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
             raise HTTPException(400, "This order has already been cancelled.")
         raise HTTPException(400, "Only a paid order can be cancelled.")
 
-    # --- Phase 8 hook goes here (inventory restoration), before this commit. ---
+    # --- Phase 8: Inventory restoration, within the same transaction. ---
+    # Find the original SALE movements for this order and restore each product's stock.
+    sale_movements = db.query(StockMovement).filter(
+        StockMovement.reference == order.order_number,
+        StockMovement.movement_type == "SALE"
+    ).all()
+
+    for sale_movement in sale_movements:
+        # Restore the quantity: undo the negative quantity_change from the SALE.
+        restore_quantity = -sale_movement.quantity_change  # e.g., SALE was -2, restore is +2
+        product_id = sale_movement.product_id
+
+        # Atomic increment: update Product.stock by restore_quantity.
+        db.execute(
+            update(Product)
+            .where(Product.id == product_id)
+            .values(stock=Product.stock + restore_quantity, updated_at=datetime.utcnow())
+        )
+
+        # Refresh to get the new current stock value.
+        product = db.get(Product, product_id)
+        db.refresh(product)
+        stock_after = product.stock
+        stock_before = stock_after - restore_quantity
+
+        # Create a new CANCELLATION movement, referencing the same order.
+        cancellation_movement = StockMovement(
+            product_id=product.id,
+            product_name=product.name,
+            movement_type="CANCELLATION",
+            quantity_change=restore_quantity,
+            reason="Order cancellation",
+            supplier=None,
+            purchase_price=None,
+            stock_before=stock_before,
+            stock_after=stock_after,
+            reference=order.order_number,
+        )
+        db.add(cancellation_movement)
 
     db.commit()
     return db.query(Order).options(joinedload(Order.items)).filter(Order.id == order_id).first()

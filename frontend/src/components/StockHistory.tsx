@@ -7,7 +7,7 @@ import type { StockMovement } from "../types";
 export function StockHistory() {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [search, setSearch] = useState("");
-  const [movementType, setMovementType] = useState<"" | "PURCHASE" | "ADJUSTMENT" | "SALE">("");
+  const [movementType, setMovementType] = useState<"" | "PURCHASE" | "ADJUSTMENT" | "SALE" | "CANCELLATION">("");
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,12 +42,13 @@ export function StockHistory() {
         <select
           className="table-select"
           value={movementType}
-          onChange={(e) => setMovementType(e.target.value as "" | "PURCHASE" | "ADJUSTMENT" | "SALE")}
+          onChange={(e) => setMovementType(e.target.value as "" | "PURCHASE" | "ADJUSTMENT" | "SALE" | "CANCELLATION")}
         >
           <option value="">All Types</option>
           <option value="PURCHASE">Purchase</option>
           <option value="ADJUSTMENT">Adjustment</option>
           <option value="SALE">Sale</option>
+          <option value="CANCELLATION">Cancellation</option>
         </select>
 
         <input

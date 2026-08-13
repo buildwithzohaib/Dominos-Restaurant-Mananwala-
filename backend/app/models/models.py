@@ -55,8 +55,8 @@ class StockMovement(Base):
     # Snapshot, not a live join — mirrors OrderItem.product_name below, so renaming a
     # product later never rewrites what an audit record said at the time.
     product_name: Mapped[str] = mapped_column(String(150))
-    # PURCHASE | ADJUSTMENT for now; SALE/RETURN/REFUND/WASTE are reserved for a
-    # future phase and deliberately not implemented here.
+    # PURCHASE | ADJUSTMENT | SALE | CANCELLATION. RETURN/REFUND/WASTE are reserved
+    # for a future phase and deliberately not implemented here.
     movement_type: Mapped[str] = mapped_column(String(20), index=True)
     quantity_change: Mapped[int] = mapped_column(Integer)  # signed: +50 purchase, -2 damage, +5 correction
     reason: Mapped[str] = mapped_column(String(200))  # e.g. "Purchase", "Damaged", "Other: <note>"

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-user-OneDrive-Desktop-New-folder--2--my-pos-my-pos\\\\030918b9-c601-4023-854c-ae3c3a220ffe\\\\scratchpad\\\\test_phase8.py\")",
+      "Bash(python -c ' *)",
+      "Bash(python test_phase8.py)",
+      "Bash(python test_phase8_v2.py)",
+      "Bash(npm run *)",
+      "Bash(python test_phase9.py)",
+      "Bash(python test_phase9_simple.py)",
+      "Bash(rm -f test_phase9*.db)",
+      "Bash(rm -f test_p9*.db)"
+    ]
+  }
+}

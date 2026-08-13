@@ -130,3 +130,22 @@ class StockMovementOut(BaseModel):
     stock_after: int
     reference: str | None
     created_at: datetime
+
+# --- Dashboard (Phase 9) ---
+
+class TopProductItem(BaseModel):
+    product_name: str
+    quantity_sold: int
+    revenue: Decimal
+
+class HourlySaleItem(BaseModel):
+    hour: int  # 0-23
+    revenue: Decimal
+
+class DashboardOverviewOut(BaseModel):
+    sales: Decimal  # Today's total revenue from PAID orders
+    orders: int  # Count of today's PAID orders
+    cancelled: int  # Count of today's CANCELLED orders
+    low_stock: int  # Count of products in LOW_STOCK status
+    hourly_sales: list[HourlySaleItem]  # Hourly breakdown of today's sales
+    top_products: list[TopProductItem]  # Top 5 selling products by quantity
