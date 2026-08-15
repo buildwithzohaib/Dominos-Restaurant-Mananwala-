@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import Base, engine
 from app.routes.catalog import router as catalog_router
 from app.routes.inventory import router as inventory_router
 from app.routes.orders import router as orders_router
@@ -10,7 +9,6 @@ from app.routes.products import router as products_router
 from app.models import models  # noqa: F401
 from app.seed import seed_data
 
-Base.metadata.create_all(bind=engine)
 seed_data()
 
 app = FastAPI(title="My Restaurant POS API", version="1.0.0")
