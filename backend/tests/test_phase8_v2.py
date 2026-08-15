@@ -99,7 +99,6 @@ def test_1_single_item_cancellation():
     print(f"Stock after cancel: {pepsi.stock} [PASS]")
 
     db.close()
-    return True
 
 def test_2_multi_item_cancellation():
     """Test 2: Multi-item cancellation"""
@@ -159,7 +158,6 @@ def test_2_multi_item_cancellation():
     print("All stocks restored correctly [PASS]")
 
     db.close()
-    return True
 
 def test_3_current_stock_incremented():
     """Test 3: Current stock is incremented, not historical stock restored"""
@@ -206,7 +204,6 @@ def test_3_current_stock_incremented():
     print(f"Expected {expected}: {stock_after_cancel} [PASS]")
 
     db.close()
-    return True
 
 def test_4_double_cancellation_protection():
     """Test 4: Double cancellation protection"""
@@ -243,16 +240,10 @@ def test_4_double_cancellation_protection():
 
     try:
         cancel_order(db, order.id, OrderCancelIn(reason="CUSTOMER_CHANGED_ORDER"))
-        print("Second cancellation: UNEXPECTED SUCCESS [FAIL]")
-        db.close()
-        return False
+        assert False, "Second cancellation should have been rejected"
     except Exception as e:
-        if "already been cancelled" in str(e):
-            print("Second cancellation: CORRECTLY REJECTED [PASS]")
-        else:
-            print(f"Second cancellation: WRONG ERROR {e} [FAIL]")
-            db.close()
-            return False
+        assert "already been cancelled" in str(e), f"Wrong error: {e}"
+        print("Second cancellation: CORRECTLY REJECTED [PASS]")
 
     # Verify stock was only restored once
     db.refresh(pepsi)
@@ -262,7 +253,6 @@ def test_4_double_cancellation_protection():
     print(f"Stock only restored once: {stock_after_second} [PASS]")
 
     db.close()
-    return True
 
 def run_all_tests():
     """Run all Phase 8 tests"""

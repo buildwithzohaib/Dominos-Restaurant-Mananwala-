@@ -108,7 +108,6 @@ def test_dashboard_endpoint():
     print("\n[PASS] Dashboard endpoint working correctly")
 
     db.close()
-    return True
 
 def test_cancelled_orders_excluded():
     """Test that cancelled orders don't count toward sales"""
@@ -184,7 +183,6 @@ def test_cancelled_orders_excluded():
     print("\n[PASS] Cancelled orders correctly excluded")
 
     db.close()
-    return True
 
 def run_all_tests():
     """Run all Phase 9 tests"""
