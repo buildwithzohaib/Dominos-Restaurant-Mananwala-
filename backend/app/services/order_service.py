@@ -1,6 +1,5 @@
 from collections import defaultdict
 from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
 
 from fastapi import HTTPException
 from sqlalchemy import update
@@ -18,10 +17,6 @@ CANCEL_REASON_LABELS = {
     "OTHER": "Other",
 }
 
-TWOPLACES = Decimal("0.01")
-def money(value: Decimal) -> Decimal:
-    return Decimal(value).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
-
 def create_order(db: Session, payload: OrderCreate) -> Order:
     if payload.order_type == "DINE_IN" and payload.table_id is None:
         raise HTTPException(400, "A table is required for dine-in orders.")
@@ -38,7 +33,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
     for item in payload.items:
         requested[item.product_id] += item.quantity
 
-    subtotal = Decimal("0")
+    subtotal = 0
     products: dict[int, Product] = {}
     for product_id, quantity in requested.items():
         product = db.get(Product, product_id)
@@ -49,18 +44,18 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         if product.stock < quantity:
             raise HTTPException(400, f'Only {product.stock} of "{product.name}" available.')
         products[product_id] = product
-        subtotal += Decimal(product.price) * quantity
+        subtotal += product.price * quantity
 
-    subtotal = money(subtotal)
-    discount = min(money(payload.discount), subtotal)
+    discount = min(payload.discount, subtotal)
     taxable = subtotal - discount
-    tax = money(taxable * payload.tax_rate / Decimal("100"))
-    total = money(taxable + tax)
-    received = money(payload.amount_received)
+    # Half-up rounding: (taxable * rate + 5000) // 10000
+    tax = (taxable * payload.tax_rate + 5000) // 10000
+    total = taxable + tax
+    received = payload.amount_received
 
     if payload.payment_method == "CASH" and received < total:
         raise HTTPException(400, f"Cash received must be at least {total}.")
-    change = money(received - total) if payload.payment_method == "CASH" else Decimal("0")
+    change = received - total if payload.payment_method == "CASH" else 0
 
     # Nothing has been written yet: every validation above (bad product, insufficient
     # cash, closed table) fails before this point, so a failed/rejected order never
@@ -135,8 +130,8 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
             product_id=product.id,
             product_name=product.name,
             quantity=quantity,
-            price=money(Decimal(product.price)),
-            line_total=money(Decimal(product.price) * quantity),
+            price=product.price,
+            line_total=product.price * quantity,
         ))
         db.add(StockMovement(
             product_id=product.id,

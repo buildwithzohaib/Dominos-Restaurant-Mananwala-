@@ -7,7 +7,6 @@ from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from decimal import Decimal
 
 from app.models.models import Product, Category
 from app.schemas.schemas import ProductCreate, ProductUpdate
@@ -58,7 +57,7 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
         sku=payload.sku.strip() if payload.sku else f"AUTO-{datetime.utcnow().timestamp()}",
         min_stock=payload.min_stock,
         unit=payload.unit.strip(),
-        purchase_price=payload.purchase_price or Decimal("0"),
+        purchase_price=payload.purchase_price or 0,
         available=True,
         image=payload.image
     )

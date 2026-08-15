@@ -4,7 +4,6 @@ Phase 9: Provides real-time overview of restaurant performance.
 """
 
 from datetime import datetime, timedelta
-from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -28,13 +27,13 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
     today_end = today_start + timedelta(days=1)
 
     # === SALES CALCULATION ===
-    # Sum of totals from PAID orders created today
+    # Sum of totals from PAID orders created today (in paisa)
     sales_result = db.query(func.sum(Order.total)).filter(
         Order.status == "PAID",
         Order.created_at >= today_start,
         Order.created_at < today_end,
     ).scalar()
-    sales = Decimal(sales_result or 0).quantize(Decimal("0.01"))
+    sales = sales_result or 0
 
     # === ORDERS COUNT ===
     # Count of PAID orders created today
@@ -74,11 +73,11 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
         func.strftime("%H", Order.created_at)
     ).all()
 
-    # Create hourly breakdown for all 24 hours (even those with no sales = 0)
-    hourly_sales_dict = {int(hour): Decimal(revenue or 0).quantize(Decimal("0.01"))
+    # Create hourly breakdown for all 24 hours (even those with no sales = 0), in paisa
+    hourly_sales_dict = {int(hour): revenue or 0
                          for hour, revenue in hourly_sales_data}
     hourly_sales = [
-        HourlySaleItem(hour=hour, revenue=hourly_sales_dict.get(hour, Decimal("0")))
+        HourlySaleItem(hour=hour, revenue=hourly_sales_dict.get(hour, 0))
         for hour in range(24)
     ]
 
@@ -100,7 +99,7 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
         TopProductItem(
             product_name=product_name,
             quantity_sold=total_quantity or 0,
-            revenue=Decimal(total_revenue or 0).quantize(Decimal("0.01")),
+            revenue=total_revenue or 0,  # in paisa
         )
         for product_name, total_quantity, total_revenue in top_products_data
     ]
