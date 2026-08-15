@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatMoney } from "../utils/money";
 import {
   CreditCard,
   Banknote,
@@ -8,16 +9,12 @@ import {
 
 import { api } from "../services/api";
 import { usePOS } from "../context/POSContext";
-import type { PaymentMethod, Product } from "../types";
-
-type ReceiptCartItem = {
-  product: Product;
-  quantity: number;
-};
+import { rupeesToPaisa, paisaToRupees } from "../utils/money";
+import type { PaymentMethod, OrderItem } from "../types";
 
 export type ReceiptData = {
   orderNumber: string;
-  cart: ReceiptCartItem[];
+  items: OrderItem[];
 
   subtotal: number;
   discount: number;
@@ -49,14 +46,12 @@ export function PaymentModal({
     setPaymentMethod,
   } = usePOS();
 
-  const [received, setReceived] = useState(Number(total));
+  const [receivedText, setReceivedText] = useState(String(paisaToRupees(total)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const change = Math.max(
-    0,
-    Number(received) - Number(total)
-  );
+  const received = rupeesToPaisa(parseFloat(receivedText) || 0);
+  const change = Math.max(0, received - total);
 
   async function pay() {
     setBusy(true);
@@ -72,15 +67,15 @@ export function PaymentModal({
           quantity: i.quantity,
         })),
 
-        discount: Number(discount),
-        tax_rate: Number(state.taxRate),
+        discount: discount,
+        tax_rate: state.taxRate,
 
         payment_method: state.paymentMethod,
 
         amount_received:
           state.paymentMethod === "CASH"
-            ? Number(received)
-            : Number(total),
+            ? received
+            : total,
       });
 
       const now = new Date();
@@ -88,27 +83,18 @@ export function PaymentModal({
       const receipt: ReceiptData = {
         orderNumber: o.order_number,
 
-        cart: state.cart.map((item) => ({
-          product: item.product,
-          quantity: item.quantity,
-        })),
+        items: o.items,
 
-        subtotal: Number(subtotal),
-        discount: Number(discount),
-        tax: Number(tax),
-        total: Number(total),
+        subtotal: o.subtotal,
+        discount: o.discount,
+        tax: o.tax,
+        total: o.total,
 
-        paymentMethod: state.paymentMethod,
+        paymentMethod: o.payment_method,
 
-        amountReceived:
-          state.paymentMethod === "CASH"
-            ? Number(received)
-            : Number(total),
+        amountReceived: o.amount_received,
 
-        change:
-          state.paymentMethod === "CASH"
-            ? Number(change)
-            : 0,
+        change: o.change_amount,
 
         date: now.toLocaleDateString(),
 
@@ -167,7 +153,7 @@ export function PaymentModal({
           </span>
 
           <strong>
-            Rs. {Number(total).toFixed(2)}
+            {formatMoney(total)}
           </strong>
         </div>
 
@@ -197,13 +183,9 @@ export function PaymentModal({
             <input
               autoFocus
               type="number"
-              min={Number(total)}
-              value={received}
-              onChange={(e) =>
-                setReceived(
-                  Number(e.target.value)
-                )
-              }
+              step="0.01"
+              value={receivedText}
+              onChange={(e) => setReceivedText(e.target.value)}
             />
           </label>
         )}
@@ -215,7 +197,7 @@ export function PaymentModal({
             </span>
 
             <strong>
-              Rs. {Number(change).toFixed(2)}
+              {formatMoney(change)}
             </strong>
           </div>
         )}
@@ -232,7 +214,7 @@ export function PaymentModal({
             busy ||
             (
               state.paymentMethod === "CASH" &&
-              Number(received) < Number(total)
+              received < total
             )
           }
           onClick={pay}
@@ -243,11 +225,9 @@ export function PaymentModal({
         </button>
 
         <p className="payment-note">
-          Subtotal Rs.{" "}
-          {Number(subtotal).toFixed(2)}
+          Subtotal {formatMoney(subtotal)}
           {" · "}
-          Tax Rs.{" "}
-          {Number(tax).toFixed(2)}
+          Tax {formatMoney(tax)}
         </p>
 
       </div>

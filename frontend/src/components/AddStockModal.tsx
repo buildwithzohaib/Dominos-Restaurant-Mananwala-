@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 import { api } from "../services/api";
+import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import type { Product } from "../types";
 
 export function AddStockModal({
@@ -17,8 +18,8 @@ export function AddStockModal({
     products[0]?.id ?? ""
   );
   const [quantity, setQuantity] = useState<number | "">("");
-  const [purchasePrice, setPurchasePrice] = useState(
-    String(products[0]?.purchase_price ?? "")
+  const [purchasePriceText, setPurchasePriceText] = useState(
+    String(paisaToRupees(products[0]?.purchase_price ?? 0))
   );
   const [supplier, setSupplier] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,7 @@ export function AddStockModal({
 
   const addQty = Number(quantity) || 0;
   const newStock = (selected?.stock ?? 0) + addQty;
-  const priceValid = purchasePrice === "" || Number(purchasePrice) >= 0;
+  const priceValid = purchasePriceText === "" || Number(purchasePriceText) >= 0;
   const canSave =
     selected != null &&
     addQty > 0 &&
@@ -44,7 +45,7 @@ export function AddStockModal({
     // Prefill from the newly selected product's current acquisition cost — the
     // admin can still override it if this purchase's price is different.
     const product = products.find((p) => p.id === id);
-    setPurchasePrice(product ? String(product.purchase_price) : "");
+    setPurchasePriceText(product ? String(paisaToRupees(product.purchase_price)) : "");
   }
 
   async function save() {
@@ -56,7 +57,7 @@ export function AddStockModal({
     try {
       const updated = await api.addStock(selected.id, {
         quantity: addQty,
-        purchase_price: purchasePrice === "" ? undefined : Number(purchasePrice),
+        purchase_price: purchasePriceText === "" ? undefined : rupeesToPaisa(parseFloat(purchasePriceText) || 0),
         supplier: supplier.trim(),
       });
       onSaved(updated);
@@ -111,8 +112,8 @@ export function AddStockModal({
               type="number"
               min="0"
               step="0.01"
-              value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value)}
+              value={purchasePriceText}
+              onChange={(e) => setPurchasePriceText(e.target.value)}
             />
           </label>
 

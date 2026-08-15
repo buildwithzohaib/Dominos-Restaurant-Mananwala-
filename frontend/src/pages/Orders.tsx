@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { formatMoney } from "../utils/money";
 import { useEffect, useState } from "react";
 
 import { CancelOrderModal } from "../components/CancelOrderModal";
@@ -96,7 +97,7 @@ export function Orders() {
                 <strong>{o.order_number}</strong>
                 <span>{new Date(o.created_at).toLocaleString()}</span>
                 <span>Walk-in</span>
-                <strong>Rs. {Number(o.total).toFixed(2)}</strong>
+                <strong>{formatMoney(o.total)}</strong>
                 <span>
                   <OrderStatusBadge status={o.status} />
                 </span>

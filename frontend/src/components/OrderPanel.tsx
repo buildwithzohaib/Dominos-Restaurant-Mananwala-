@@ -1,5 +1,8 @@
+import { useState, useMemo } from "react";
+import { formatMoney } from "../utils/money";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { usePOS } from "../context/POSContext";
+import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 
 export function OrderPanel({ onPay }: { onPay: () => void }) {
   const {
@@ -13,6 +16,11 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
     setDiscount,
     setTaxRate,
   } = usePOS();
+
+  const [discountText, setDiscountText] = useState(
+    String(paisaToRupees(state.discount))
+  );
+  const [taxText, setTaxText] = useState(String(state.taxRate / 100));
 
   return (
     <aside className="order-panel">
@@ -44,7 +52,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                   <strong>{i.product.name}</strong>
 
                   <span>
-                    Rs. {Number(i.product.price).toFixed(2)} each
+                    {formatMoney(i.product.price)} each
                   </span>
 
                   {atStockLimit && (
@@ -82,8 +90,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                 </div>
 
                 <strong className="line-total">
-                  Rs.{" "}
-                  {Number(i.product.price * i.quantity).toFixed(2)}
+                  {formatMoney(i.product.price * i.quantity)}
                 </strong>
               </div>
             );
@@ -99,10 +106,11 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
             <input
               type="number"
               min="0"
-              value={state.discount || ""}
-              onChange={(e) =>
-                setDiscount(Number(e.target.value) || 0)
-              }
+              value={discountText}
+              onChange={(e) => {
+                setDiscountText(e.target.value);
+                setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
+              }}
             />
           </label>
 
@@ -112,32 +120,33 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
             <input
               type="number"
               min="0"
-              value={state.taxRate || ""}
-              onChange={(e) =>
-                setTaxRate(Number(e.target.value) || 0)
-              }
+              value={taxText}
+              onChange={(e) => {
+                setTaxText(e.target.value);
+                setTaxRate(Math.round((parseFloat(e.target.value) || 0) * 100));
+              }}
             />
           </label>
         </div>
 
         <div className="summary-row">
           <span>Subtotal</span>
-          <b>Rs. {Number(subtotal).toFixed(2)}</b>
+          <b>{formatMoney(subtotal)}</b>
         </div>
 
         <div className="summary-row">
           <span>Discount</span>
-          <b>- Rs. {Number(discount).toFixed(2)}</b>
+          <b>- {formatMoney(discount)}</b>
         </div>
 
         <div className="summary-row">
           <span>Tax</span>
-          <b>Rs. {Number(tax).toFixed(2)}</b>
+          <b>{formatMoney(tax)}</b>
         </div>
 
         <div className="total-row">
           <span>Total</span>
-          <strong>Rs. {Number(total).toFixed(2)}</strong>
+          <strong>{formatMoney(total)}</strong>
         </div>
 
         <button

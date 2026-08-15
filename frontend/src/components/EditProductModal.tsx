@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { api } from "../services/api";
+import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import type { Category, Product, ProductUpdateInput } from "../types";
 
 export function EditProductModal({
@@ -27,11 +28,22 @@ export function EditProductModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const [priceText, setPriceText] = useState(
+    formData.price !== undefined ? String(paisaToRupees(formData.price)) : ""
+  );
+  const [purchasePriceText, setPurchasePriceText] = useState(
+    formData.purchase_price !== undefined ? String(paisaToRupees(formData.purchase_price)) : ""
+  );
+
   async function submit() {
     setBusy(true);
     setError("");
     try {
-      const updated = await api.updateProduct(product.id, formData);
+      const updated = await api.updateProduct(product.id, {
+        ...formData,
+        price: priceText !== "" ? rupeesToPaisa(parseFloat(priceText) || 0) : undefined,
+        purchase_price: purchasePriceText !== "" ? rupeesToPaisa(parseFloat(purchasePriceText) || 0) : undefined,
+      });
       onSaved(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not update product");
@@ -87,10 +99,8 @@ export function EditProductModal({
             <input
               type="number"
               step="0.01"
-              value={formData.price !== undefined ? formData.price : ""}
-              onChange={(e) =>
-                setFormData({ ...formData, price: Number(e.target.value) })
-              }
+              value={priceText}
+              onChange={(e) => setPriceText(e.target.value)}
             />
           </label>
 
@@ -99,13 +109,8 @@ export function EditProductModal({
             <input
               type="number"
               step="0.01"
-              value={formData.purchase_price !== undefined ? formData.purchase_price : ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  purchase_price: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
+              value={purchasePriceText}
+              onChange={(e) => setPurchasePriceText(e.target.value)}
             />
           </label>
 

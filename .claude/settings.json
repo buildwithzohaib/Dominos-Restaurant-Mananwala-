@@ -23,7 +23,9 @@
       "Bash(alembic upgrade *)",
       "Bash(python scripts/backfill_paisa.py)",
       "Bash(timeout 5 uvicorn app.main:app --reload)",
-      "Bash(pytest)"
+      "Bash(pytest)",
+      "Bash(grep -E \"toFixed|Number\\\\\\(|\\\\\\\\\\\\${.*toFixed\")",
+      "Bash(git commit *)"
     ]
   }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { formatMoney } from "../utils/money";
 import { api } from "../services/api";
 import type { DashboardOverview } from "../types";
 
@@ -83,10 +84,7 @@ export function Dashboard() {
         <div className="dashboard-card">
           <p className="dashboard-label">Sales</p>
           <h2 className="dashboard-value">
-            Rs. {Number(data.sales).toLocaleString("en-PK", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
+            {formatMoney(data.sales)}
           </h2>
         </div>
 
@@ -124,7 +122,7 @@ export function Dashboard() {
                     <div
                       className="bar"
                       style={{ height: `${height}%` }}
-                      title={`${hour}:00 - Rs. ${Number(item.revenue).toFixed(0)}`}
+                      title={`${hour}:00 - ${formatMoney(item.revenue)}`}
                     />
                   </div>
                   <span className="bar-label">{hour}</span>
@@ -156,7 +154,7 @@ export function Dashboard() {
                 <span className="product-name">{product.product_name}</span>
                 <span>{product.quantity_sold}</span>
                 <span className="revenue">
-                  Rs. {Number(product.revenue).toFixed(2)}
+                  {formatMoney(product.revenue)}
                 </span>
               </div>
             ))}

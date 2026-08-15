@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 
 import { api } from "../services/api";
+import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import type { Product } from "../types";
 
 export function EditInventoryModal({
@@ -17,8 +18,8 @@ export function EditInventoryModal({
   const [sku, setSku] = useState(product.sku);
   const [minStock, setMinStock] = useState(String(product.min_stock));
   const [unit, setUnit] = useState(product.unit);
-  const [purchasePrice, setPurchasePrice] = useState(String(product.purchase_price));
-  const [price, setPrice] = useState(String(product.price));
+  const [purchasePriceText, setPurchasePriceText] = useState(String(paisaToRupees(product.purchase_price)));
+  const [priceText, setPriceText] = useState(String(paisaToRupees(product.price)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,8 +28,8 @@ export function EditInventoryModal({
     if (!sku.trim()) return "SKU cannot be empty.";
     if (!unit.trim()) return "Unit cannot be empty.";
     if (minStock === "" || Number(minStock) < 0) return "Minimum stock cannot be negative.";
-    if (purchasePrice === "" || Number(purchasePrice) < 0) return "Purchase price cannot be negative.";
-    if (price === "" || Number(price) < 0) return "Selling price cannot be negative.";
+    if (purchasePriceText === "" || Number(purchasePriceText) < 0) return "Purchase price cannot be negative.";
+    if (priceText === "" || Number(priceText) < 0) return "Selling price cannot be negative.";
     return null;
   }
 
@@ -46,8 +47,8 @@ export function EditInventoryModal({
         sku: sku.trim(),
         min_stock: Number(minStock),
         unit: unit.trim(),
-        purchase_price: Number(purchasePrice),
-        price: Number(price),
+        purchase_price: rupeesToPaisa(parseFloat(purchasePriceText) || 0),
+        price: rupeesToPaisa(parseFloat(priceText) || 0),
       });
       onSaved(updated);
     } catch (e) {
@@ -104,8 +105,8 @@ export function EditInventoryModal({
               type="number"
               min="0"
               step="0.01"
-              value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value)}
+              value={purchasePriceText}
+              onChange={(e) => setPurchasePriceText(e.target.value)}
             />
           </label>
 
@@ -115,8 +116,8 @@ export function EditInventoryModal({
               type="number"
               min="0"
               step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              value={priceText}
+              onChange={(e) => setPriceText(e.target.value)}
             />
           </label>
         </div>

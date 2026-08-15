@@ -48,7 +48,11 @@ const C = createContext<POSContextValue | null>(null);
 export function POSProvider({children}:{children:ReactNode}){
  const[state,dispatch]=useReducer(reducer,initialState);
  const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+i.product.price*i.quantity,0),[state.cart]);
- const discount=Math.min(state.discount,subtotal),tax=(subtotal-discount)*state.taxRate/100,total=subtotal-discount+tax;
+ const discountAmount=Math.min(state.discount,subtotal);
+ const taxable=subtotal-discountAmount;
+ const tax=Math.floor((taxable*state.taxRate+5000)/10000);
+ const total=taxable+tax;
+ const discount=discountAmount;
  const value={state,subtotal,discount,tax,total,
  addProduct:useCallback((product:Product)=>dispatch({type:"ADD",product}),[]),
  setQty:useCallback((productId:number,quantity:number)=>dispatch({type:"SET_QTY",productId,quantity}),[]),

@@ -1,4 +1,5 @@
 import { Plus, Search, Edit2, Power, Lock } from "lucide-react";
+import { formatMoney } from "../utils/money";
 import { useEffect, useState } from "react";
 
 import { AddProductModal } from "../components/AddProductModal";
@@ -136,7 +137,7 @@ export function Products() {
                   {item.category_id} {/* TODO: display category name */}
                 </span>
                 <span>{item.sku}</span>
-                <span>Rs. {Number(item.price).toFixed(2)}</span>
+                <span>{formatMoney(item.price)}</span>
                 <span>{item.stock}</span>
                 <span>
                   {item.available ? (

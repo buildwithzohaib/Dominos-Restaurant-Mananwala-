@@ -4,6 +4,7 @@
   X,
 } from "lucide-react";
 
+import { formatMoney } from "../utils/money";
 import type { ReceiptData } from "./PaymentModal";
 
 export function SuccessModal({
@@ -57,17 +58,17 @@ export function SuccessModal({
           <div className="receipt-line" />
 
           <div className="receipt-items">
-            {receipt.cart.map((item) => (
-              <div className="receipt-item" key={item.product.id}>
+            {receipt.items.map((item) => (
+              <div className="receipt-item" key={item.id}>
                 <div>
-                  <strong>{item.product.name}</strong>
+                  <strong>{item.product_name}</strong>
                   <span>
-                    {item.quantity} × Rs. {Number(item.product.price).toFixed(2)}
+                    {item.quantity} × {formatMoney(item.price)}
                   </span>
                 </div>
 
                 <strong>
-                  Rs. {Number(item.product.price * item.quantity).toFixed(2)}
+                  {formatMoney(item.line_total)}
                 </strong>
               </div>
             ))}
@@ -78,22 +79,22 @@ export function SuccessModal({
           <div className="receipt-summary">
             <div>
               <span>Subtotal</span>
-              <strong>Rs. {Number(receipt.subtotal).toFixed(2)}</strong>
+              <strong>{formatMoney(receipt.subtotal)}</strong>
             </div>
 
             <div>
               <span>Discount</span>
-              <strong>- Rs. {Number(receipt.discount).toFixed(2)}</strong>
+              <strong>- {formatMoney(receipt.discount)}</strong>
             </div>
 
             <div>
               <span>Tax</span>
-              <strong>Rs. {Number(receipt.tax).toFixed(2)}</strong>
+              <strong>{formatMoney(receipt.tax)}</strong>
             </div>
 
             <div className="receipt-grand-total">
               <span>TOTAL</span>
-              <strong>Rs. {Number(receipt.total).toFixed(2)}</strong>
+              <strong>{formatMoney(receipt.total)}</strong>
             </div>
           </div>
 
@@ -109,12 +110,12 @@ export function SuccessModal({
               <>
                 <div>
                   <span>Received</span>
-                  <strong>Rs. {Number(receipt.amountReceived).toFixed(2)}</strong>
+                  <strong>{formatMoney(receipt.amountReceived)}</strong>
                 </div>
 
                 <div>
                   <span>Change</span>
-                  <strong>Rs. {Number(receipt.change).toFixed(2)}</strong>
+                  <strong>{formatMoney(receipt.change)}</strong>
                 </div>
               </>
             )}
@@ -178,45 +179,39 @@ export function SuccessModal({
 
         <div className="receipt-divider">--------------------------------</div>
 
-        {receipt.cart.map((item) => {
-          const qty = Number(item.quantity);
-          const unit = Number(item.product.price);
-          const line = Number(qty * unit);
-
-          return (
-            <div className="thermal-item" key={item.product.id}>
-              <div className="thermal-item-name">{item.product.name}</div>
-              <div className="thermal-item-row">
-                <div className="thermal-col-name" />
-                <div className="thermal-col-qty">{qty}</div>
-                <div className="thermal-col-price">{unit.toFixed(2)}</div>
-                <div className="thermal-col-total">{line.toFixed(2)}</div>
-              </div>
+        {receipt.items.map((item) => (
+          <div className="thermal-item" key={item.id}>
+            <div className="thermal-item-name">{item.product_name}</div>
+            <div className="thermal-item-row">
+              <div className="thermal-col-name" />
+              <div className="thermal-col-qty">{item.quantity}</div>
+              <div className="thermal-col-price">{formatMoney(item.price)}</div>
+              <div className="thermal-col-total">{formatMoney(item.line_total)}</div>
             </div>
-          );
-        })}
+          </div>
+        ))}
 
         <div className="receipt-divider">--------------------------------</div>
 
         <div className="thermal-summary">
           <div>
             <span>Subtotal</span>
-            <strong>Rs. {Number(receipt.subtotal).toFixed(2)}</strong>
+            <strong>{formatMoney(receipt.subtotal)}</strong>
           </div>
 
           <div>
             <span>Discount</span>
-            <strong>- Rs. {Number(receipt.discount).toFixed(2)}</strong>
+            <strong>- {formatMoney(receipt.discount)}</strong>
           </div>
 
           <div>
             <span>Tax</span>
-            <strong>Rs. {Number(receipt.tax).toFixed(2)}</strong>
+            <strong>{formatMoney(receipt.tax)}</strong>
           </div>
 
           <div className="thermal-total">
             <span>TOTAL</span>
-            <strong>Rs. {Number(receipt.total).toFixed(2)}</strong>
+            <strong>{formatMoney(receipt.total)}</strong>
           </div>
         </div>
 
@@ -229,7 +224,7 @@ export function SuccessModal({
           </div>
           <div className="thermal-payable">
             <span>PAYABLE</span>
-            <strong>Rs. {Number(receipt.total).toFixed(2)}</strong>
+            <strong>{formatMoney(receipt.total)}</strong>
           </div>
         </div>
 

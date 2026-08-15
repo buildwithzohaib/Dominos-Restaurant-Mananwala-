@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { api } from "../services/api";
+import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import type { Category, Product, ProductCreateInput } from "../types";
 
 export function AddProductModal({
@@ -26,11 +27,20 @@ export function AddProductModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const [priceText, setPriceText] = useState(String(paisaToRupees(formData.price)));
+  const [purchasePriceText, setPurchasePriceText] = useState(
+    formData.purchase_price ? String(paisaToRupees(formData.purchase_price)) : ""
+  );
+
   async function submit() {
     setBusy(true);
     setError("");
     try {
-      const product = await api.createProduct(formData);
+      const product = await api.createProduct({
+        ...formData,
+        price: rupeesToPaisa(parseFloat(priceText) || 0),
+        purchase_price: purchasePriceText ? rupeesToPaisa(parseFloat(purchasePriceText) || 0) : undefined,
+      });
       onSaved(product);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create product");
@@ -88,10 +98,8 @@ export function AddProductModal({
             <input
               type="number"
               step="0.01"
-              value={formData.price}
-              onChange={(e) =>
-                setFormData({ ...formData, price: Number(e.target.value) })
-              }
+              value={priceText}
+              onChange={(e) => setPriceText(e.target.value)}
             />
           </label>
 
@@ -100,13 +108,8 @@ export function AddProductModal({
             <input
               type="number"
               step="0.01"
-              value={formData.purchase_price || ""}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  purchase_price: e.target.value ? Number(e.target.value) : undefined,
-                })
-              }
+              value={purchasePriceText}
+              onChange={(e) => setPurchasePriceText(e.target.value)}
             />
           </label>
 

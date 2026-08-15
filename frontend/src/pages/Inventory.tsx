@@ -1,4 +1,5 @@
 import { History, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { formatMoney } from "../utils/money";
 import { useEffect, useState } from "react";
 
 import { AddStockModal } from "../components/AddStockModal";
@@ -135,8 +136,8 @@ export function Inventory({ onChange }: { onChange?: () => void }) {
                   <span>{item.stock}</span>
                   <span>{item.min_stock}</span>
                   <span>{item.unit}</span>
-                  <span>Rs. {Number(item.purchase_price).toFixed(2)}</span>
-                  <span>Rs. {Number(item.price).toFixed(2)}</span>
+                  <span>{formatMoney(item.purchase_price)}</span>
+                  <span>{formatMoney(item.price)}</span>
                   <span>
                     <StatusBadge status={item.stock_status} />
                   </span>

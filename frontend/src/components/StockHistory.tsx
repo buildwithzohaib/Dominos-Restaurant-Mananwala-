@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { formatMoney } from "../utils/money";
 import { useEffect, useState } from "react";
 
 import { api } from "../services/api";
@@ -91,7 +92,7 @@ export function StockHistory() {
                 <span>{m.supplier ?? "—"}</span>
                 <span>{m.stock_before}</span>
                 <span>{m.stock_after}</span>
-                <span>{m.purchase_price != null ? `Rs. ${Number(m.purchase_price).toFixed(2)}` : "—"}</span>
+                <span>{m.purchase_price != null ? `{formatMoney(m.purchase_price)}` : "—"}</span>
                 <span>{m.reference ?? "—"}</span>
               </div>
             ))}

@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import { formatMoney } from "../utils/money";
 
 export function ProductCard({
   product,
@@ -28,7 +29,7 @@ export function ProductCard({
           <span className="status-badge out-of-stock">Out of Stock</span>
         ) : (
           <>
-            <span>Rs. {Number(product.price).toFixed(2)}</span>
+            <span>{formatMoney(product.price)}</span>
             <span>Stock: {product.stock}</span>
           </>
         )}

@@ -86,6 +86,18 @@ describe("rupeesToPaisa", () => {
   it("converts 0 to 0", () => {
     expect(rupeesToPaisa(0)).toBe(0);
   });
+
+  it("handles parseFloat empty string: parseFloat('') || 0 -> 0", () => {
+    expect(rupeesToPaisa(parseFloat("") || 0)).toBe(0);
+  });
+
+  it("handles parseFloat invalid string: parseFloat('abc') || 0 -> 0", () => {
+    expect(rupeesToPaisa(parseFloat("abc") || 0)).toBe(0);
+  });
+
+  it("handles parseFloat trailing dot: parseFloat('450.') || 0 -> 45000", () => {
+    expect(rupeesToPaisa(parseFloat("450.") || 0)).toBe(45000);
+  });
 });
 
 describe("paisaToRupees", () => {
