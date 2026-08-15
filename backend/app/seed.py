@@ -1,5 +1,4 @@
 from datetime import datetime
-from decimal import Decimal
 
 from sqlalchemy import text
 
@@ -22,106 +21,46 @@ DEFAULT_PRODUCTS = [
         "name": "Chicken Nuggets",
         "category": "Fast Food",
         "sku": "FF-NUG-001",
-        "price": "250",
+        "price": 25000,
         "stock": 25,
         "min_stock": 10,
         "unit": "Piece",
-        "purchase_price": "150",
+        "purchase_price": 15000,
     },
     {
         "name": "Regular Fries",
         "category": "Fast Food",
         "sku": "FF-FRY-001",
-        "price": "150",
+        "price": 15000,
         "stock": 25,
         "min_stock": 8,
         "unit": "Portion",
-        "purchase_price": "90",
+        "purchase_price": 9000,
     },
     {
         "name": "Zinger + Fries + Drink",
         "category": "Deals",
         "sku": "DEAL-ZFD-001",
-        "price": "650",
+        "price": 65000,
         "stock": 10,
         "min_stock": 5,
         "unit": "Deal",
-        "purchase_price": "430",
+        "purchase_price": 43000,
     },
     {
         "name": "Pepsi",
         "category": "Drinks",
         "sku": "DRK-PEP-001",
-        "price": "80",
+        "price": 8000,
         "stock": 25,
         "min_stock": 10,
         "unit": "Bottle",
-        "purchase_price": "60",
+        "purchase_price": 6000,
     },
 ]
 
 
-def ensure_stock_column() -> None:
-    with engine.connect() as connection:
-        existing = [row[1] for row in connection.execute(text("PRAGMA table_info(products)"))]
-        if "stock" not in existing:
-            connection.execute(text("ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0"))
-            connection.commit()
-
-
-def ensure_inventory_columns() -> None:
-    """Lightweight migration for Phase 3 inventory fields, mirroring ensure_stock_column().
-    Columns are added nullable; seed_data() below backfills real values, then a unique
-    index is created on sku once every row has one (see ensure_sku_index)."""
-    with engine.connect() as connection:
-        existing = [row[1] for row in connection.execute(text("PRAGMA table_info(products)"))]
-        statements = []
-        if "sku" not in existing:
-            statements.append("ALTER TABLE products ADD COLUMN sku VARCHAR(50)")
-        if "min_stock" not in existing:
-            statements.append("ALTER TABLE products ADD COLUMN min_stock INTEGER DEFAULT 5")
-        if "unit" not in existing:
-            statements.append("ALTER TABLE products ADD COLUMN unit VARCHAR(30) DEFAULT 'Piece'")
-        if "purchase_price" not in existing:
-            statements.append("ALTER TABLE products ADD COLUMN purchase_price NUMERIC(10, 2) DEFAULT 0")
-        if "updated_at" not in existing:
-            statements.append("ALTER TABLE products ADD COLUMN updated_at DATETIME")
-        for statement in statements:
-            connection.execute(text(statement))
-        if statements:
-            connection.commit()
-
-
-def ensure_sku_index() -> None:
-    with engine.connect() as connection:
-        connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_products_sku ON products (sku)"))
-        connection.commit()
-
-
-def ensure_order_columns() -> None:
-    """Lightweight migration for Phase 7 cancellation fields, mirroring
-    ensure_inventory_columns(). Also backfills any pre-Phase-7 order's old
-    "COMPLETED" status label to the new "PAID" one, so the Orders UI's status
-    filter/badges recognize every row instead of silently ignoring legacy ones."""
-    with engine.connect() as connection:
-        existing = [row[1] for row in connection.execute(text("PRAGMA table_info(orders)"))]
-        statements = []
-        if "cancelled_at" not in existing:
-            statements.append("ALTER TABLE orders ADD COLUMN cancelled_at DATETIME")
-        if "cancelled_reason" not in existing:
-            statements.append("ALTER TABLE orders ADD COLUMN cancelled_reason VARCHAR(200)")
-        for statement in statements:
-            connection.execute(text(statement))
-        connection.execute(text("UPDATE orders SET status = 'PAID' WHERE status = 'COMPLETED'"))
-        connection.commit()
-
-
 def seed_data() -> None:
-    Base.metadata.create_all(bind=engine)
-    ensure_stock_column()
-    ensure_inventory_columns()
-    ensure_order_columns()
-
     db = SessionLocal()
     try:
         category_map: dict[str, int] = {}
@@ -146,11 +85,11 @@ def seed_data() -> None:
                         category_id=category_map[product_info["category"]],
                         name=product_info["name"],
                         sku=product_info["sku"],
-                        price=Decimal(product_info["price"]),
+                        price=product_info["price"],
                         stock=product_info["stock"],
                         min_stock=product_info["min_stock"],
                         unit=product_info["unit"],
-                        purchase_price=Decimal(product_info["purchase_price"]),
+                        purchase_price=product_info["purchase_price"],
                         available=product_info["stock"] > 0,
                     )
                 )
@@ -168,7 +107,7 @@ def seed_data() -> None:
                 if not product.unit:
                     product.unit = product_info["unit"]
                 if product.purchase_price is None:
-                    product.purchase_price = Decimal(product_info["purchase_price"])
+                    product.purchase_price = product_info["purchase_price"]
 
         for product in db.query(Product).all():
             if product.name not in default_names:
@@ -182,7 +121,7 @@ def seed_data() -> None:
             if not product.unit:
                 product.unit = "Piece"
             if product.purchase_price is None:
-                product.purchase_price = Decimal("0")
+                product.purchase_price = 0
             if product.updated_at is None:
                 product.updated_at = datetime.utcnow()
 
@@ -198,8 +137,6 @@ def seed_data() -> None:
         print("Seed complete.")
     finally:
         db.close()
-
-    ensure_sku_index()
 
 
 if __name__ == "__main__":
