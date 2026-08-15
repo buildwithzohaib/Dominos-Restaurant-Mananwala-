@@ -7,9 +7,6 @@ from app.routes.stock_movements import router as stock_movements_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.products import router as products_router
 from app.models import models  # noqa: F401
-from app.seed import seed_data
-
-seed_data()
 
 app = FastAPI(title="My Restaurant POS API", version="1.0.0")
 app.add_middleware(
