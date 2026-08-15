@@ -97,8 +97,21 @@ This prevents bugs where:
 **Fix:** Run `alembic upgrade head` from the `backend/` directory.
 
 ### "UNIQUE constraint failed: sku"
-**Cause:** Trying to seed when products already exist.  
-**Fix:** This is OK. The seed script skips existing products. If you want to reset, delete `backend/pos.db` and re-run the setup sequence.
+**This error should NOT occur in normal use.** The seed script is idempotent — it queries for existing products before inserting and skips duplicates.
+
+**If you see this error, it indicates a real bug:**
+- Something else is inserting duplicate products (e.g., concurrent requests, manual database manipulation, or a regression in the seed logic)
+- Ignore the error at your peril; investigate the cause instead
+
+**To diagnose:**
+1. Check what products exist: `sqlite3 backend/pos.db "SELECT id, sku, name FROM products;"`
+2. Look for duplicate SKUs
+3. Check if `seed.py` was modified to skip the idempotency checks
+4. Verify no other process is inserting products concurrently
+
+**To reset and retry:**
+1. Delete `backend/pos.db` (or back it up first)
+2. Re-run the setup sequence: `alembic upgrade head && python -m app.seed`
 
 ### App starts but shows no data
 **Cause:** Migrations ran but seeding didn't.  
