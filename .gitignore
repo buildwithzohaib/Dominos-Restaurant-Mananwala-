@@ -7,3 +7,14 @@ frontend/node_modules/
 frontend/dist/
 frontend/.env
 *.pyc
+
+# POS project
+*.db
+*.db-wal
+*.db-shm
+backups/
+venv/
+__pycache__/
+node_modules/
+dist/
+.env
