@@ -5,28 +5,28 @@ export interface Category { id:number; name:string; active:boolean; }
 // Inventory fields (Phase 3) live on the same Product row the POS/cart/receipt already
 // read — sku/min_stock/unit/purchase_price/stock_status/updated_at are additive, and
 // price/stock remain the single authoritative selling-price/current-stock values.
-export interface Product { id:number; category_id:number; name:string; price:number; stock:number; image?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; stock_status:StockStatus; updated_at:string; }
-export interface InventoryUpdateInput { name?:string; sku?:string; min_stock?:number; unit?:string; purchase_price?:number; price?:number; }
+export interface Product { id:number; category_id:number; name:string; price:number; /* paisa */ stock:number; image?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; updated_at:string; }
+export interface InventoryUpdateInput { name?:string; sku?:string; min_stock?:number; unit?:string; purchase_price?:number; /* paisa */ price?:number; /* paisa */ }
 // Stock operations (Phase 4–8) — every change to Product.stock writes one of
 // these ledger rows in the same backend transaction; Product.stock stays the only
 // authoritative current-stock value, this just explains its history.
 export type MovementType = "PURCHASE" | "ADJUSTMENT" | "SALE" | "CANCELLATION";
 export type AdjustmentReason = "DAMAGED" | "EXPIRED" | "LOST" | "MANUAL_CORRECTION" | "OTHER";
-export interface StockPurchaseInput { quantity:number; purchase_price?:number; supplier:string; }
+export interface StockPurchaseInput { quantity:number; purchase_price?:number; /* paisa */ supplier:string; }
 export interface StockAdjustmentInput { quantity_change:number; reason:AdjustmentReason; note?:string; }
-export interface StockMovement { id:number; product_id:number; product_name:string; movement_type:MovementType; quantity_change:number; reason:string; supplier?:string|null; purchase_price?:number|null; stock_before:number; stock_after:number; reference?:string|null; created_at:string; }
+export interface StockMovement { id:number; product_id:number; product_name:string; movement_type:MovementType; quantity_change:number; reason:string; supplier?:string|null; purchase_price?:number|null; /* paisa */ stock_before:number; stock_after:number; reference?:string|null; created_at:string; }
 export interface RestaurantTable { id:number; name:string; seats:number; active:boolean; }
 export interface CartItem { product:Product; quantity:number; }
-export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; line_total:number; }
+export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ }
 // Order status (Phase 7) — PAID | CANCELLED. One status field, no separate flag.
 export type OrderStatus = "PAID" | "CANCELLED";
 export type CancellationReason = "CUSTOMER_CHANGED_ORDER" | "WRONG_ORDER" | "PAYMENT_ISSUE" | "DUPLICATE_ORDER" | "OTHER";
 export interface OrderCancelInput { reason:CancellationReason; note?:string; }
-export interface Order { id:number; order_number:string; order_type:OrderType; table_id?:number|null; status:OrderStatus; subtotal:number; discount:number; tax:number; total:number; payment_method:PaymentMethod; amount_received:number; change_amount:number; created_at:string; cancelled_at?:string|null; cancelled_reason?:string|null; items:OrderItem[]; }
+export interface Order { id:number; order_number:string; order_type:OrderType; table_id?:number|null; status:OrderStatus; subtotal:number; /* paisa */ discount:number; /* paisa */ tax:number; /* paisa */ total:number; /* paisa */ payment_method:PaymentMethod; amount_received:number; /* paisa */ change_amount:number; /* paisa */ created_at:string; cancelled_at?:string|null; cancelled_reason?:string|null; items:OrderItem[]; }
 // Dashboard (Phase 9) — real-time business metrics
-export interface HourlySale { hour:number; revenue:number; }
-export interface TopProduct { product_name:string; quantity_sold:number; revenue:number; }
-export interface DashboardOverview { sales:number; orders:number; cancelled:number; low_stock:number; hourly_sales:HourlySale[]; top_products:TopProduct[]; }
+export interface HourlySale { hour:number; revenue:number; /* paisa */ }
+export interface TopProduct { product_name:string; quantity_sold:number; revenue:number; /* paisa */ }
+export interface DashboardOverview { sales:number; /* paisa */ orders:number; cancelled:number; low_stock:number; hourly_sales:HourlySale[]; top_products:TopProduct[]; }
 // Product Management (Phase 10)
-export interface ProductCreateInput { category_id:number; name:string; price:number; purchase_price?:number; stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
-export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; purchase_price?:number; min_stock?:number; sku?:string; unit?:string; image?:string; }
+export interface ProductCreateInput { category_id:number; name:string; price:number; /* paisa */ purchase_price?:number; /* paisa */ stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
+export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; /* paisa */ purchase_price?:number; /* paisa */ min_stock?:number; sku?:string; unit?:string; image?:string; }

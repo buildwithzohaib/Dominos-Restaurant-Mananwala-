@@ -22,7 +22,8 @@
       "Bash(alembic -x \"db_url=sqlite:///C:\\\\Users\\\\user\\\\OneDrive\\\\Desktop\\\\New folder \\(2\\)\\\\my-pos\\\\my-pos\\\\backend\\\\tmp_empty.db\" revision --autogenerate -m \"Initial schema from Phase 1-10\")",
       "Bash(alembic upgrade *)",
       "Bash(python scripts/backfill_paisa.py)",
-      "Bash(timeout 5 uvicorn app.main:app --reload)"
+      "Bash(timeout 5 uvicorn app.main:app --reload)",
+      "Bash(pytest)"
     ]
   }
 }
