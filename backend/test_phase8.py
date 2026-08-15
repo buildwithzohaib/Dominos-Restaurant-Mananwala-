@@ -4,7 +4,7 @@ Tests all requirements and edge cases for Phase 8 implementation.
 """
 
 import sys
-from decimal import Decimal
+import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -13,11 +13,15 @@ from app.models.models import Product, Category, Order, OrderItem, StockMovement
 from app.services.order_service import create_order, cancel_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate, OrderCancelIn
 
-# Use an in-memory SQLite database for testing
-TEST_DB = "sqlite:///:memory:"
-engine = create_engine(TEST_DB, echo=False)
-Base.metadata.create_all(bind=engine)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+@pytest.fixture(scope="function")
+def db_session():
+    """Create a fresh in-memory SQLite database for each test"""
+    engine = create_engine("sqlite:///:memory:", echo=False)
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    yield db
+    db.close()
 
 def setup_test_data(db, category_name="Beverages"):
     """Create test products and categories in the provided session"""
@@ -38,34 +42,34 @@ def setup_test_data(db, category_name="Beverages"):
         Product(
             category_id=category.id,
             name="Pepsi",
-            price=Decimal("80"),
+            price=8000,
             stock=20,
             sku="PEPSI-001",
             min_stock=5,
             unit="Bottle",
-            purchase_price=Decimal("40"),
+            purchase_price=4000,
             available=True
         ),
         Product(
             category_id=category.id,
             name="Fries",
-            price=Decimal("150"),
+            price=15000,
             stock=30,
             sku="FRIES-001",
             min_stock=10,
             unit="Portion",
-            purchase_price=Decimal("75"),
+            purchase_price=7500,
             available=True
         ),
         Product(
             category_id=category.id,
             name="Chicken Nuggets",
-            price=Decimal("250"),
+            price=25000,
             stock=15,
             sku="NUGGETS-001",
             min_stock=5,
             unit="Piece",
-            purchase_price=Decimal("125"),
+            purchase_price=12500,
             available=True
         ),
     ]
@@ -81,13 +85,13 @@ def setup_test_data(db, category_name="Beverages"):
     result = {"category": category, "products": {p.name: p for p in products}}
     return result
 
-def test_single_item_cancellation():
+def test_single_item_cancellation(db_session):
     """Test 1: Single item cancellation and inventory restoration"""
     print("\n" + "="*60)
     print("TEST 1: Single Item Cancellation")
     print("="*60)
 
-    db = SessionLocal()
+    db = db_session
     setup = setup_test_data(db)
     pepsi = setup["products"]["Pepsi"]
 
@@ -99,10 +103,10 @@ def test_single_item_cancellation():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     )
 
     order = create_order(db, payload)
@@ -155,16 +159,15 @@ def test_single_item_cancellation():
     assert len(sale_movements) == 1, "SALE movement was deleted"
     assert sale_movements[0].quantity_change == -2, "SALE movement was modified"
 
-    db.close()
     print("[PASS] TEST 1 PASSED")
 
-def test_multi_item_cancellation():
+def test_multi_item_cancellation(db_session):
     """Test 2: Multi-item cancellation"""
     print("\n" + "="*60)
     print("TEST 2: Multi-Item Cancellation")
     print("="*60)
 
-    db = SessionLocal()
+    db = db_session
     setup = setup_test_data(db)
     pepsi = setup["products"]["Pepsi"]
     fries = setup["products"]["Fries"]
@@ -186,10 +189,10 @@ def test_multi_item_cancellation():
             OrderItemCreate(product_id=fries.id, quantity=3),
             OrderItemCreate(product_id=nuggets.id, quantity=1),
         ],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("1000")
+        amount_received=100000
     )
 
     order = create_order(db, payload)
@@ -244,16 +247,15 @@ def test_multi_item_cancellation():
     print(f"CANCELLATION movements: {len(cancel_movements)}")
     assert len(cancel_movements) == 3, "Not all CANCELLATION movements created"
 
-    db.close()
     print("✅ TEST 2 PASSED")
 
-def test_current_stock_incremented():
+def test_current_stock_incremented(db_session):
     """Test 3: Current stock is incremented, not historical stock restored"""
     print("\n" + "="*60)
     print("TEST 3: Current Stock Incremented (Not Historical)")
     print("="*60)
 
-    db = SessionLocal()
+    db = db_session
     setup = setup_test_data(db)
     pepsi = setup["products"]["Pepsi"]
 
@@ -265,10 +267,10 @@ def test_current_stock_incremented():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     )
 
     order = create_order(db, payload)
@@ -298,16 +300,15 @@ def test_current_stock_incremented():
     print(f"Expected: {expected}, Actual: {stock_after_cancel}")
     assert stock_after_cancel == expected, f"Stock should be {expected}, got {stock_after_cancel}"
 
-    db.close()
     print("✅ TEST 3 PASSED")
 
-def test_double_cancellation_protection():
+def test_double_cancellation_protection(db_session):
     """Test 4: Double cancellation protection"""
     print("\n" + "="*60)
     print("TEST 4: Double Cancellation Protection")
     print("="*60)
 
-    db = SessionLocal()
+    db = db_session
     setup = setup_test_data(db)
     pepsi = setup["products"]["Pepsi"]
 
@@ -318,10 +319,10 @@ def test_double_cancellation_protection():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     )
 
     order = create_order(db, payload)
@@ -338,7 +339,6 @@ def test_double_cancellation_protection():
         print(f"First cancellation: SUCCESS - Status: {cancelled_order.status}")
     except Exception as e:
         print(f"First cancellation FAILED: {e}")
-        db.close()
         raise
 
     # Second cancellation should fail
@@ -349,7 +349,6 @@ def test_double_cancellation_protection():
     try:
         cancelled_order = cancel_order(db, order.id, cancel_payload)
         print(f"Second cancellation: UNEXPECTED SUCCESS - Status: {cancelled_order.status}")
-        db.close()
         raise AssertionError("Second cancellation should have failed")
     except Exception as e:
         if "already been cancelled" in str(e):
@@ -364,16 +363,15 @@ def test_double_cancellation_protection():
     assert stock_after_second_attempt == initial_stock, "Stock was restored twice"
     assert stock_after_second_attempt == stock_after_first_cancel, "Stock changed between attempts"
 
-    db.close()
     print("✅ TEST 4 PASSED")
 
-def test_stock_movement_audit_trail():
+def test_stock_movement_audit_trail(db_session):
     """Test 6: Verify stock movement audit trail"""
     print("\n" + "="*60)
     print("TEST 6: Stock Movement Audit Trail")
     print("="*60)
 
-    db = SessionLocal()
+    db = db_session
     setup = setup_test_data(db)
     pepsi = setup["products"]["Pepsi"]
 
@@ -382,10 +380,10 @@ def test_stock_movement_audit_trail():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     )
 
     order = create_order(db, payload)
@@ -427,7 +425,6 @@ def test_stock_movement_audit_trail():
     print(f"SALE unchanged: {sale_movement.quantity_change == -2}")
     assert sale_movement.quantity_change == -2, "SALE movement was modified"
 
-    db.close()
     print("✅ TEST 6 PASSED")
 
 def run_all_tests():

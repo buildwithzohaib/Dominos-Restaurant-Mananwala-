@@ -5,7 +5,7 @@ Verifies dashboard metrics are calculated correctly from order data
 
 import sys
 from datetime import datetime, timedelta
-from decimal import Decimal
+import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -16,11 +16,15 @@ from app.services.order_service import create_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate
 from app.services.dashboard_service import get_dashboard_overview
 
-# Create test database
-engine = create_engine("sqlite:///test_phase9.db", echo=False)
-Base.metadata.drop_all(bind=engine)
-Base.metadata.create_all(bind=engine)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+@pytest.fixture(scope="function")
+def db_session():
+    """Create a fresh in-memory SQLite database for each test"""
+    engine = create_engine("sqlite:///:memory:", echo=False)
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    yield db
+    db.close()
 
 def setup_test_data(db):
     """Create test products and categories"""
@@ -30,9 +34,9 @@ def setup_test_data(db):
 
     products = []
     for i, (name, sku, price) in enumerate([
-        ("Product A", "SKU-A", Decimal("100")),
-        ("Product B", "SKU-B", Decimal("200")),
-        ("Product C", "SKU-C", Decimal("150")),
+        ("Product A", "SKU-A", 10000),
+        ("Product B", "SKU-B", 20000),
+        ("Product C", "SKU-C", 15000),
     ]):
         product = Product(
             category_id=category.id,
@@ -42,7 +46,7 @@ def setup_test_data(db):
             sku=sku,
             min_stock=5,
             unit="Piece",
-            purchase_price=price / 2,
+            purchase_price=price // 2,
             available=True
         )
         db.add(product)
@@ -54,17 +58,17 @@ def setup_test_data(db):
 
     return category, products
 
-def test_basic_dashboard_metrics():
+def test_basic_dashboard_metrics(db_session):
     """Test basic dashboard metric calculations"""
     print("\nTEST: Basic Dashboard Metrics")
     print("-" * 60)
 
-    db = SessionLocal()
+    db = db_session
     category, products = setup_test_data(db)
     product_a, product_b, product_c = products
 
     # Create a few orders today at different times
-    # Order 1: 08:00 - 2x A, 1x B = 100*2 + 200*1 = 400
+    # Order 1: 08:00 - 2x A, 1x B = 10000*2 + 20000*1 = 40000
     today = datetime.utcnow().replace(hour=8, minute=0, second=0, microsecond=0)
     order1 = create_order(db, OrderCreate(
         order_type="TAKEAWAY",
@@ -73,25 +77,30 @@ def test_basic_dashboard_metrics():
             OrderItemCreate(product_id=product_a.id, quantity=2),
             OrderItemCreate(product_id=product_b.id, quantity=1),
         ],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("500")
+        amount_received=50000
     ))
+    db.query(Order).filter(Order.id == order1.id).update({"created_at": today})
+    db.commit()
     print(f"Created order 1: {order1.order_number}, Total: {order1.total}")
 
-    # Order 2: 12:00 - 3x C = 150*3 = 450
+    # Order 2: 12:00 - 3x C = 15000*3 = 45000
+    order2_time = datetime.utcnow().replace(hour=12, minute=0, second=0, microsecond=0)
     order2 = create_order(db, OrderCreate(
         order_type="TAKEAWAY",
         table_id=None,
         items=[
             OrderItemCreate(product_id=product_c.id, quantity=3),
         ],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("500")
+        amount_received=50000
     ))
+    db.query(Order).filter(Order.id == order2.id).update({"created_at": order2_time})
+    db.commit()
     print(f"Created order 2: {order2.order_number}, Total: {order2.total}")
 
     # Order 3: Tomorrow (should not be included in dashboard)
@@ -100,25 +109,25 @@ def test_basic_dashboard_metrics():
         order_number="ORD-TOMORROW",
         order_type="TAKEAWAY",
         status="PAID",
-        subtotal=Decimal("100"),
-        discount=Decimal("0"),
-        tax=Decimal("0"),
-        total=Decimal("100"),
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
         payment_method="CASH",
-        amount_received=Decimal("100"),
-        change_amount=Decimal("0"),
+        amount_received=10000,
+        change_amount=0,
         created_at=tomorrow
     )
     db.add(order3)
+    db.flush()
     db.add(OrderItem(
         order_id=order3.id,
         product_id=product_a.id,
         product_name="Product A",
         quantity=1,
-        price=Decimal("100"),
-        line_total=Decimal("100"),
+        price=10000,
+        line_total=10000,
     ))
-    db.flush()
     db.commit()
     print(f"Created order 3 (tomorrow): {order3.order_number}")
 
@@ -134,7 +143,7 @@ def test_basic_dashboard_metrics():
     print(f"  Hourly Sales (12:00): Rs. {dashboard.hourly_sales[12].revenue}")
 
     # Verify calculations
-    expected_sales = Decimal("400") + Decimal("450")  # 850
+    expected_sales = 40000 + 45000  # 850 rupees
     assert dashboard.sales == expected_sales, f"Expected sales {expected_sales}, got {dashboard.sales}"
     print("[PASS] Sales calculation correct")
 
@@ -149,26 +158,35 @@ def test_basic_dashboard_metrics():
     assert dashboard.low_stock == 0, f"Expected 0 low stock, got {dashboard.low_stock}"
     print("[PASS] Low stock count correct")
 
-    assert dashboard.hourly_sales[8].revenue == Decimal("400")
-    assert dashboard.hourly_sales[12].revenue == Decimal("450")
+    assert dashboard.hourly_sales[8].revenue == 40000
+    assert dashboard.hourly_sales[12].revenue == 45000
     print("[PASS] Hourly sales breakdown correct")
 
-    # Check top products
-    assert len(dashboard.top_products) == 2, f"Expected 2 top products, got {len(dashboard.top_products)}"
+    # Check top products (ordered by quantity_sold descending)
+    # Order 1: 2x A, 1x B = A:qty=2, B:qty=1
+    # Order 2: 3x C = C:qty=3
+    # Expected ranking: C (3), A (2), B (1)
+    assert len(dashboard.top_products) == 3, f"Expected 3 top products, got {len(dashboard.top_products)}"
     top1 = dashboard.top_products[0]
-    assert top1.product_name == "Product A"
-    assert top1.quantity_sold == 2
+    assert top1.product_name == "Product C"
+    assert top1.quantity_sold == 3
+    assert top1.revenue == 45000
+    top2 = dashboard.top_products[1]
+    assert top2.product_name == "Product A"
+    assert top2.quantity_sold == 2
+    assert top2.revenue == 20000
+    top3 = dashboard.top_products[2]
+    assert top3.product_name == "Product B"
+    assert top3.quantity_sold == 1
+    assert top3.revenue == 20000
     print("[PASS] Top products ranking correct")
 
-    db.close()
-    return True
-
-def test_cancelled_orders_excluded():
+def test_cancelled_orders_excluded(db_session):
     """Test that cancelled orders don't count toward sales"""
     print("\nTEST: Cancelled Orders Excluded from Sales")
     print("-" * 60)
 
-    db = SessionLocal()
+    db = db_session
     category, products = setup_test_data(db)
     product_a = products[0]
 
@@ -177,10 +195,10 @@ def test_cancelled_orders_excluded():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=product_a.id, quantity=1)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     ))
 
     # Manually create a CANCELLED order
@@ -188,13 +206,13 @@ def test_cancelled_orders_excluded():
         order_number="ORD-CANCELLED",
         order_type="TAKEAWAY",
         status="CANCELLED",
-        subtotal=Decimal("100"),
-        discount=Decimal("0"),
-        tax=Decimal("0"),
-        total=Decimal("100"),
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
         payment_method="CASH",
-        amount_received=Decimal("100"),
-        change_amount=Decimal("0"),
+        amount_received=10000,
+        change_amount=0,
         cancelled_at=datetime.utcnow(),
         cancelled_reason="Test"
     )
@@ -207,8 +225,8 @@ def test_cancelled_orders_excluded():
         product_id=product_a.id,
         product_name="Product A",
         quantity=5,
-        price=Decimal("100"),
-        line_total=Decimal("500"),
+        price=10000,
+        line_total=50000,
     ))
     db.commit()
 
@@ -222,15 +240,12 @@ def test_cancelled_orders_excluded():
     print(f"  Sales: Rs. {dashboard.sales} (only 1 order)")
     print(f"  Cancelled: {dashboard.cancelled}")
 
-    db.close()
-    return True
-
-def test_low_stock_detection():
+def test_low_stock_detection(db_session):
     """Test low stock product detection"""
     print("\nTEST: Low Stock Detection")
     print("-" * 60)
 
-    db = SessionLocal()
+    db = db_session
 
     category = Category(name="Category", active=True)
     db.add(category)
@@ -241,45 +256,45 @@ def test_low_stock_detection():
         Product(
             category_id=category.id,
             name="In Stock",
-            price=Decimal("100"),
+            price=10000,
             stock=100,
             sku="IN-STOCK",
             min_stock=5,
             unit="Piece",
-            purchase_price=Decimal("50"),
+            purchase_price=5000,
             available=True
         ),
         Product(
             category_id=category.id,
             name="Low Stock",
-            price=Decimal("100"),
+            price=10000,
             stock=3,
             sku="LOW-STOCK",
             min_stock=5,
             unit="Piece",
-            purchase_price=Decimal("50"),
+            purchase_price=5000,
             available=True
         ),
         Product(
             category_id=category.id,
             name="Out of Stock",
-            price=Decimal("100"),
+            price=10000,
             stock=0,
             sku="OUT-OF-STOCK",
             min_stock=5,
             unit="Piece",
-            purchase_price=Decimal("50"),
+            purchase_price=5000,
             available=True
         ),
         Product(
             category_id=category.id,
             name="Disabled",
-            price=Decimal("100"),
+            price=10000,
             stock=0,
             sku="DISABLED",
             min_stock=5,
             unit="Piece",
-            purchase_price=Decimal("50"),
+            purchase_price=5000,
             available=False  # Disabled products shouldn't count
         ),
     ]
@@ -295,9 +310,6 @@ def test_low_stock_detection():
     assert dashboard.low_stock == 2, f"Expected 2 low stock, got {dashboard.low_stock}"
     print("[PASS] Low stock detection correct")
     print(f"  Low/Out-of-Stock: {dashboard.low_stock} (excluded disabled products)")
-
-    db.close()
-    return True
 
 def run_all_tests():
     """Run all Phase 9 dashboard tests"""

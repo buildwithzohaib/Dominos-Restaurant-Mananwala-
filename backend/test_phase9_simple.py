@@ -4,7 +4,6 @@ Verifies dashboard metrics are calculated correctly
 """
 
 import sys
-from decimal import Decimal
 from datetime import datetime
 
 from sqlalchemy import create_engine
@@ -45,12 +44,12 @@ def test_dashboard_endpoint():
         p = Product(
             category_id=category.id,
             name=name,
-            price=Decimal("100"),
+            price=10000,
             stock=100,
             sku=sku,
             min_stock=5,
             unit="Piece",
-            purchase_price=Decimal("50"),
+            purchase_price=5000,
             available=True
         )
         db.add(p)
@@ -68,10 +67,10 @@ def test_dashboard_endpoint():
             OrderItemCreate(product_id=burger.id, quantity=2),
             OrderItemCreate(product_id=fries.id, quantity=1),
         ],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("500")
+        amount_received=50000
     ))
 
     order2 = create_order(db, OrderCreate(
@@ -80,10 +79,10 @@ def test_dashboard_endpoint():
         items=[
             OrderItemCreate(product_id=cola.id, quantity=3),
         ],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("500")
+        amount_received=50000
     ))
 
     print(f"Created order 1: {order1.order_number}, Total: {order1.total}")
@@ -131,12 +130,12 @@ def test_cancelled_orders_excluded():
     product = Product(
         category_id=category.id,
         name="Coffee",
-        price=Decimal("50"),
+        price=5000,
         stock=100,
         sku="COFFEE-UNIQUE",
         min_stock=5,
         unit="Cup",
-        purchase_price=Decimal("25"),
+        purchase_price=2500,
         available=True
     )
     db.add(product)
@@ -147,10 +146,10 @@ def test_cancelled_orders_excluded():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=product.id, quantity=1)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("100")
+        amount_received=10000
     ))
 
     print(f"Created order 1 (PAID): {order1.order_number}")
@@ -160,10 +159,10 @@ def test_cancelled_orders_excluded():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=product.id, quantity=5)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("500")
+        amount_received=50000
     ))
 
     cancel_order(db, order2.id, OrderCancelIn(reason="CUSTOMER_CHANGED_ORDER"))

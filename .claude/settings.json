@@ -25,7 +25,24 @@
       "Bash(timeout 5 uvicorn app.main:app --reload)",
       "Bash(pytest)",
       "Bash(grep -E \"toFixed|Number\\\\\\(|\\\\\\\\\\\\${.*toFixed\")",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(python -c \"from app import seed; print\\('✓ Import successful'\\)\")",
+      "Bash(python -c \"from app import seed; print\\('Import successful'\\)\")",
+      "Bash(python -c \"import os; os.remove\\('tmp_seed_test.db'\\) if os.path.exists\\('tmp_seed_test.db'\\) else None; print\\('Clean'\\)\")",
+      "Bash(alembic -x db_url=sqlite:///./tmp_seed_test.db upgrade head)",
+      "Bash(python -c \"import sqlite3; c=sqlite3.connect\\('tmp_seed_test.db'\\); tables = c.execute\\(\\\\\"SELECT name FROM sqlite_master WHERE type='table' ORDER BY name\\\\\"\\).fetchall\\(\\); print\\('Tables:', [t[0] for t in tables]\\); print\\('Count:', len\\(tables\\)\\)\")",
+      "Bash(python -c \"from app.seed import seed_data; seed_data\\(\\)\")",
+      "Bash(python -c \"import sqlite3; c=sqlite3.connect\\('tmp_seed_test.db'\\); rows = c.execute\\('SELECT name, price, purchase_price, typeof\\(price\\), typeof\\(purchase_price\\) FROM products ORDER BY name'\\).fetchall\\(\\); [print\\(f'{r[0]:25} | price={r[1]:5} \\({r[3]:7}\\) | purchase={r[2]:5} \\({r[4]:7}\\)'\\) for r in rows]\")",
+      "Bash(python -c \"import os; os.remove\\('tmp_seed_test.db'\\) if os.path.exists\\('tmp_seed_test.db'\\) else None; print\\('Deleted'\\)\")",
+      "Bash(python -c \"import sqlite3; c=sqlite3.connect\\('pos.db'\\); result = c.execute\\('SELECT COUNT\\(*\\), SUM\\(price\\) FROM products'\\).fetchone\\(\\); print\\(f'Rows: {result[0]}, SUM\\(price\\): {result[1]}'\\)\")",
+      "Bash(python -m pytest -v)",
+      "Bash(python -m pytest test_phase8.py::test_multi_item_cancellation -v)",
+      "Bash(python -m pytest -v --tb=no)",
+      "Bash(python -m pytest test_phase8.py test_phase8_v2.py -v)",
+      "Bash(rm -f test_phase*.db test_p9*.db)",
+      "Bash(python -m pytest test_phase8.py test_phase8_v2.py -v --tb=short)",
+      "Bash(python -m pytest test_phase9.py::test_basic_dashboard_metrics -v)",
+      "Bash(python -m pytest test_phase9.py::test_basic_dashboard_metrics -v --tb=short)"
     ]
   }
 }

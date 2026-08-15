@@ -4,7 +4,6 @@ Simplified version focusing on core functionality
 """
 
 import sys
-from decimal import Decimal
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from app.database import Base
@@ -42,12 +41,12 @@ def setup_test_data(db):
         product = Product(
             category_id=category.id,
             name=name,
-            price=Decimal("80" if i == 0 else "150" if i == 1 else "250"),
+            price=8000 if i == 0 else 15000 if i == 1 else 25000,
             stock=20 if i == 0 else 30 if i == 1 else 15,
             sku=sku,
             min_stock=5 if i != 1 else 10,
             unit="Bottle" if i == 0 else "Portion" if i == 1 else "Piece",
-            purchase_price=Decimal("40" if i == 0 else "75" if i == 1 else "125"),
+            purchase_price=4000 if i == 0 else 7500 if i == 1 else 12500,
             available=True
         )
         db.add(product)
@@ -76,10 +75,10 @@ def test_1_single_item_cancellation():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     ))
 
     print(f"Order created: {order.order_number}")
@@ -128,10 +127,10 @@ def test_2_multi_item_cancellation():
             OrderItemCreate(product_id=fries.id, quantity=3),
             OrderItemCreate(product_id=nuggets.id, quantity=1),
         ],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("1000")
+        amount_received=100000
     ))
 
     print(f"Order created: {order.order_number}")
@@ -178,10 +177,10 @@ def test_3_current_stock_incremented():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     ))
 
     db.refresh(pepsi)
@@ -225,10 +224,10 @@ def test_4_double_cancellation_protection():
         order_type="TAKEAWAY",
         table_id=None,
         items=[OrderItemCreate(product_id=pepsi.id, quantity=2)],
-        discount=Decimal("0"),
-        tax_rate=Decimal("0"),
+        discount=0,
+        tax_rate=0,
         payment_method="CASH",
-        amount_received=Decimal("200")
+        amount_received=20000
     ))
 
     print(f"Order created: {order.order_number}")
