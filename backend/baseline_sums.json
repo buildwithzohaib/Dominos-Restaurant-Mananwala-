@@ -1,0 +1,25 @@
+{
+  "products": {
+    "count": 5,
+    "price_sum": "1230.00",
+    "purchase_price_sum": "830.00"
+  },
+  "orders": {
+    "count": 5,
+    "subtotal_sum": "2210.00",
+    "discount_sum": "0",
+    "tax_sum": "0",
+    "total_sum": "2210.00",
+    "amount_received_sum": "2210.00",
+    "change_amount_sum": "0"
+  },
+  "order_items": {
+    "count": 7,
+    "price_sum": "2210.00",
+    "line_total_sum": "2210.00"
+  },
+  "stock_movements": {
+    "count": 10,
+    "purchase_price_sum": "160.00"
+  }
+}

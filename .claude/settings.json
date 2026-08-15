@@ -15,7 +15,11 @@
       "Bash(git commit -m 'docs: add Phases 8, 9, 10 completion summary *)",
       "Bash(python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000)",
       "PowerShell(Invoke-WebRequest -Uri \"http://localhost:8000/api/health\")",
-      "Bash(curl -s http://localhost:8000/api/health)"
+      "Bash(curl -s http://localhost:8000/api/health)",
+      "Bash(python record_baseline.py)",
+      "Bash(python)",
+      "Bash(python -c \"from app.database import Base; from app.models import models; print\\('Tables in Base.metadata:'\\); print\\(sorted\\(Base.metadata.tables.keys\\(\\)\\)\\)\")",
+      "Bash(alembic -x \"db_url=sqlite:///C:\\\\Users\\\\user\\\\OneDrive\\\\Desktop\\\\New folder \\(2\\)\\\\my-pos\\\\my-pos\\\\backend\\\\tmp_empty.db\" revision --autogenerate -m \"Initial schema from Phase 1-10\")"
     ]
   }
 }
