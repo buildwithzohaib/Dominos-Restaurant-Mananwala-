@@ -1,6 +1,5 @@
 from datetime import datetime
-from decimal import Decimal
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -16,7 +15,7 @@ class Product(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     name: Mapped[str] = mapped_column(String(150), index=True)
-    price: Mapped[Decimal] = mapped_column(Numeric(10, 2))  # single authoritative selling price: POS/cart/receipt all read this
+    price: Mapped[int] = mapped_column(Integer)  # single authoritative selling price: POS/cart/receipt all read this
     stock: Mapped[int] = mapped_column(Integer, default=0)  # single authoritative current-stock value
     image: Mapped[str | None] = mapped_column(String(500), nullable=True)
     available: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -25,7 +24,7 @@ class Product(Base):
     sku: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     min_stock: Mapped[int] = mapped_column(Integer, default=5)
     unit: Mapped[str] = mapped_column(String(30), default="Piece")
-    purchase_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    purchase_price: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     category: Mapped["Category"] = relationship(back_populates="products")
@@ -61,7 +60,7 @@ class StockMovement(Base):
     quantity_change: Mapped[int] = mapped_column(Integer)  # signed: +50 purchase, -2 damage, +5 correction
     reason: Mapped[str] = mapped_column(String(200))  # e.g. "Purchase", "Damaged", "Other: <note>"
     supplier: Mapped[str | None] = mapped_column(String(150), nullable=True)
-    purchase_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    purchase_price: Mapped[int | None] = mapped_column(Integer, nullable=True)
     stock_before: Mapped[int] = mapped_column(Integer)
     stock_after: Mapped[int] = mapped_column(Integer)
     reference: Mapped[str | None] = mapped_column(String(50), nullable=True)  # reserved for a future SALE movement's order_number
@@ -86,13 +85,13 @@ class Order(Base):
     # the old "COMPLETED" default to match the terminology Phase 7's Orders page
     # uses; see seed.py's migration for the one-time backfill of pre-existing rows.
     status: Mapped[str] = mapped_column(String(30), default="PAID")
-    subtotal: Mapped[Decimal] = mapped_column(Numeric(10, 2))
-    discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
-    tax: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
-    total: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    subtotal: Mapped[int] = mapped_column(Integer)
+    discount: Mapped[int] = mapped_column(Integer, default=0)
+    tax: Mapped[int] = mapped_column(Integer, default=0)
+    total: Mapped[int] = mapped_column(Integer)
     payment_method: Mapped[str] = mapped_column(String(30))
-    amount_received: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
-    change_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0)
+    amount_received: Mapped[int] = mapped_column(Integer, default=0)
+    change_amount: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     # --- Cancellation metadata (Phase 7) — a cancelled order is never deleted, only
     # flipped to status="CANCELLED" with these two fields recorded alongside it. ---
@@ -108,6 +107,6 @@ class OrderItem(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     product_name: Mapped[str] = mapped_column(String(150))
     quantity: Mapped[int] = mapped_column(Integer)
-    price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
-    line_total: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    price: Mapped[int] = mapped_column(Integer)
+    line_total: Mapped[int] = mapped_column(Integer)
     order: Mapped["Order"] = relationship(back_populates="items")
