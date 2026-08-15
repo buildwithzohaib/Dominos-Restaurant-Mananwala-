@@ -84,7 +84,7 @@ export function StockHistory() {
             {movements.map((m) => (
               <div className="history-row" key={m.id}>
                 <span>{new Date(m.created_at).toLocaleString()}</span>
-                <span>{m.product_name}</span>
+                <span>{m.item_name}</span>
                 <span className={m.quantity_change > 0 ? "change-positive" : "change-negative"}>
                   {m.quantity_change > 0 ? `+${m.quantity_change}` : m.quantity_change}
                 </span>

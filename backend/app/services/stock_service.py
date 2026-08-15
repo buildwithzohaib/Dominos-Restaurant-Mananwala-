@@ -50,8 +50,9 @@ def add_purchase_stock(db: Session, product_id: int, payload: StockPurchaseIn) -
     stock_before = stock_after - payload.quantity
 
     movement = StockMovement(
-        product_id=product.id,
-        product_name=product.name,
+        item_type="PRODUCT",
+        item_id=product.id,
+        item_name=product.name,
         movement_type="PURCHASE",
         quantity_change=payload.quantity,
         reason="Purchase",
@@ -105,8 +106,9 @@ def adjust_stock(db: Session, product_id: int, payload: StockAdjustmentIn) -> Pr
     stock_before = stock_after - payload.quantity_change
 
     movement = StockMovement(
-        product_id=product.id,
-        product_name=product.name,
+        item_type="PRODUCT",
+        item_id=product.id,
+        item_name=product.name,
         movement_type="ADJUSTMENT",
         quantity_change=payload.quantity_change,
         reason=label,
@@ -135,7 +137,7 @@ def list_movements(
     if search and search.strip():
         term = f"%{search.strip()}%"
         query = query.filter(
-            or_(StockMovement.product_name.ilike(term), StockMovement.supplier.ilike(term))
+            or_(StockMovement.item_name.ilike(term), StockMovement.supplier.ilike(term))
         )
     if movement_type and movement_type.strip():
         query = query.filter(StockMovement.movement_type == movement_type.strip().upper())

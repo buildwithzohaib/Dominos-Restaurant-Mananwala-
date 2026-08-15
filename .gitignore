@@ -19,4 +19,4 @@ __pycache__/
 node_modules/
 dist/
 .env
-baseline_sums.json
+backend/baseline_*.json

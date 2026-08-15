@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -44,16 +44,19 @@ class Product(Base):
         return "IN_STOCK"
 
 class StockMovement(Base):
-    """Phase 4 ledger — every manual stock change writes one row here in the same
-    transaction that updates Product.stock, so the two can never drift apart.
-    Product.stock remains the single authoritative current-stock value; this table
-    only explains its history, it never competes with it as a second source of truth."""
+    """Task 0.7 ledger (polymorphic) — every stock change for products or ingredients
+    writes one row here in the same transaction that updates the current stock value.
+    Uses item_type ('PRODUCT' | 'INGREDIENT') + item_id to identify the item.
+    Task 0.8 (ingredients + recipes) will add Ingredient model; stock_movements will track both."""
     __tablename__ = "stock_movements"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
-    # Snapshot, not a live join — mirrors OrderItem.product_name below, so renaming a
-    # product later never rewrites what an audit record said at the time.
-    product_name: Mapped[str] = mapped_column(String(150))
+    # Polymorphic identity: 'PRODUCT' | 'INGREDIENT'
+    item_type: Mapped[str] = mapped_column(String(20))
+    # The item's id in its respective table (products.id or ingredients.id in Stage 6)
+    item_id: Mapped[int] = mapped_column(Integer)
+    # Snapshot, not a live join — product or ingredient name at the time of movement,
+    # so renaming an item later never rewrites what an audit record said at the time.
+    item_name: Mapped[str] = mapped_column(String(150))
     # PURCHASE | ADJUSTMENT | SALE | CANCELLATION. RETURN/REFUND/WASTE are reserved
     # for a future phase and deliberately not implemented here.
     movement_type: Mapped[str] = mapped_column(String(20), index=True)
@@ -66,7 +69,9 @@ class StockMovement(Base):
     reference: Mapped[str | None] = mapped_column(String(50), nullable=True)  # reserved for a future SALE movement's order_number
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
-    product: Mapped["Product"] = relationship()
+    __table_args__ = (
+        Index('ix_stock_movements_item_type_item_id', 'item_type', 'item_id'),
+    )
 
 class RestaurantTable(Base):
     __tablename__ = "restaurant_tables"

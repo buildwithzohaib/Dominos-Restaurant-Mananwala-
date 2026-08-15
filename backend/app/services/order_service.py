@@ -134,8 +134,9 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
             line_total=product.price * quantity,
         ))
         db.add(StockMovement(
-            product_id=product.id,
-            product_name=product.name,
+            item_type="PRODUCT",
+            item_id=product.id,
+            item_name=product.name,
             movement_type="SALE",
             quantity_change=-quantity,
             reason="Sale",
@@ -197,35 +198,38 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
     for sale_movement in sale_movements:
         # Restore the quantity: undo the negative quantity_change from the SALE.
         restore_quantity = -sale_movement.quantity_change  # e.g., SALE was -2, restore is +2
-        product_id = sale_movement.product_id
 
-        # Atomic increment: update Product.stock by restore_quantity.
-        db.execute(
-            update(Product)
-            .where(Product.id == product_id)
-            .values(stock=Product.stock + restore_quantity, updated_at=datetime.utcnow())
-        )
+        # For now, all movements are PRODUCT type. Get the product to update its stock.
+        # Stage 6 will handle INGREDIENT type separately.
+        if sale_movement.item_type == "PRODUCT":
+            product = db.get(Product, sale_movement.item_id)
+            # Atomic increment: update Product.stock by restore_quantity.
+            db.execute(
+                update(Product)
+                .where(Product.id == product.id)
+                .values(stock=Product.stock + restore_quantity, updated_at=datetime.utcnow())
+            )
 
-        # Refresh to get the new current stock value.
-        product = db.get(Product, product_id)
-        db.refresh(product)
-        stock_after = product.stock
-        stock_before = stock_after - restore_quantity
+            # Refresh to get the new current stock value.
+            db.refresh(product)
+            stock_after = product.stock
+            stock_before = stock_after - restore_quantity
 
-        # Create a new CANCELLATION movement, referencing the same order.
-        cancellation_movement = StockMovement(
-            product_id=product.id,
-            product_name=product.name,
-            movement_type="CANCELLATION",
-            quantity_change=restore_quantity,
-            reason="Order cancellation",
-            supplier=None,
-            purchase_price=None,
-            stock_before=stock_before,
-            stock_after=stock_after,
-            reference=order.order_number,
-        )
-        db.add(cancellation_movement)
+            # Create a new CANCELLATION movement, referencing the same order.
+            cancellation_movement = StockMovement(
+                item_type=sale_movement.item_type,
+                item_id=sale_movement.item_id,
+                item_name=sale_movement.item_name,
+                movement_type="CANCELLATION",
+                quantity_change=restore_quantity,
+                reason="Order cancellation",
+                supplier=None,
+                purchase_price=None,
+                stock_before=stock_before,
+                stock_after=stock_after,
+                reference=order.order_number,
+            )
+            db.add(cancellation_movement)
 
     db.commit()
     return db.query(Order).options(joinedload(Order.items)).filter(Order.id == order_id).first()

@@ -121,8 +121,9 @@ class StockAdjustmentIn(BaseModel):
 class StockMovementOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    product_id: int
-    product_name: str
+    item_type: str  # 'PRODUCT' | 'INGREDIENT'
+    item_id: int
+    item_name: str
     movement_type: str
     quantity_change: int
     reason: str
