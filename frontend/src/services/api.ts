@@ -6,6 +6,7 @@ async function request<T>(path:string,options?:RequestInit):Promise<T>{
  return r.json();
 }
 export const api={
+ getCatalogCategories:()=>request<Category[]>("/api/catalog/categories"),
  getCategories:()=>request<Category[]>("/api/categories"),
  getCatalogProducts:()=>request<Product[]>("/api/catalog/products"),
  getProducts:(search?:string,includeDisabled?:boolean)=>{

@@ -22,7 +22,7 @@ function AppContent() {
   const settings = settingsContext?.settings;
 
   useEffect(() => {
-    Promise.all([api.getCategories(), api.getCatalogProducts()])
+    Promise.all([api.getCatalogCategories(), api.getCatalogProducts()])
       .then(([c, p]) => {
         setCategories(c);
         setProducts(p);

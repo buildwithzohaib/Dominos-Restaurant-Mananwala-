@@ -135,7 +135,7 @@ export function Products() {
                   <strong className="item-name">{item.name_display}</strong>
                 </span>
                 <span>
-                  {item.category_id} {/* TODO: display category name */}
+                  {item.category.name_display}
                 </span>
                 <span>{item.sku}</span>
                 <span>{formatCurrency(item.price)}</span>
