@@ -5,12 +5,24 @@ Endpoints for creating, reading, updating, and managing categories.
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from app.models.models import Category
 
 from app.database import get_db
 from app.schemas.schemas import CategoryCreate, CategoryUpdate, CategoryOut
 from app.services import category_service
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
+
+
+@router.get("", response_model=list[CategoryOut])
+def list_categories(db: Session = Depends(get_db)):
+    """
+    Get all categories (active and inactive).
+
+    Used by management UIs and dropdowns. Returns both active and inactive
+    categories so that products in inactive categories can still be edited.
+    """
+    return db.query(Category).order_by(Category.name_display).all()
 
 
 @router.post("", response_model=CategoryOut)

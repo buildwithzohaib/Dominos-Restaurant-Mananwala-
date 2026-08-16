@@ -6,8 +6,9 @@ from app.schemas.schemas import CategoryOut, ProductOut, TableOut
 
 router = APIRouter(prefix="/api", tags=["catalog"])
 
-@router.get("/categories", response_model=list[CategoryOut])
-def categories(db: Session = Depends(get_db)):
+@router.get("/catalog/categories", response_model=list[CategoryOut])
+def catalog_categories(db: Session = Depends(get_db)):
+    """Get all active categories for the POS catalog/grid."""
     return db.query(Category).filter(Category.active.is_(True)).order_by(Category.name_display).all()
 
 @router.get("/catalog/products", response_model=list[ProductOut])

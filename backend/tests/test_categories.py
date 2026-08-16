@@ -7,8 +7,10 @@ Includes category lifecycle, name normalization, deduplication, and catalog filt
 import pytest
 import tempfile
 import os
+import gc
+import time
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from app.database import Base, get_db
 from app.models.models import Category, Product
@@ -29,15 +31,25 @@ def engine():
         Base.metadata.create_all(bind=test_engine)
         yield test_engine
     finally:
-        # Dispose of engine before deleting the file
+        # Explicitly close all connections before disposal
+        test_engine.raw_connection().close() if hasattr(test_engine.raw_connection(), 'close') else None
         test_engine.dispose()
-        # Clean up the temporary file
+
+        # Force garbage collection to release file handles
+        gc.collect()
+        time.sleep(0.1)  # Brief pause to allow OS to release file
+
+        # Clean up the temporary file with retry
         if os.path.exists(db_path):
-            try:
-                os.remove(db_path)
-            except OSError:
-                # File might still be locked on Windows, ignore
-                pass
+            for attempt in range(3):
+                try:
+                    os.remove(db_path)
+                    break
+                except OSError:
+                    if attempt < 2:
+                        gc.collect()
+                        time.sleep(0.05)
+                    # After 3 attempts, file will be cleaned up by OS eventually
 
 
 @pytest.fixture(scope="function")

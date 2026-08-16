@@ -6,7 +6,7 @@ Handles product CRUD operations, enable/disable, and product lifecycle.
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Product, Category
 from app.schemas.schemas import ProductCreate, ProductUpdate
@@ -88,7 +88,7 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
 
 def get_product(db: Session, product_id: int, include_disabled: bool = False) -> Product:
     """Get a product by ID"""
-    product = db.get(Product, product_id)
+    product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(404, "Product not found.")
     if not include_disabled and not product.available:
@@ -98,7 +98,7 @@ def get_product(db: Session, product_id: int, include_disabled: bool = False) ->
 
 def list_products(db: Session, search: str | None = None, include_disabled: bool = False) -> list[Product]:
     """List products with optional search"""
-    query = db.query(Product)
+    query = db.query(Product).options(joinedload(Product.category))
 
     if not include_disabled:
         query = query.filter(Product.available.is_(True))

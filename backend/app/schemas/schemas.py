@@ -38,6 +38,13 @@ class CategoryOut(BaseModel):
     name_display: str
     active: bool
 
+class CategoryNested(BaseModel):
+    """Nested category representation for ProductOut"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name_display: str
+    active: bool
+
 class CategoryCreate(BaseModel):
     name: str
 
@@ -48,6 +55,7 @@ class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     category_id: int
+    category: CategoryNested  # nested category object
     name_display: str
     price: int  # paisa
     stock: int
