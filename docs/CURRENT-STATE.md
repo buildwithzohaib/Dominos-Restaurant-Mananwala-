@@ -659,13 +659,34 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-## 7. SCHEMA COMPLETENESS CHECK
+## 7. KNOWN GAPS
+
+### orders.tax_rate Snapshot Missing (Rule 7)
+
+**Issue:** The `orders` table stores `tax` (paisa) but not `tax_rate` (basis points).  
+**Impact:** The tax rate applied to an order cannot be recovered later. If settings change, historical orders show only the calculated tax amount, not the rate that produced it.
+
+**Example:** Order ORD-00011 has `tax=4000` and was charged at 16% (1600 bp). If tax settings later change to 20%, we cannot tell from the order record alone whether 4000 was 16% or 20% of 25000.
+
+**Rule Violated:** Rule 7 (Order snapshots must capture the state at time of sale)
+
+**Fix:** Add `tax_rate` column to `orders` table in a migration (Stage 4, Orders phase).
+- Alembic migration: `ALTER TABLE orders ADD COLUMN tax_rate INTEGER DEFAULT 0;`
+- Backfill existing rows to 0 (since `tax_enabled` has been false throughout)
+- Once added, PaymentModal sends `tax_rate` with every order, and it is stored alongside `tax`
+
+**Timeline:** 30 minutes (straightforward migration + backfill)  
+**Priority:** Low (not urgent while `tax_enabled` is false, but required for Rule 7 compliance)
+
+---
+
+## 8. SCHEMA COMPLETENESS CHECK
 
 **Missing for Production Use:**
 
 | Feature | Table Needed | Status | Priority |
 |---------|--------------|--------|----------|
-| Settings (Rule 1) | `settings` | ❌ Missing | Phase 15 |
+| Settings (Rule 1) | `settings` | ✅ Added (Task 1.1) | Complete |
 | Ingredients (Phase 15) | `ingredients`, extend `stock_movements` | ❌ Missing | Phase 15 |
 | Recipes/BOM (Phase 15) | `recipes` | ❌ Missing | Phase 15 |
 | Customers (Phase 11+) | `customers` | ❌ Missing | TBD |
@@ -674,7 +695,7 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-## 8. SUMMARY
+## 9. SUMMARY
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
