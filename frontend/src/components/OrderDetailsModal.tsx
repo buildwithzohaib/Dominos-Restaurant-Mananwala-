@@ -1,7 +1,9 @@
 import { X } from "lucide-react";
+import { useContext } from "react";
 
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
+import { SettingsContext } from "../context/SettingsContext";
 import type { Order } from "../types";
 
 export function OrderDetailsModal({
@@ -14,6 +16,8 @@ export function OrderDetailsModal({
   onCancelRequested: () => void;
 }) {
   const formatCurrency = useCurrencyFormat();
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
   return (
     <div className="modal-backdrop">
       <div className="inventory-modal order-details-modal">
@@ -56,10 +60,12 @@ export function OrderDetailsModal({
             <span>Discount</span>
             <strong>- {formatCurrency(order.discount)}</strong>
           </div>
-          <div>
-            <span>Tax</span>
-            <strong>{formatCurrency(order.tax)}</strong>
-          </div>
+          {settings?.tax_enabled && (
+            <div>
+              <span>Tax</span>
+              <strong>{formatCurrency(order.tax)}</strong>
+            </div>
+          )}
           <div className="receipt-grand-total">
             <span>TOTAL</span>
             <strong>{formatCurrency(order.total)}</strong>

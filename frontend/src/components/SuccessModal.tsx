@@ -96,10 +96,12 @@ export function SuccessModal({
               <strong>- {formatCurrency(receipt.discount)}</strong>
             </div>
 
-            <div>
-              <span>Tax</span>
-              <strong>{formatCurrency(receipt.tax)}</strong>
-            </div>
+            {settings?.tax_enabled && (
+              <div>
+                <span>Tax</span>
+                <strong>{formatCurrency(receipt.tax)}</strong>
+              </div>
+            )}
 
             <div className="receipt-grand-total">
               <span>TOTAL</span>
@@ -213,10 +215,12 @@ export function SuccessModal({
             <strong>- {formatCurrency(receipt.discount)}</strong>
           </div>
 
-          <div>
-            <span>Tax</span>
-            <strong>{formatCurrency(receipt.tax)}</strong>
-          </div>
+          {settings?.tax_enabled && (
+            <div>
+              <span>Tax</span>
+              <strong>{formatCurrency(receipt.tax)}</strong>
+            </div>
+          )}
 
           <div className="thermal-total">
             <span>TOTAL</span>

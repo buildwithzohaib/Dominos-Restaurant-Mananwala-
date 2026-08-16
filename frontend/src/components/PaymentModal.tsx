@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
+import { SettingsContext } from "../context/SettingsContext";
 import {
   CreditCard,
   Banknote,
@@ -37,6 +38,8 @@ export function PaymentModal({
   onSuccess: (receipt: ReceiptData) => void;
 }) {
   const formatCurrency = useCurrencyFormat();
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
   const {
     state,
     subtotal,
@@ -69,7 +72,7 @@ export function PaymentModal({
         })),
 
         discount: discount,
-        tax_rate: state.taxRate,
+        tax_rate: settings?.tax_rate ?? 0,
 
         payment_method: state.paymentMethod,
 
@@ -227,8 +230,12 @@ export function PaymentModal({
 
         <p className="payment-note">
           Subtotal {formatCurrency(subtotal)}
-          {" · "}
-          Tax {formatCurrency(tax)}
+          {settings?.tax_enabled && (
+            <>
+              {" · "}
+              Tax {formatCurrency(tax)}
+            </>
+          )}
         </p>
 
       </div>

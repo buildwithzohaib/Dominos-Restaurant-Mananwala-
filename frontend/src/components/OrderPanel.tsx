@@ -1,11 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useContext } from "react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { usePOS } from "../context/POSContext";
+import { SettingsContext } from "../context/SettingsContext";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 
 export function OrderPanel({ onPay }: { onPay: () => void }) {
   const formatCurrency = useCurrencyFormat();
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
   const {
     state,
     subtotal,
@@ -15,13 +18,11 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
     setQty,
     removeProduct,
     setDiscount,
-    setTaxRate,
   } = usePOS();
 
   const [discountText, setDiscountText] = useState(
     String(paisaToRupees(state.discount))
   );
-  const [taxText, setTaxText] = useState(String(state.taxRate / 100));
 
   return (
     <aside className="order-panel">
@@ -114,20 +115,6 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
               }}
             />
           </label>
-
-          <label>
-            Tax %
-
-            <input
-              type="number"
-              min="0"
-              value={taxText}
-              onChange={(e) => {
-                setTaxText(e.target.value);
-                setTaxRate(Math.round((parseFloat(e.target.value) || 0) * 100));
-              }}
-            />
-          </label>
         </div>
 
         <div className="summary-row">
@@ -140,10 +127,12 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
           <b>- {formatCurrency(discount)}</b>
         </div>
 
-        <div className="summary-row">
-          <span>Tax</span>
-          <b>{formatCurrency(tax)}</b>
-        </div>
+        {settings?.tax_enabled && (
+          <div className="summary-row">
+            <span>Tax</span>
+            <b>{formatCurrency(tax)}</b>
+          </div>
+        )}
 
         <div className="total-row">
           <span>Total</span>

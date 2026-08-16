@@ -1,8 +1,9 @@
 import {createContext,useCallback,useContext,useMemo,useReducer,type ReactNode} from "react";
 import type {CartItem,OrderType,PaymentMethod,Product,RestaurantTable} from "../types";
-interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;taxRate:number;paymentMethod:PaymentMethod}
-type Action={type:"ADD";product:Product}|{type:"SET_QTY";productId:number;quantity:number}|{type:"REMOVE";productId:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"TAX";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]};
-const initialState:State={cart:[],orderType:"TAKEAWAY",selectedTable:null,discount:0,taxRate:0,paymentMethod:"CASH"};
+import { SettingsContext } from "./SettingsContext";
+interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;paymentMethod:PaymentMethod}
+type Action={type:"ADD";product:Product}|{type:"SET_QTY";productId:number;quantity:number}|{type:"REMOVE";productId:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]};
+const initialState:State={cart:[],orderType:"TAKEAWAY",selectedTable:null,discount:0,paymentMethod:"CASH"};
 function reducer(s:State,a:Action):State{
  switch(a.type){
  // Soft, UI-side stock cap — mirrors the backend's authoritative check (order_service)
@@ -15,7 +16,6 @@ function reducer(s:State,a:Action):State{
  case"ORDER_TYPE":return{...s,orderType:a.value,selectedTable:a.value==="DINE_IN"?s.selectedTable:null};
  case"TABLE":return{...s,selectedTable:a.value};
  case"DISCOUNT":return{...s,discount:Math.max(0,a.value)};
- case"TAX":return{...s,taxRate:Math.max(0,a.value)};
  case"PAYMENT":return{...s,paymentMethod:a.value};
  // Phase 6: a cart line built from an earlier product snapshot can go stale if
  // another sale/adjustment lands while it's sitting in this cart. Whenever fresh
@@ -39,18 +39,20 @@ interface POSContextValue {
   setOrderType: (value: OrderType) => void;
   setTable: (value: RestaurantTable | null) => void;
   setDiscount: (value: number) => void;
-  setTaxRate: (value: number) => void;
   setPaymentMethod: (value: PaymentMethod) => void;
   syncProducts: (products: Product[]) => void;
 }
 
 const C = createContext<POSContextValue | null>(null);
 export function POSProvider({children}:{children:ReactNode}){
+ const settingsContext=useContext(SettingsContext);
+ const settings=settingsContext?.settings;
  const[state,dispatch]=useReducer(reducer,initialState);
  const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+i.product.price*i.quantity,0),[state.cart]);
  const discountAmount=Math.min(state.discount,subtotal);
  const taxable=subtotal-discountAmount;
- const tax=Math.floor((taxable*state.taxRate+5000)/10000);
+ const taxRate=settings?.tax_rate??0;
+ const tax=Math.floor((taxable*taxRate+5000)/10000);
  const total=taxable+tax;
  const discount=discountAmount;
  const value={state,subtotal,discount,tax,total,
@@ -61,7 +63,6 @@ export function POSProvider({children}:{children:ReactNode}){
  setOrderType:useCallback((value:OrderType)=>dispatch({type:"ORDER_TYPE",value}),[]),
  setTable:useCallback((value:RestaurantTable|null)=>dispatch({type:"TABLE",value}),[]),
  setDiscount:useCallback((value:number)=>dispatch({type:"DISCOUNT",value}),[]),
- setTaxRate:useCallback((value:number)=>dispatch({type:"TAX",value}),[]),
  setPaymentMethod:useCallback((value:PaymentMethod)=>dispatch({type:"PAYMENT",value}),[]),
  syncProducts:useCallback((products:Product[])=>dispatch({type:"SYNC_PRODUCTS",products}),[])};
  return <C.Provider value={value}>{children}</C.Provider>;
