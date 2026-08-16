@@ -14,6 +14,7 @@ from app.models.models import Product, Category, Order, OrderItem, RestaurantTab
 from app.services.order_service import create_order, cancel_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate, OrderCancelIn
 from app.services.dashboard_service import get_dashboard_overview
+from app.utils.normalization import normalize_display, derive_key
 
 # Create test database
 engine = create_engine("sqlite:///test_phase9_simple.db", echo=False)
@@ -34,7 +35,12 @@ def test_dashboard_endpoint():
     db = FreshSession()
 
     # Setup
-    category = Category(name="Food", active=True)
+    category = Category(
+        name_raw="Food",
+        name_display=normalize_display("Food"),
+        name_key=derive_key("Food"),
+        active=True
+    )
     db.add(category)
     db.flush()
 
@@ -43,7 +49,9 @@ def test_dashboard_endpoint():
     for name, sku in skus:
         p = Product(
             category_id=category.id,
-            name=name,
+            name_raw=name,
+            name_display=normalize_display(name),
+            name_key=derive_key(name),
             price=10000,
             stock=100,
             sku=sku,
@@ -122,13 +130,20 @@ def test_cancelled_orders_excluded():
     db = FreshSession()
 
     # Setup
-    category = Category(name="Beverages", active=True)
+    category = Category(
+        name_raw="Beverages",
+        name_display=normalize_display("Beverages"),
+        name_key=derive_key("Beverages"),
+        active=True
+    )
     db.add(category)
     db.flush()
 
     product = Product(
         category_id=category.id,
-        name="Coffee",
+        name_raw="Coffee",
+        name_display=normalize_display("Coffee"),
+        name_key=derive_key("Coffee"),
         price=5000,
         stock=100,
         sku="COFFEE-UNIQUE",

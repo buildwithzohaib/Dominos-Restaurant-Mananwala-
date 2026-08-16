@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app.database import Base, SessionLocal, engine
 from app.models.models import Category, Product, RestaurantTable
+from app.utils.normalization import normalize_display, derive_key
 
 DEFAULT_CATEGORIES = [
     "Fast Food",
@@ -65,25 +66,34 @@ def seed_data() -> None:
     try:
         category_map: dict[str, int] = {}
         for name in DEFAULT_CATEGORIES:
-            category = db.query(Category).filter(Category.name == name).first()
+            name_key = derive_key(name)
+            category = db.query(Category).filter(Category.name_key == name_key).first()
             if not category:
-                category = Category(name=name, active=True)
+                category = Category(
+                    name_raw=name,
+                    name_display=normalize_display(name),
+                    name_key=name_key,
+                    active=True
+                )
                 db.add(category)
                 db.flush()
             else:
                 category.active = True
             category_map[name] = category.id
         for category in db.query(Category).all():
-            category.active = category.name in DEFAULT_CATEGORIES
+            category.active = category.name_display in DEFAULT_CATEGORIES
         default_names = {item["name"] for item in DEFAULT_PRODUCTS}
 
         for product_info in DEFAULT_PRODUCTS:
-            product = db.query(Product).filter(Product.name == product_info["name"]).first()
+            name_key = derive_key(product_info["name"])
+            product = db.query(Product).filter(Product.name_key == name_key).first()
             if not product:
                 db.add(
                     Product(
                         category_id=category_map[product_info["category"]],
-                        name=product_info["name"],
+                        name_raw=product_info["name"],
+                        name_display=normalize_display(product_info["name"]),
+                        name_key=name_key,
                         sku=product_info["sku"],
                         price=product_info["price"],
                         stock=product_info["stock"],
@@ -110,7 +120,7 @@ def seed_data() -> None:
                     product.purchase_price = product_info["purchase_price"]
 
         for product in db.query(Product).all():
-            if product.name not in default_names:
+            if product.name_display not in default_names:
                 product.available = False
             # Backfill any legacy/non-default product that predates Phase 3 so every
             # row has a valid, unique SKU and complete inventory fields.

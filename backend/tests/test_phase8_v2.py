@@ -10,37 +10,39 @@ from app.database import Base
 from app.models.models import Product, Category
 from app.services.order_service import create_order, cancel_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate, OrderCancelIn
+from app.utils.normalization import normalize_display, derive_key
 
-# Create a persistent database for testing
-engine = create_engine("sqlite:///test_phase8.db", echo=False)
-Base.metadata.drop_all(bind=engine)  # Clean start
-Base.metadata.create_all(bind=engine)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-test_counter = 0
+def get_fresh_db():
+    """Create a fresh database for each test"""
+    engine = create_engine("sqlite:///:memory:", echo=False)
+    Base.metadata.create_all(bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return SessionLocal()
 
 def setup_test_data(db):
-    """Create test products and categories once"""
-    global test_counter
-    test_counter += 1
+    """Create test products and categories"""
+    # Create category
+    category = Category(
+        name_raw="Beverages",
+        name_display=normalize_display("Beverages"),
+        name_key=derive_key("Beverages"),
+        active=True
+    )
+    db.add(category)
+    db.flush()
 
-    # Create category (only first time)
-    category = db.query(Category).filter(Category.name == "Beverages").first()
-    if not category:
-        category = Category(name="Beverages", active=True)
-        db.add(category)
-        db.commit()
-
-    # Create unique products for this test run
+    # Create products
     products = []
     for i, (name, sku) in enumerate([
-        ("Pepsi", f"PEPSI-{test_counter}"),
-        ("Fries", f"FRIES-{test_counter}"),
-        ("Nuggets", f"NUGGETS-{test_counter}")
+        ("Pepsi", "PEPSI-001"),
+        ("Fries", "FRIES-001"),
+        ("Nuggets", "NUGGETS-001")
     ]):
         product = Product(
             category_id=category.id,
-            name=name,
+            name_raw=name,
+            name_display=normalize_display(name),
+            name_key=derive_key(name),
             price=8000 if i == 0 else 15000 if i == 1 else 25000,
             stock=20 if i == 0 else 30 if i == 1 else 15,
             sku=sku,
@@ -56,14 +58,14 @@ def setup_test_data(db):
     for product in products:
         db.refresh(product)
 
-    return {p.name: p for p in products}
+    return {p.name_display: p for p in products}
 
 def test_1_single_item_cancellation():
     """Test 1: Single item cancellation and inventory restoration"""
     print("\nTEST 1: Single Item Cancellation")
     print("-" * 40)
 
-    db = SessionLocal()
+    db = get_fresh_db()
     products = setup_test_data(db)
     pepsi = products["Pepsi"]
 
@@ -105,7 +107,7 @@ def test_2_multi_item_cancellation():
     print("\nTEST 2: Multi-Item Cancellation")
     print("-" * 40)
 
-    db = SessionLocal()
+    db = get_fresh_db()
     products = setup_test_data(db)
     pepsi = products["Pepsi"]
     fries = products["Fries"]
@@ -164,7 +166,7 @@ def test_3_current_stock_incremented():
     print("\nTEST 3: Current Stock Incremented (Not Historical)")
     print("-" * 40)
 
-    db = SessionLocal()
+    db = get_fresh_db()
     products = setup_test_data(db)
     pepsi = products["Pepsi"]
 
@@ -210,7 +212,7 @@ def test_4_double_cancellation_protection():
     print("\nTEST 4: Double Cancellation Protection")
     print("-" * 40)
 
-    db = SessionLocal()
+    db = get_fresh_db()
     products = setup_test_data(db)
     pepsi = products["Pepsi"]
 

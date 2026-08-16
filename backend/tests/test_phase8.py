@@ -12,6 +12,7 @@ from app.database import Base
 from app.models.models import Product, Category, Order, OrderItem, StockMovement
 from app.services.order_service import create_order, cancel_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate, OrderCancelIn
+from app.utils.normalization import normalize_display, derive_key
 
 @pytest.fixture(scope="function")
 def db_session():
@@ -26,14 +27,19 @@ def db_session():
 def setup_test_data(db, category_name="Beverages"):
     """Create test products and categories in the provided session"""
     # Create category with unique name to avoid conflicts between tests
-    category = Category(name=category_name, active=True)
+    category = Category(
+        name_raw=category_name,
+        name_display=normalize_display(category_name),
+        name_key=derive_key(category_name),
+        active=True
+    )
     db.add(category)
     try:
         db.flush()
     except Exception:
         # Category might already exist from previous test, try to fetch it
         db.rollback()
-        category = db.query(Category).filter(Category.name == category_name).first()
+        category = db.query(Category).filter(Category.name_key == derive_key(category_name)).first()
         if not category:
             raise
 
@@ -41,7 +47,9 @@ def setup_test_data(db, category_name="Beverages"):
     products = [
         Product(
             category_id=category.id,
-            name="Pepsi",
+            name_raw="Pepsi",
+            name_display=normalize_display("Pepsi"),
+            name_key=derive_key("Pepsi"),
             price=8000,
             stock=20,
             sku="PEPSI-001",
@@ -52,7 +60,9 @@ def setup_test_data(db, category_name="Beverages"):
         ),
         Product(
             category_id=category.id,
-            name="Fries",
+            name_raw="Fries",
+            name_display=normalize_display("Fries"),
+            name_key=derive_key("Fries"),
             price=15000,
             stock=30,
             sku="FRIES-001",
@@ -63,7 +73,9 @@ def setup_test_data(db, category_name="Beverages"):
         ),
         Product(
             category_id=category.id,
-            name="Chicken Nuggets",
+            name_raw="Chicken Nuggets",
+            name_display=normalize_display("Chicken Nuggets"),
+            name_key=derive_key("Chicken Nuggets"),
             price=25000,
             stock=15,
             sku="NUGGETS-001",
@@ -82,7 +94,7 @@ def setup_test_data(db, category_name="Beverages"):
     for product in products:
         db.refresh(product)
 
-    result = {"category": category, "products": {p.name: p for p in products}}
+    result = {"category": category, "products": {p.name_display: p for p in products}}
     return result
 
 def test_single_item_cancellation(db_session):

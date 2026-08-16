@@ -15,6 +15,7 @@ from app.models.models import Product, Category, Order, OrderItem
 from app.services.order_service import create_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate
 from app.services.dashboard_service import get_dashboard_overview
+from app.utils.normalization import normalize_display, derive_key
 
 @pytest.fixture(scope="function")
 def db_session():
@@ -28,7 +29,12 @@ def db_session():
 
 def setup_test_data(db):
     """Create test products and categories"""
-    category = Category(name="Test Category", active=True)
+    category = Category(
+        name_raw="Test Category",
+        name_display=normalize_display("Test Category"),
+        name_key=derive_key("Test Category"),
+        active=True
+    )
     db.add(category)
     db.flush()
 
@@ -40,7 +46,9 @@ def setup_test_data(db):
     ]):
         product = Product(
             category_id=category.id,
-            name=name,
+            name_raw=name,
+            name_display=normalize_display(name),
+            name_key=derive_key(name),
             price=price,
             stock=100,
             sku=sku,
@@ -247,7 +255,12 @@ def test_low_stock_detection(db_session):
 
     db = db_session
 
-    category = Category(name="Category", active=True)
+    category = Category(
+        name_raw="Category",
+        name_display=normalize_display("Category"),
+        name_key=derive_key("Category"),
+        active=True
+    )
     db.add(category)
     db.flush()
 
@@ -255,7 +268,9 @@ def test_low_stock_detection(db_session):
     products = [
         Product(
             category_id=category.id,
-            name="In Stock",
+            name_raw="In Stock",
+            name_display=normalize_display("In Stock"),
+            name_key=derive_key("In Stock"),
             price=10000,
             stock=100,
             sku="IN-STOCK",
@@ -266,7 +281,9 @@ def test_low_stock_detection(db_session):
         ),
         Product(
             category_id=category.id,
-            name="Low Stock",
+            name_raw="Low Stock",
+            name_display=normalize_display("Low Stock"),
+            name_key=derive_key("Low Stock"),
             price=10000,
             stock=3,
             sku="LOW-STOCK",
@@ -277,7 +294,9 @@ def test_low_stock_detection(db_session):
         ),
         Product(
             category_id=category.id,
-            name="Out of Stock",
+            name_raw="Out of Stock",
+            name_display=normalize_display("Out of Stock"),
+            name_key=derive_key("Out of Stock"),
             price=10000,
             stock=0,
             sku="OUT-OF-STOCK",
@@ -288,7 +307,9 @@ def test_low_stock_detection(db_session):
         ),
         Product(
             category_id=category.id,
-            name="Disabled",
+            name_raw="Disabled",
+            name_display=normalize_display("Disabled"),
+            name_key=derive_key("Disabled"),
             price=10000,
             stock=0,
             sku="DISABLED",
