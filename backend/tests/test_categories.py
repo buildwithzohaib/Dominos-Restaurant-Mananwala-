@@ -400,6 +400,112 @@ def test_products_include_disabled_flag(test_client):
 
 
 # ============================================================================
+# ORDER VALIDATION — Categories affect sellability
+# ============================================================================
+
+def test_order_rejects_product_in_deactivated_category(test_client):
+    """Order must reject a product whose category was deactivated"""
+    # Create category and product
+    cat_resp = test_client.post("/api/categories", json={"name": "Drinks"})
+    cat_id = cat_resp.json()["id"]
+
+    prod_resp = test_client.post("/api/products", json={
+        "name": "Pepsi",
+        "category_id": cat_id,
+        "price": 8000,
+        "stock": 20,
+        "sku": "PEPSI-001",
+        "unit": "Bottle"
+    })
+    prod_id = prod_resp.json()["id"]
+
+    # Deactivate the category
+    test_client.patch(f"/api/categories/{cat_id}/deactivate")
+
+    # Order with this product should be rejected
+    order_payload = {
+        "order_type": "TAKEAWAY",
+        "table_id": None,
+        "items": [{"product_id": prod_id, "quantity": 1}],
+        "discount": 0,
+        "tax_rate": 0,
+        "payment_method": "CASH",
+        "amount_received": 10000
+    }
+    resp = test_client.post("/api/orders", json=order_payload)
+    assert resp.status_code == 400
+    assert "disabled category" in resp.json()["detail"]
+
+
+def test_order_rejects_disabled_product(test_client):
+    """Order must reject a disabled product"""
+    # Create category and product
+    cat_resp = test_client.post("/api/categories", json={"name": "Food"})
+    cat_id = cat_resp.json()["id"]
+
+    prod_resp = test_client.post("/api/products", json={
+        "name": "Burger",
+        "category_id": cat_id,
+        "price": 25000,
+        "stock": 10,
+        "sku": "BURGER-001",
+        "unit": "Piece"
+    })
+    prod_id = prod_resp.json()["id"]
+
+    # Disable the product
+    test_client.patch(f"/api/products/{prod_id}/disable")
+
+    # Order with this product should be rejected
+    order_payload = {
+        "order_type": "TAKEAWAY",
+        "table_id": None,
+        "items": [{"product_id": prod_id, "quantity": 1}],
+        "discount": 0,
+        "tax_rate": 0,
+        "payment_method": "CASH",
+        "amount_received": 30000
+    }
+    resp = test_client.post("/api/orders", json=order_payload)
+    assert resp.status_code == 400
+    assert "disabled" in resp.json()["detail"]
+
+
+def test_order_succeeds_with_active_product_in_active_category(test_client):
+    """Order succeeds when product is active and its category is active"""
+    # Create category and product
+    cat_resp = test_client.post("/api/categories", json={"name": "Snacks"})
+    cat_id = cat_resp.json()["id"]
+
+    prod_resp = test_client.post("/api/products", json={
+        "name": "Chips",
+        "category_id": cat_id,
+        "price": 5000,
+        "stock": 100,
+        "sku": "CHIPS-001",
+        "unit": "Packet"
+    })
+    prod_id = prod_resp.json()["id"]
+
+    # Order should succeed
+    order_payload = {
+        "order_type": "TAKEAWAY",
+        "table_id": None,
+        "items": [{"product_id": prod_id, "quantity": 2}],
+        "discount": 0,
+        "tax_rate": 0,
+        "payment_method": "CASH",
+        "amount_received": 15000
+    }
+    resp = test_client.post("/api/orders", json=order_payload)
+    assert resp.status_code == 200
+    order = resp.json()
+    assert order["status"] == "PAID"
+    assert len(order["items"]) == 1
+    assert order["items"][0]["product_name"] == "Chips"
+
+
+# ============================================================================
 # RUN ALL TESTS
 # ============================================================================
 

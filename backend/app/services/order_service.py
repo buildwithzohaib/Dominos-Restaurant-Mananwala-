@@ -36,9 +36,13 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
     subtotal = 0
     products: dict[int, Product] = {}
     for product_id, quantity in requested.items():
-        product = db.get(Product, product_id)
-        if not product or not product.available:
-            raise HTTPException(400, f"Product {product_id} is unavailable.")
+        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(400, "Product not found.")
+        if not product.available:
+            raise HTTPException(400, f'"{product.name_display}" is disabled.')
+        if not product.category.active:
+            raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
         if product.stock <= 0:
             raise HTTPException(400, f'"{product.name_display}" is out of stock.')
         if product.stock < quantity:
