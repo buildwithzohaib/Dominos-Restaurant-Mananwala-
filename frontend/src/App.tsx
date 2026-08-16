@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, LayoutDashboard, Package, ShoppingCart } from "lucide-react";
+import { SettingsProvider } from "./context/SettingsContext";
 import { POSProvider } from "./context/POSContext";
 import { api } from "./services/api";
 import { POS } from "./pages/POS";
@@ -103,8 +104,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <POSProvider>
-      <AppContent />
-    </POSProvider>
+    <SettingsProvider>
+      <POSProvider>
+        <AppContent />
+      </POSProvider>
+    </SettingsProvider>
   );
 }

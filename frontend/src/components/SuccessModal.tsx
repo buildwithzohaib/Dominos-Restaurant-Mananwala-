@@ -4,7 +4,9 @@
   X,
 } from "lucide-react";
 
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
+import { useContext } from "react";
+import { SettingsContext } from "../context/SettingsContext";
 import type { ReceiptData } from "./PaymentModal";
 
 export function SuccessModal({
@@ -14,6 +16,13 @@ export function SuccessModal({
   receipt: ReceiptData;
   onClose: () => void;
 }) {
+  const formatCurrency = useCurrencyFormat();
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
+
+  // Default values while settings load
+  const restaurantName = settings?.restaurant_name || "MY RESTAURANT";
+  const footerText = settings?.receipt_footer_text || "Please visit us again.";
   return (
     <div className="modal-backdrop">
       {/* NORMAL SCREEN RECEIPT */}
@@ -32,7 +41,7 @@ export function SuccessModal({
 
         <div className="receipt-screen">
           <div className="receipt-business">
-            <strong>MY RESTAURANT</strong>
+            <strong>{restaurantName}</strong>
             <span>Restaurant POS</span>
           </div>
 
@@ -63,12 +72,12 @@ export function SuccessModal({
                 <div>
                   <strong>{item.product_name}</strong>
                   <span>
-                    {item.quantity} × {formatMoney(item.price)}
+                    {item.quantity} × {formatCurrency(item.price)}
                   </span>
                 </div>
 
                 <strong>
-                  {formatMoney(item.line_total)}
+                  {formatCurrency(item.line_total)}
                 </strong>
               </div>
             ))}
@@ -79,22 +88,22 @@ export function SuccessModal({
           <div className="receipt-summary">
             <div>
               <span>Subtotal</span>
-              <strong>{formatMoney(receipt.subtotal)}</strong>
+              <strong>{formatCurrency(receipt.subtotal)}</strong>
             </div>
 
             <div>
               <span>Discount</span>
-              <strong>- {formatMoney(receipt.discount)}</strong>
+              <strong>- {formatCurrency(receipt.discount)}</strong>
             </div>
 
             <div>
               <span>Tax</span>
-              <strong>{formatMoney(receipt.tax)}</strong>
+              <strong>{formatCurrency(receipt.tax)}</strong>
             </div>
 
             <div className="receipt-grand-total">
               <span>TOTAL</span>
-              <strong>{formatMoney(receipt.total)}</strong>
+              <strong>{formatCurrency(receipt.total)}</strong>
             </div>
           </div>
 
@@ -110,12 +119,12 @@ export function SuccessModal({
               <>
                 <div>
                   <span>Received</span>
-                  <strong>{formatMoney(receipt.amountReceived)}</strong>
+                  <strong>{formatCurrency(receipt.amountReceived)}</strong>
                 </div>
 
                 <div>
                   <span>Change</span>
-                  <strong>{formatMoney(receipt.change)}</strong>
+                  <strong>{formatCurrency(receipt.change)}</strong>
                 </div>
               </>
             )}
@@ -125,7 +134,7 @@ export function SuccessModal({
 
           <div className="receipt-thankyou">
             <strong>THANK YOU!</strong>
-            <span>Please visit us again.</span>
+            <span>{footerText}</span>
           </div>
         </div>
 
@@ -147,7 +156,7 @@ export function SuccessModal({
       {/* THERMAL RECEIPT (printed only) */}
       <div className="print-receipt">
         <div className="receipt-header">
-          <h1>MY RESTAURANT</h1>
+          <h1>{restaurantName}</h1>
           <p>Restaurant POS</p>
         </div>
 
@@ -185,8 +194,8 @@ export function SuccessModal({
             <div className="thermal-item-row">
               <div className="thermal-col-name" />
               <div className="thermal-col-qty">{item.quantity}</div>
-              <div className="thermal-col-price">{formatMoney(item.price)}</div>
-              <div className="thermal-col-total">{formatMoney(item.line_total)}</div>
+              <div className="thermal-col-price">{formatCurrency(item.price)}</div>
+              <div className="thermal-col-total">{formatCurrency(item.line_total)}</div>
             </div>
           </div>
         ))}
@@ -196,22 +205,22 @@ export function SuccessModal({
         <div className="thermal-summary">
           <div>
             <span>Subtotal</span>
-            <strong>{formatMoney(receipt.subtotal)}</strong>
+            <strong>{formatCurrency(receipt.subtotal)}</strong>
           </div>
 
           <div>
             <span>Discount</span>
-            <strong>- {formatMoney(receipt.discount)}</strong>
+            <strong>- {formatCurrency(receipt.discount)}</strong>
           </div>
 
           <div>
             <span>Tax</span>
-            <strong>{formatMoney(receipt.tax)}</strong>
+            <strong>{formatCurrency(receipt.tax)}</strong>
           </div>
 
           <div className="thermal-total">
             <span>TOTAL</span>
-            <strong>{formatMoney(receipt.total)}</strong>
+            <strong>{formatCurrency(receipt.total)}</strong>
           </div>
         </div>
 
@@ -224,7 +233,7 @@ export function SuccessModal({
           </div>
           <div className="thermal-payable">
             <span>PAYABLE</span>
-            <strong>{formatMoney(receipt.total)}</strong>
+            <strong>{formatCurrency(receipt.total)}</strong>
           </div>
         </div>
 
@@ -232,7 +241,7 @@ export function SuccessModal({
 
         <div className="receipt-footer">
           <p>THANK YOU!</p>
-          <p>Please visit us again.</p>
+          <p>{footerText}</p>
         </div>
       </div>
     </div>

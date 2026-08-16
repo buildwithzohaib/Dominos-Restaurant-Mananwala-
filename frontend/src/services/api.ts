@@ -1,4 +1,4 @@
-import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
+import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
 const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
  const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
@@ -43,6 +43,9 @@ export const api={
   const qs=q.toString();
   return request<StockMovement[]>(`/api/stock-movements${qs?`?${qs}`:""}`);
  },
+ // Settings (Task 1.1) — restaurant configuration
+ getSettings:()=>request<Settings>("/api/settings"),
+ updateSettings:(p:SettingsUpdate)=>request<Settings>("/api/settings",{method:"PATCH",body:JSON.stringify(p)}),
  // Dashboard (Phase 9) — today's business metrics
  getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview"),
  // Product Management (Phase 10)

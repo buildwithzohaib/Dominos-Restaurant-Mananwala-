@@ -34,15 +34,18 @@ export function formatSouthAsianGrouping(num: number): string {
 
 /**
  * Format paisa as a currency string.
- * Handles null/undefined as "Rs. 0".
+ * Handles null/undefined as "0".
  * Decimal part: either 0 digits (if paisa % 100 === 0) or exactly 2 (zero-padded).
  * Example: 125000 -> "Rs. 1,250"
  * Example: 45050 -> "Rs. 450.50"
  * Example: 45005 -> "Rs. 450.05"
  */
-export function formatMoney(paisa: number | null | undefined): string {
+export function formatMoney(
+  paisa: number | null | undefined,
+  currencySymbol: string = CURRENCY_SYMBOL
+): string {
   if (paisa === null || paisa === undefined) {
-    return CURRENCY_SYMBOL + "0";
+    return currencySymbol + "0";
   }
 
   const isNegative = paisa < 0;
@@ -65,7 +68,7 @@ export function formatMoney(paisa: number | null | undefined): string {
     result = `-${result}`;
   }
 
-  return CURRENCY_SYMBOL + result;
+  return currencySymbol + result;
 }
 
 /**
