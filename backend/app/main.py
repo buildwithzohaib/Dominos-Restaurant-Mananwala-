@@ -6,6 +6,7 @@ from app.routes.orders import router as orders_router
 from app.routes.stock_movements import router as stock_movements_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.products import router as products_router
+from app.routes.settings import router as settings_router
 from app.models import models  # noqa: F401
 
 app = FastAPI(title="My Restaurant POS API", version="1.0.0")
@@ -22,6 +23,7 @@ app.include_router(orders_router)
 app.include_router(stock_movements_router)
 app.include_router(dashboard_router)
 app.include_router(products_router)
+app.include_router(settings_router)
 
 @app.get("/api/health")
 def health():

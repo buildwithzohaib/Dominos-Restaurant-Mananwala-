@@ -2,6 +2,36 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+# --- Settings (Task 1.1) ---
+
+class SettingsOut(BaseModel):
+    """Settings row (read-only response)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    restaurant_name: str
+    restaurant_address: str
+    restaurant_phone: str
+    currency_symbol: str
+    tax_rate: int  # basis points (1600 = 16%)
+    tax_enabled: bool
+    day_starts_at: str  # HH:MM format
+    receipt_footer_text: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SettingsUpdate(BaseModel):
+    """Settings partial update (PATCH request). id cannot be changed."""
+    restaurant_name: str | None = None
+    restaurant_address: str | None = None
+    restaurant_phone: str | None = None
+    currency_symbol: str | None = None
+    tax_rate: int | None = Field(default=None, ge=0, le=10000)  # basis points
+    tax_enabled: bool | None = None
+    day_starts_at: str | None = None
+    receipt_footer_text: str | None = None
+
+
 class CategoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

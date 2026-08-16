@@ -90,6 +90,55 @@ This prevents bugs where:
 
 ---
 
+## Settings Table
+
+**Task 1.1:** The `settings` table holds the single immutable row that stores business configuration (restaurant name, currency symbol, tax rate, etc.). It is protected by three layers:
+- CHECK constraint: `id = 1` (only id=1 allowed)
+- PRIMARY KEY: prevents duplicate id=1
+- DELETE trigger: `prevent_settings_delete` (prevents any deletion)
+
+### Critical: DELETE Trigger Fragility
+
+When SQLite rebuilds the `settings` table (e.g., adding a new column in a future migration), **the DELETE trigger may vanish silently**. This happened with indexes in Task 0.6 and 0.7.
+
+**After any ALTER TABLE on the `settings` table**, verify the trigger exists:
+
+```bash
+sqlite3 backend/pos.db
+SELECT name, sql FROM sqlite_master WHERE type='trigger' AND name='prevent_settings_delete';
+```
+
+If the result is empty, recreate the trigger immediately:
+
+```sql
+CREATE TRIGGER prevent_settings_delete
+BEFORE DELETE ON settings
+BEGIN
+  SELECT RAISE(ABORT, 'Cannot delete settings row');
+END;
+```
+
+Then verify it was created:
+```sql
+SELECT name, sql FROM sqlite_master WHERE type='trigger';
+```
+
+### Column Defaults
+
+The `settings` table has **no database-level column defaults** (no `server_default` in SQL). All columns have Python-level defaults in the model, and the row is pre-populated by the migration (INSERT statement).
+
+**When adding a new NOT NULL column to `settings`:**
+1. Use `server_default` on the new column (not just Python `default=`)
+2. Or provide a value for the existing row in the migration
+3. Without this, the existing row will fail the NOT NULL constraint
+
+Example for Stage 3 (adding `delivery_charges`):
+```python
+op.add_column('settings', sa.Column('delivery_charges', sa.Integer(), nullable=False, server_default='0'))
+```
+
+---
+
 ## Troubleshooting
 
 ### "Table 'products' doesn't exist"
@@ -119,5 +168,5 @@ This prevents bugs where:
 
 ---
 
-**Last Updated:** 2026-08-15  
-**Applies to:** Task 0.6 onwards
+**Last Updated:** 2026-08-16  
+**Applies to:** Task 0.6 onwards (Task 1.1 added settings table documentation)

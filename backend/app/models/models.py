@@ -1,7 +1,27 @@
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
+
+class Settings(Base):
+    """Single-row settings table. id=1 enforced by CHECK constraint + DELETE trigger.
+    Never create a second row — the constraint and trigger prevent it."""
+    __tablename__ = "settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    restaurant_name: Mapped[str] = mapped_column(String(150), default="My Restaurant")
+    restaurant_address: Mapped[str] = mapped_column(String(300), default="")
+    restaurant_phone: Mapped[str] = mapped_column(String(20), default="")
+    currency_symbol: Mapped[str] = mapped_column(String(10), default="Rs. ")
+    tax_rate: Mapped[int] = mapped_column(Integer, default=0)  # basis points (1600 = 16%)
+    tax_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    day_starts_at: Mapped[str] = mapped_column(String(5), default="06:00")  # HH:MM format
+    receipt_footer_text: Mapped[str] = mapped_column(String(200), default="Please visit us again.")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint('id = 1', name='check_single_row'),
+    )
 
 class Category(Base):
     __tablename__ = "categories"
