@@ -20,3 +20,4 @@ node_modules/
 dist/
 .env
 backend/baseline_*.json
+pytest_output.txt
