@@ -64,14 +64,26 @@ export function EditProductModal({
 
         <div className="modal-field-grid">
           <label className="modal-field">
-            Category ID
-            <input
-              type="number"
+            Category
+            <select
               value={formData.category_id || product.category_id}
               onChange={(e) =>
                 setFormData({ ...formData, category_id: Number(e.target.value) })
               }
-            />
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name_display}
+                  {!cat.active ? " (inactive)" : ""}
+                </option>
+              ))}
+              {/* Show product's current category even if not in the list (e.g., inactive) */}
+              {product.category && !categories.find(c => c.id === product.category.id) && (
+                <option value={product.category.id} selected>
+                  {product.category.name_display} (inactive)
+                </option>
+              )}
+            </select>
           </label>
 
           <label className="modal-field">

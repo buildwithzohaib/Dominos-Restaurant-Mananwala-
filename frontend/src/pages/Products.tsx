@@ -1,4 +1,4 @@
-import { Plus, Search, Edit2, Power, Lock } from "lucide-react";
+import { Plus, Search, Edit2, Power, PowerOff, Lock } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useEffect, useState } from "react";
 
@@ -7,12 +7,13 @@ import { EditProductModal } from "../components/EditProductModal";
 import { StatusBadge } from "../components/StatusBadge";
 
 import { api } from "../services/api";
-import type { Product } from "../types";
+import type { Category, Product } from "../types";
 
 export function Products() {
   const formatCurrency = useCurrencyFormat();
   const [items, setItems] = useState<Product[]>([]);
   const [allItems, setAllItems] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,6 +54,11 @@ export function Products() {
 
   useEffect(() => {
     loadAll();
+    api.getCategories()
+      .then(setCategories)
+      .catch(() => {
+        // Categories are not essential, silently fail
+      });
   }, []);
 
   function applyUpdated(updated: Product) {
@@ -157,8 +163,9 @@ export function Products() {
                   <button
                     className="row-action-button"
                     onClick={() => toggleProduct(item)}
+                    title={item.available ? "Disable" : "Enable"}
                   >
-                    <Power size={16} />
+                    {item.available ? <Power size={16} /> : <PowerOff size={16} />}
                   </button>
                 </span>
               </div>
@@ -169,7 +176,7 @@ export function Products() {
 
       {addOpen && (
         <AddProductModal
-          categories={[]} // TODO: fetch categories
+          categories={categories}
           onClose={() => setAddOpen(false)}
           onSaved={(created) => {
             applyUpdated(created);
@@ -181,7 +188,7 @@ export function Products() {
       {editing && (
         <EditProductModal
           product={editing}
-          categories={[]} // TODO: fetch categories
+          categories={categories}
           onClose={() => setEditing(null)}
           onSaved={(updated) => {
             applyUpdated(updated);

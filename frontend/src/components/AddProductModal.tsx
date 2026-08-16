@@ -13,8 +13,11 @@ export function AddProductModal({
   onClose: () => void;
   onSaved: (product: Product) => void;
 }) {
+  // Default to first active category, or first category if none are active
+  const defaultCategoryId = categories.find(c => c.active)?.id || categories[0]?.id || 1;
+
   const [formData, setFormData] = useState<ProductCreateInput>({
-    category_id: categories[0]?.id || 1,
+    category_id: defaultCategoryId,
     name: "",
     price: 100,
     purchase_price: 50,
@@ -61,14 +64,20 @@ export function AddProductModal({
 
         <div className="modal-field-grid">
           <label className="modal-field">
-            Category ID
-            <input
-              type="number"
+            Category
+            <select
               value={formData.category_id}
               onChange={(e) =>
                 setFormData({ ...formData, category_id: Number(e.target.value) })
               }
-            />
+            >
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name_display}
+                  {!cat.active ? " (inactive)" : ""}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="modal-field">

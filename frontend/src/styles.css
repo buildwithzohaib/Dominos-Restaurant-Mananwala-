@@ -919,19 +919,6 @@ h2 {
   color: #a21b1b;
 }
 
-.row-action-button {
-  border: 1px solid #dfe4ea;
-  background: #fff;
-  color: #273246;
-  border-radius: 7px;
-  padding: 7px 12px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.row-action-button:hover {
-  border-color: #111827;
-}
 
 .inventory-modal {
   position: relative;
@@ -1620,9 +1607,10 @@ h2 {
   border-radius: 6px;
   border: 1px solid #d1d5db;
   background: white;
-  color: #6b7280;
+  color: #172033;
   cursor: pointer;
   transition: all 0.2s ease;
+  padding: 0;
 }
 
 .row-action-button:hover {
