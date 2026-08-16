@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { usePOS } from "../context/POSContext";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 
 export function OrderPanel({ onPay }: { onPay: () => void }) {
+  const formatCurrency = useCurrencyFormat();
   const {
     state,
     subtotal,
@@ -52,7 +53,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                   <strong>{i.product.name}</strong>
 
                   <span>
-                    {formatMoney(i.product.price)} each
+                    {formatCurrency(i.product.price)} each
                   </span>
 
                   {atStockLimit && (
@@ -90,7 +91,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                 </div>
 
                 <strong className="line-total">
-                  {formatMoney(i.product.price * i.quantity)}
+                  {formatCurrency(i.product.price * i.quantity)}
                 </strong>
               </div>
             );
@@ -131,22 +132,22 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
 
         <div className="summary-row">
           <span>Subtotal</span>
-          <b>{formatMoney(subtotal)}</b>
+          <b>{formatCurrency(subtotal)}</b>
         </div>
 
         <div className="summary-row">
           <span>Discount</span>
-          <b>- {formatMoney(discount)}</b>
+          <b>- {formatCurrency(discount)}</b>
         </div>
 
         <div className="summary-row">
           <span>Tax</span>
-          <b>{formatMoney(tax)}</b>
+          <b>{formatCurrency(tax)}</b>
         </div>
 
         <div className="total-row">
           <span>Total</span>
-          <strong>{formatMoney(total)}</strong>
+          <strong>{formatCurrency(total)}</strong>
         </div>
 
         <button

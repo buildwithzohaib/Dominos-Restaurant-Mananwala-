@@ -1,5 +1,5 @@
 import type { Product } from "../types";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 
 export function ProductCard({
   product,
@@ -8,6 +8,7 @@ export function ProductCard({
   product: Product;
   onAdd: (p: Product) => void;
 }) {
+  const formatCurrency = useCurrencyFormat();
   // Reuse the backend's authoritative stock_status (Phase 3) rather than
   // re-deriving availability from stock/available locally — one status
   // calculation, computed on the server, read everywhere.
@@ -29,7 +30,7 @@ export function ProductCard({
           <span className="status-badge out-of-stock">Out of Stock</span>
         ) : (
           <>
-            <span>{formatMoney(product.price)}</span>
+            <span>{formatCurrency(product.price)}</span>
             <span>Stock: {product.stock}</span>
           </>
         )}

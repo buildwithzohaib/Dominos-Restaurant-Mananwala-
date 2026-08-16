@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import {
   CreditCard,
   Banknote,
@@ -36,6 +36,7 @@ export function PaymentModal({
   onClose: () => void;
   onSuccess: (receipt: ReceiptData) => void;
 }) {
+  const formatCurrency = useCurrencyFormat();
   const {
     state,
     subtotal,
@@ -153,7 +154,7 @@ export function PaymentModal({
           </span>
 
           <strong>
-            {formatMoney(total)}
+            {formatCurrency(total)}
           </strong>
         </div>
 
@@ -197,7 +198,7 @@ export function PaymentModal({
             </span>
 
             <strong>
-              {formatMoney(change)}
+              {formatCurrency(change)}
             </strong>
           </div>
         )}
@@ -225,9 +226,9 @@ export function PaymentModal({
         </button>
 
         <p className="payment-note">
-          Subtotal {formatMoney(subtotal)}
+          Subtotal {formatCurrency(subtotal)}
           {" · "}
-          Tax {formatMoney(tax)}
+          Tax {formatCurrency(tax)}
         </p>
 
       </div>

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { api } from "../services/api";
 import type { DashboardOverview } from "../types";
 
 export function Dashboard() {
+  const formatCurrency = useCurrencyFormat();
   const [data, setData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -84,7 +85,7 @@ export function Dashboard() {
         <div className="dashboard-card">
           <p className="dashboard-label">Sales</p>
           <h2 className="dashboard-value">
-            {formatMoney(data.sales)}
+            {formatCurrency(data.sales)}
           </h2>
         </div>
 
@@ -122,7 +123,7 @@ export function Dashboard() {
                     <div
                       className="bar"
                       style={{ height: `${height}%` }}
-                      title={`${hour}:00 - ${formatMoney(item.revenue)}`}
+                      title={`${hour}:00 - ${formatCurrency(item.revenue)}`}
                     />
                   </div>
                   <span className="bar-label">{hour}</span>
@@ -154,7 +155,7 @@ export function Dashboard() {
                 <span className="product-name">{product.product_name}</span>
                 <span>{product.quantity_sold}</span>
                 <span className="revenue">
-                  {formatMoney(product.revenue)}
+                  {formatCurrency(product.revenue)}
                 </span>
               </div>
             ))}

@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 
 import { OrderStatusBadge } from "./OrderStatusBadge";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import type { Order } from "../types";
 
 export function OrderDetailsModal({
@@ -13,6 +13,7 @@ export function OrderDetailsModal({
   onClose: () => void;
   onCancelRequested: () => void;
 }) {
+  const formatCurrency = useCurrencyFormat();
   return (
     <div className="modal-backdrop">
       <div className="inventory-modal order-details-modal">
@@ -36,10 +37,10 @@ export function OrderDetailsModal({
               <div>
                 <strong>{item.product_name}</strong>
                 <span>
-                  {item.quantity} × {formatMoney(item.price)}
+                  {item.quantity} × {formatCurrency(item.price)}
                 </span>
               </div>
-              <strong>{formatMoney(item.line_total)}</strong>
+              <strong>{formatCurrency(item.line_total)}</strong>
             </div>
           ))}
         </div>
@@ -49,19 +50,19 @@ export function OrderDetailsModal({
         <div className="receipt-summary">
           <div>
             <span>Subtotal</span>
-            <strong>{formatMoney(order.subtotal)}</strong>
+            <strong>{formatCurrency(order.subtotal)}</strong>
           </div>
           <div>
             <span>Discount</span>
-            <strong>- {formatMoney(order.discount)}</strong>
+            <strong>- {formatCurrency(order.discount)}</strong>
           </div>
           <div>
             <span>Tax</span>
-            <strong>{formatMoney(order.tax)}</strong>
+            <strong>{formatCurrency(order.tax)}</strong>
           </div>
           <div className="receipt-grand-total">
             <span>TOTAL</span>
-            <strong>{formatMoney(order.total)}</strong>
+            <strong>{formatCurrency(order.total)}</strong>
           </div>
         </div>
 

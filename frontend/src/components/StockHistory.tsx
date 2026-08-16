@@ -1,11 +1,12 @@
 import { Search } from "lucide-react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useEffect, useState } from "react";
 
 import { api } from "../services/api";
 import type { StockMovement } from "../types";
 
 export function StockHistory() {
+  const formatCurrency = useCurrencyFormat();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [search, setSearch] = useState("");
   const [movementType, setMovementType] = useState<"" | "PURCHASE" | "ADJUSTMENT" | "SALE" | "CANCELLATION">("");
@@ -92,7 +93,7 @@ export function StockHistory() {
                 <span>{m.supplier ?? "—"}</span>
                 <span>{m.stock_before}</span>
                 <span>{m.stock_after}</span>
-                <span>{m.purchase_price != null ? `{formatMoney(m.purchase_price)}` : "—"}</span>
+                <span>{m.purchase_price != null ? formatCurrency(m.purchase_price) : "—"}</span>
                 <span>{m.reference ?? "—"}</span>
               </div>
             ))}

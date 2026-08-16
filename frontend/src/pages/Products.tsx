@@ -1,5 +1,5 @@
 import { Plus, Search, Edit2, Power, Lock } from "lucide-react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useEffect, useState } from "react";
 
 import { AddProductModal } from "../components/AddProductModal";
@@ -10,6 +10,7 @@ import { api } from "../services/api";
 import type { Product } from "../types";
 
 export function Products() {
+  const formatCurrency = useCurrencyFormat();
   const [items, setItems] = useState<Product[]>([]);
   const [allItems, setAllItems] = useState<Product[]>([]);
   const [query, setQuery] = useState("");
@@ -137,7 +138,7 @@ export function Products() {
                   {item.category_id} {/* TODO: display category name */}
                 </span>
                 <span>{item.sku}</span>
-                <span>{formatMoney(item.price)}</span>
+                <span>{formatCurrency(item.price)}</span>
                 <span>{item.stock}</span>
                 <span>
                   {item.available ? (

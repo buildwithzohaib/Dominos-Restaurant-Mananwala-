@@ -1,5 +1,5 @@
 import { History, Plus, Search, SlidersHorizontal } from "lucide-react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useEffect, useState } from "react";
 
 import { AddStockModal } from "../components/AddStockModal";
@@ -12,6 +12,7 @@ import { api } from "../services/api";
 import type { Product } from "../types";
 
 export function Inventory({ onChange }: { onChange?: () => void }) {
+  const formatCurrency = useCurrencyFormat();
   const [items, setItems] = useState<Product[]>([]);
   // Full, unfiltered product list — kept separate from the (possibly search-narrowed)
   // `items` above so the Add Stock / Stock Adjustment product pickers always offer
@@ -136,8 +137,8 @@ export function Inventory({ onChange }: { onChange?: () => void }) {
                   <span>{item.stock}</span>
                   <span>{item.min_stock}</span>
                   <span>{item.unit}</span>
-                  <span>{formatMoney(item.purchase_price)}</span>
-                  <span>{formatMoney(item.price)}</span>
+                  <span>{formatCurrency(item.purchase_price)}</span>
+                  <span>{formatCurrency(item.price)}</span>
                   <span>
                     <StatusBadge status={item.stock_status} />
                   </span>

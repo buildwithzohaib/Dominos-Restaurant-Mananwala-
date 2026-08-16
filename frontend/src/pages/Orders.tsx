@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { formatMoney } from "../utils/money";
+import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useEffect, useState } from "react";
 
 import { CancelOrderModal } from "../components/CancelOrderModal";
@@ -10,6 +10,7 @@ import { api } from "../services/api";
 import type { Order, OrderStatus } from "../types";
 
 export function Orders() {
+  const formatCurrency = useCurrencyFormat();
   const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"" | OrderStatus>("");
@@ -97,7 +98,7 @@ export function Orders() {
                 <strong>{o.order_number}</strong>
                 <span>{new Date(o.created_at).toLocaleString()}</span>
                 <span>Walk-in</span>
-                <strong>{formatMoney(o.total)}</strong>
+                <strong>{formatCurrency(o.total)}</strong>
                 <span>
                   <OrderStatusBadge status={o.status} />
                 </span>
