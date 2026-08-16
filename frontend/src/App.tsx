@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { ClipboardList, LayoutDashboard, Package, ShoppingCart } from "lucide-react";
-import { SettingsProvider } from "./context/SettingsContext";
+import { useCallback, useContext, useEffect, useState } from "react";
+import { ClipboardList, LayoutDashboard, Package, ShoppingCart, Settings as SettingsIcon } from "lucide-react";
+import { SettingsProvider, SettingsContext } from "./context/SettingsContext";
 import { POSProvider } from "./context/POSContext";
 import { api } from "./services/api";
 import { POS } from "./pages/POS";
@@ -8,13 +8,18 @@ import { Orders } from "./pages/Orders";
 import { Inventory } from "./pages/Inventory";
 import { Dashboard } from "./pages/Dashboard";
 import { Products } from "./pages/Products";
+import { Settings } from "./pages/Settings";
+import { getRestaurantLetter } from "./utils/restaurant";
 import type { Category, Product } from "./types";
 
 function AppContent() {
-  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard" | "products">("pos");
+  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard" | "products" | "settings">("pos");
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState("");
+
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
 
   useEffect(() => {
     Promise.all([api.getCategories(), api.getProducts()])
@@ -40,7 +45,13 @@ function AppContent() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="sidebar-logo">M</div>
+        <button
+          className="sidebar-logo"
+          onClick={() => setPage("pos")}
+          title="Go to POS"
+        >
+          {getRestaurantLetter(settings?.restaurant_name)}
+        </button>
         <nav>
           <button
             className={page === "pos" ? "nav-item active" : "nav-item"}
@@ -77,6 +88,13 @@ function AppContent() {
             <Package size={21} />
             <span>Products</span>
           </button>
+          <button
+            className={page === "settings" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("settings")}
+          >
+            <SettingsIcon size={21} />
+            <span>Settings</span>
+          </button>
         </nav>
         <div className="sidebar-footer">v1.0</div>
       </aside>
@@ -97,6 +115,7 @@ function AppContent() {
         {page === "inventory" && <Inventory onChange={refreshProducts} />}
         {page === "dashboard" && <Dashboard />}
         {page === "products" && <Products />}
+        {page === "settings" && <Settings />}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@
 } from "lucide-react";
 
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
+import { formatMoney } from "../utils/money";
 import { useContext } from "react";
 import { SettingsContext } from "../context/SettingsContext";
 import type { ReceiptData } from "./PaymentModal";
@@ -22,7 +23,12 @@ export function SuccessModal({
 
   // Default values while settings load
   const restaurantName = settings?.restaurant_name || "MY RESTAURANT";
+  const restaurantAddress = settings?.restaurant_address || "";
+  const restaurantPhone = settings?.restaurant_phone || "";
   const footerText = settings?.receipt_footer_text || "Please visit us again.";
+
+  // Local helper: bare numbers without currency symbol
+  const formatBare = (amount: number) => formatMoney(amount, "");
   return (
     <div className="modal-backdrop">
       {/* NORMAL SCREEN RECEIPT */}
@@ -42,7 +48,8 @@ export function SuccessModal({
         <div className="receipt-screen">
           <div className="receipt-business">
             <strong>{restaurantName}</strong>
-            <span>Restaurant POS</span>
+            {restaurantAddress && <p>{restaurantAddress}</p>}
+            {restaurantPhone && <p>{restaurantPhone}</p>}
           </div>
 
           <div className="receipt-line" />
@@ -72,12 +79,12 @@ export function SuccessModal({
                 <div>
                   <strong>{item.product_name}</strong>
                   <span>
-                    {item.quantity} × {formatCurrency(item.price)}
+                    {item.quantity} × {formatBare(item.price)}
                   </span>
                 </div>
 
                 <strong>
-                  {formatCurrency(item.line_total)}
+                  {formatBare(item.line_total)}
                 </strong>
               </div>
             ))}
@@ -88,18 +95,18 @@ export function SuccessModal({
           <div className="receipt-summary">
             <div>
               <span>Subtotal</span>
-              <strong>{formatCurrency(receipt.subtotal)}</strong>
+              <strong>{formatBare(receipt.subtotal)}</strong>
             </div>
 
             <div>
               <span>Discount</span>
-              <strong>- {formatCurrency(receipt.discount)}</strong>
+              <strong>- {formatBare(receipt.discount)}</strong>
             </div>
 
             {settings?.tax_enabled && (
               <div>
                 <span>Tax</span>
-                <strong>{formatCurrency(receipt.tax)}</strong>
+                <strong>{formatBare(receipt.tax)}</strong>
               </div>
             )}
 
@@ -121,7 +128,7 @@ export function SuccessModal({
               <>
                 <div>
                   <span>Received</span>
-                  <strong>{formatCurrency(receipt.amountReceived)}</strong>
+                  <strong>{formatBare(receipt.amountReceived)}</strong>
                 </div>
 
                 <div>
@@ -159,7 +166,8 @@ export function SuccessModal({
       <div className="print-receipt">
         <div className="receipt-header">
           <h1>{restaurantName}</h1>
-          <p>Restaurant POS</p>
+          {restaurantAddress && <p>{restaurantAddress}</p>}
+          {restaurantPhone && <p>{restaurantPhone}</p>}
         </div>
 
         <div className="receipt-divider">--------------------------------</div>
@@ -196,8 +204,8 @@ export function SuccessModal({
             <div className="thermal-item-row">
               <div className="thermal-col-name" />
               <div className="thermal-col-qty">{item.quantity}</div>
-              <div className="thermal-col-price">{formatCurrency(item.price)}</div>
-              <div className="thermal-col-total">{formatCurrency(item.line_total)}</div>
+              <div className="thermal-col-price">{formatBare(item.price)}</div>
+              <div className="thermal-col-total">{formatBare(item.line_total)}</div>
             </div>
           </div>
         ))}
@@ -207,18 +215,18 @@ export function SuccessModal({
         <div className="thermal-summary">
           <div>
             <span>Subtotal</span>
-            <strong>{formatCurrency(receipt.subtotal)}</strong>
+            <strong>{formatBare(receipt.subtotal)}</strong>
           </div>
 
           <div>
             <span>Discount</span>
-            <strong>- {formatCurrency(receipt.discount)}</strong>
+            <strong>- {formatBare(receipt.discount)}</strong>
           </div>
 
           {settings?.tax_enabled && (
             <div>
               <span>Tax</span>
-              <strong>{formatCurrency(receipt.tax)}</strong>
+              <strong>{formatBare(receipt.tax)}</strong>
             </div>
           )}
 

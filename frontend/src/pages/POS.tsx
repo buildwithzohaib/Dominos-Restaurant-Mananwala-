@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 
 import { CategoryBar } from "../components/CategoryBar";
 import { OrderPanel } from "../components/OrderPanel";
@@ -11,6 +11,8 @@ import { ProductCard } from "../components/ProductCard";
 import { SuccessModal } from "../components/SuccessModal";
 
 import { usePOS } from "../context/POSContext";
+import { SettingsContext } from "../context/SettingsContext";
+import { getRestaurantLetter } from "../utils/restaurant";
 import { tables } from "../data/tables";
 
 import type {
@@ -34,6 +36,9 @@ export function POS({
     setTable,
     syncProducts,
   } = usePOS();
+
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
 
   // Whenever the product list is refreshed (after an order or an inventory edit),
   // re-point any existing cart lines at the latest stock so a line added before a
@@ -88,12 +93,12 @@ export function POS({
         <div className="brand">
 
           <div className="brand-mark">
-            M
+            {getRestaurantLetter(settings?.restaurant_name)}
           </div>
 
           <div>
             <strong>
-              My Restaurant
+              {settings?.restaurant_name || "Loading..."}
             </strong>
 
             <span>
