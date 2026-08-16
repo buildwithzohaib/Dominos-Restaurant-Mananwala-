@@ -131,7 +131,7 @@ export function Inventory({ onChange }: { onChange?: () => void }) {
               {items.map((item) => (
                 <div className="inventory-row" key={item.id}>
                   <span>
-                    <strong className="item-name">{item.name}</strong>
+                    <strong className="item-name">{item.name_display}</strong>
                   </span>
                   <span>{item.sku}</span>
                   <span>{item.stock}</span>

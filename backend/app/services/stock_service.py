@@ -52,7 +52,7 @@ def add_purchase_stock(db: Session, product_id: int, payload: StockPurchaseIn) -
     movement = StockMovement(
         item_type="PRODUCT",
         item_id=product.id,
-        item_name=product.name,
+        item_name=product.name_display,
         movement_type="PURCHASE",
         quantity_change=payload.quantity,
         reason="Purchase",
@@ -108,7 +108,7 @@ def adjust_stock(db: Session, product_id: int, payload: StockAdjustmentIn) -> Pr
     movement = StockMovement(
         item_type="PRODUCT",
         item_id=product.id,
-        item_name=product.name,
+        item_name=product.name_display,
         movement_type="ADJUSTMENT",
         quantity_change=payload.quantity_change,
         reason=label,

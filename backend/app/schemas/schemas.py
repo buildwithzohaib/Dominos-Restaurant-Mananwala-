@@ -35,14 +35,14 @@ class SettingsUpdate(BaseModel):
 class CategoryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    name: str
+    name_display: str
     active: bool
 
 class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     category_id: int
-    name: str
+    name_display: str
     price: int  # paisa
     stock: int
     image: str | None

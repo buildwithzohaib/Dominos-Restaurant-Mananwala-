@@ -87,7 +87,7 @@ export function AddStockModal({
             >
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.sku})
+                  {p.name_display} ({p.sku})
                 </option>
               ))}
             </select>

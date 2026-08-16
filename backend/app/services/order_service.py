@@ -40,9 +40,9 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         if not product or not product.available:
             raise HTTPException(400, f"Product {product_id} is unavailable.")
         if product.stock <= 0:
-            raise HTTPException(400, f'"{product.name}" is out of stock.')
+            raise HTTPException(400, f'"{product.name_display}" is out of stock.')
         if product.stock < quantity:
-            raise HTTPException(400, f'Only {product.stock} of "{product.name}" available.')
+            raise HTTPException(400, f'Only {product.stock} of "{product.name_display}" available.')
         products[product_id] = product
         subtotal += product.price * quantity
 
@@ -116,7 +116,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         if result.rowcount == 0:
             db.rollback()
             product = db.get(Product, product_id)
-            name = product.name if product else product_id
+            name = product.name_display if product else product_id
             available = product.stock if product else 0
             raise HTTPException(400, f'Only {available} of "{name}" available.')
 
@@ -128,7 +128,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         db.add(OrderItem(
             order_id=order.id,
             product_id=product.id,
-            product_name=product.name,
+            product_name=product.name_display,
             quantity=quantity,
             price=product.price,
             line_total=product.price * quantity,
@@ -136,7 +136,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         db.add(StockMovement(
             item_type="PRODUCT",
             item_id=product.id,
-            item_name=product.name,
+            item_name=product.name_display,
             movement_type="SALE",
             quantity_change=-quantity,
             reason="Sale",

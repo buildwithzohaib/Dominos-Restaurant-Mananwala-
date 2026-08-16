@@ -6,14 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.models.models import Product
 from app.schemas.schemas import InventoryUpdate
+from app.utils.normalization import derive_key, normalize_display
 
 
 def list_inventory(db: Session, search: str | None = None) -> list[Product]:
     query = db.query(Product)
     if search and search.strip():
         term = f"%{search.strip()}%"
-        query = query.filter(or_(Product.name.ilike(term), Product.sku.ilike(term)))
-    return query.order_by(Product.name).all()
+        query = query.filter(or_(Product.name_display.ilike(term), Product.sku.ilike(term)))
+    return query.order_by(Product.name_display).all()
 
 
 def get_inventory_item(db: Session, product_id: int) -> Product:
@@ -31,10 +32,26 @@ def update_inventory_item(db: Session, product_id: int, payload: InventoryUpdate
         raise HTTPException(404, "Product not found.")
 
     if payload.name is not None:
-        name = payload.name.strip()
-        if not name:
+        name = payload.name
+        if not name or not name.strip():
             raise HTTPException(400, "Item name cannot be empty.")
-        product.name = name
+
+        # Validate that name contains at least one alphanumeric character
+        name_key = derive_key(name)
+        if not name_key:
+            raise HTTPException(400, "Item name must contain at least one letter or digit.")
+
+        # Check for duplicate name (excluding self)
+        existing = db.query(Product).filter(
+            Product.name_key == name_key,
+            Product.id != product_id
+        ).first()
+        if existing:
+            raise HTTPException(400, f'Product "{existing.name_display}" already exists. Use a different name.')
+
+        product.name_raw = name
+        product.name_display = normalize_display(name)
+        product.name_key = name_key
 
     if payload.sku is not None:
         sku = payload.sku.strip()

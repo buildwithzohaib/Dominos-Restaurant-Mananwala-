@@ -26,7 +26,9 @@ class Settings(Base):
 class Category(Base):
     __tablename__ = "categories"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    name_raw: Mapped[str] = mapped_column(String(255))  # exactly as typed, audit trail
+    name_display: Mapped[str] = mapped_column(String(255))  # whitespace-normalized, for UI/display
+    name_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # lowercase alphanumeric, dedup detection
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     products: Mapped[list["Product"]] = relationship(back_populates="category", cascade="all, delete-orphan")
 
@@ -34,7 +36,9 @@ class Product(Base):
     __tablename__ = "products"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
-    name: Mapped[str] = mapped_column(String(150), index=True)
+    name_raw: Mapped[str] = mapped_column(String(255))  # exactly as typed, audit trail
+    name_display: Mapped[str] = mapped_column(String(255))  # whitespace-normalized, for UI/display
+    name_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # lowercase alphanumeric, dedup detection
     price: Mapped[int] = mapped_column(Integer)  # single authoritative selling price: POS/cart/receipt all read this
     stock: Mapped[int] = mapped_column(Integer, default=0)  # single authoritative current-stock value
     image: Mapped[str | None] = mapped_column(String(500), nullable=True)

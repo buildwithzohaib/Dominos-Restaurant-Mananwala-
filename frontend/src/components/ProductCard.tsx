@@ -21,11 +21,11 @@ export function ProductCard({
       disabled={outOfStock}
     >
       <div className="product-thumb">
-        {product.name[0]}
+        {product.name_display[0]}
       </div>
 
       <div className="product-info">
-        <strong>{product.name}</strong>
+        <strong>{product.name_display}</strong>
         {outOfStock ? (
           <span className="status-badge out-of-stock">Out of Stock</span>
         ) : (

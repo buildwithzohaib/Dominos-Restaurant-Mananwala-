@@ -4,11 +4,11 @@ export type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 // Settings (Task 1.1) — single immutable row with restaurant configuration
 export interface Settings { id:number; restaurant_name:string; restaurant_address:string; restaurant_phone:string; currency_symbol:string; tax_rate:number; /* basis points */ tax_enabled:boolean; day_starts_at:string; /* HH:MM format */ receipt_footer_text:string; created_at:string; updated_at:string; }
 export interface SettingsUpdate { restaurant_name?:string; restaurant_address?:string; restaurant_phone?:string; currency_symbol?:string; tax_rate?:number; /* basis points */ tax_enabled?:boolean; day_starts_at?:string; receipt_footer_text?:string; }
-export interface Category { id:number; name:string; active:boolean; }
+export interface Category { id:number; name_display:string; active:boolean; }
 // Inventory fields (Phase 3) live on the same Product row the POS/cart/receipt already
 // read — sku/min_stock/unit/purchase_price/stock_status/updated_at are additive, and
 // price/stock remain the single authoritative selling-price/current-stock values.
-export interface Product { id:number; category_id:number; name:string; price:number; /* paisa */ stock:number; image?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; updated_at:string; }
+export interface Product { id:number; category_id:number; name_display:string; price:number; /* paisa */ stock:number; image?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; updated_at:string; }
 export interface InventoryUpdateInput { name?:string; sku?:string; min_stock?:number; unit?:string; purchase_price?:number; /* paisa */ price?:number; /* paisa */ }
 // Stock operations (Phase 4–8) — every change to Product.stock writes one of
 // these ledger rows in the same backend transaction; Product.stock stays the only

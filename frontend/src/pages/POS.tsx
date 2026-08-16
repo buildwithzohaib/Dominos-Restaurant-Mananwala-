@@ -72,7 +72,7 @@ export function POS({
         ) &&
         (
           !q ||
-          p.name
+          p.name_display
             .toLowerCase()
             .includes(q)
         )

@@ -51,7 +51,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
             return (
               <div className="cart-row" key={i.product.id}>
                 <div className="cart-main">
-                  <strong>{i.product.name}</strong>
+                  <strong>{i.product.name_display}</strong>
 
                   <span>
                     {formatCurrency(i.product.price)} each

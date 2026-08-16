@@ -14,7 +14,7 @@ export function EditInventoryModal({
   onClose: () => void;
   onSaved: (product: Product) => void;
 }) {
-  const [name, setName] = useState(product.name);
+  const [name, setName] = useState(product.name_display);
   const [sku, setSku] = useState(product.sku);
   const [minStock, setMinStock] = useState(String(product.min_stock));
   const [unit, setUnit] = useState(product.unit);

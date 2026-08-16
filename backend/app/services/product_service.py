@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.models import Product, Category
 from app.schemas.schemas import ProductCreate, ProductUpdate
+from app.utils.normalization import derive_key, normalize_display
 
 
 def create_product(db: Session, payload: ProductCreate) -> Product:
@@ -18,6 +19,16 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
     # Validate required fields
     if not payload.name or not payload.name.strip():
         raise HTTPException(400, "Product name is required.")
+
+    # Validate that name contains at least one alphanumeric character (not just symbols)
+    name_key = derive_key(payload.name)
+    if not name_key:
+        raise HTTPException(400, "Product name must contain at least one letter or digit.")
+
+    # Check for duplicate name (by name_key dedup detection)
+    existing = db.query(Product).filter(Product.name_key == name_key).first()
+    if existing:
+        raise HTTPException(400, f'Product "{existing.name_display}" already exists. Use a different name.')
 
     # Check for duplicate SKU
     if payload.sku:
@@ -51,7 +62,9 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
     # Create product
     product = Product(
         category_id=payload.category_id,
-        name=payload.name.strip(),
+        name_raw=payload.name,
+        name_display=normalize_display(payload.name),
+        name_key=name_key,
         price=payload.price,
         stock=payload.stock,
         sku=payload.sku.strip() if payload.sku else f"AUTO-{datetime.utcnow().timestamp()}",
@@ -94,12 +107,12 @@ def list_products(db: Session, search: str | None = None, include_disabled: bool
         term = f"%{search.strip()}%"
         query = query.filter(
             or_(
-                Product.name.ilike(term),
+                Product.name_display.ilike(term),
                 Product.sku.ilike(term)
             )
         )
 
-    return query.order_by(Product.name).all()
+    return query.order_by(Product.name_display).all()
 
 
 def update_product(db: Session, product_id: int, payload: ProductUpdate) -> Product:
@@ -108,12 +121,28 @@ def update_product(db: Session, product_id: int, payload: ProductUpdate) -> Prod
     if not product:
         raise HTTPException(404, "Product not found.")
 
-    # Update name
+    # Update name (all three columns)
     if payload.name is not None:
-        name = payload.name.strip()
-        if not name:
+        name = payload.name
+        if not name or not name.strip():
             raise HTTPException(400, "Product name cannot be empty.")
-        product.name = name
+
+        # Validate that name contains at least one alphanumeric character
+        name_key = derive_key(name)
+        if not name_key:
+            raise HTTPException(400, "Product name must contain at least one letter or digit.")
+
+        # Check for duplicate name (excluding self)
+        existing = db.query(Product).filter(
+            Product.name_key == name_key,
+            Product.id != product_id
+        ).first()
+        if existing:
+            raise HTTPException(400, f'Product "{existing.name_display}" already exists. Use a different name.')
+
+        product.name_raw = name
+        product.name_display = normalize_display(name)
+        product.name_key = name_key
 
     # Update category
     if payload.category_id is not None:

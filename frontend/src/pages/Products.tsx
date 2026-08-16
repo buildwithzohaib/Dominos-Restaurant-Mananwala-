@@ -132,7 +132,7 @@ export function Products() {
                 key={item.id}
               >
                 <span>
-                  <strong className="item-name">{item.name}</strong>
+                  <strong className="item-name">{item.name_display}</strong>
                 </span>
                 <span>
                   {item.category_id} {/* TODO: display category name */}

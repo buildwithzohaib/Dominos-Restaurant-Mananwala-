@@ -16,7 +16,7 @@ export function EditProductModal({
   onSaved: (product: Product) => void;
 }) {
   const [formData, setFormData] = useState<ProductUpdateInput>({
-    name: product.name,
+    name: product.name_display,
     category_id: product.category_id,
     sku: product.sku,
     price: Number(product.price),
