@@ -11,24 +11,12 @@ import { ProductCard } from "../components/ProductCard";
 import { SuccessModal } from "../components/SuccessModal";
 
 import { usePOS } from "../context/POSContext";
+import { useCatalog } from "../context/CatalogContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { getRestaurantLetter } from "../utils/restaurant";
 import { tables } from "../data/tables";
 
-import type {
-  Category,
-  Product,
-} from "../types";
-
-export function POS({
-  categories,
-  products,
-  onOrderComplete,
-}: {
-  categories: Category[];
-  products: Product[];
-  onOrderComplete?: () => void;
-}) {
+export function POS() {
   const {
     addProduct,
     state,
@@ -37,6 +25,8 @@ export function POS({
     syncProducts,
   } = usePOS();
 
+  const { catalogProducts, catalogCategories, refresh } = useCatalog();
+
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
 
@@ -44,8 +34,8 @@ export function POS({
   // re-point any existing cart lines at the latest stock so a line added before a
   // concurrent sale can't still be checked out against stock that's gone (Phase 6).
   useEffect(() => {
-    syncProducts(products);
-  }, [products, syncProducts]);
+    syncProducts(catalogProducts);
+  }, [catalogProducts, syncProducts]);
 
   const [category, setCategory] =
     useState<number | "all">("all");
@@ -64,7 +54,7 @@ export function POS({
       .toLowerCase()
       .trim();
 
-    return products.filter(
+    return catalogProducts.filter(
       (p) =>
         (
           category === "all" ||
@@ -78,7 +68,7 @@ export function POS({
         )
     );
   }, [
-    products,
+    catalogProducts,
     category,
     query,
   ]);
@@ -245,7 +235,7 @@ export function POS({
 
 
           <CategoryBar
-            categories={categories}
+            categories={catalogCategories}
             selected={category}
             onChange={setCategory}
           />
@@ -291,7 +281,7 @@ export function POS({
             setSuccess(receipt);
             // Stock was decremented on the backend as part of the completed order;
             // refetch so the menu/cart never sell against a now-stale stock count.
-            onOrderComplete?.();
+            refresh();
           }}
         />
 

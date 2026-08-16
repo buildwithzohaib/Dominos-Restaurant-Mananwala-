@@ -1,8 +1,8 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { ClipboardList, LayoutDashboard, Package, ShoppingCart, Settings as SettingsIcon } from "lucide-react";
 import { SettingsProvider, SettingsContext } from "./context/SettingsContext";
+import { CatalogProvider } from "./context/CatalogContext";
 import { POSProvider } from "./context/POSContext";
-import { api } from "./services/api";
 import { POS } from "./pages/POS";
 import { Orders } from "./pages/Orders";
 import { Inventory } from "./pages/Inventory";
@@ -10,37 +10,13 @@ import { Dashboard } from "./pages/Dashboard";
 import { Products } from "./pages/Products";
 import { Settings } from "./pages/Settings";
 import { getRestaurantLetter } from "./utils/restaurant";
-import type { Category, Product } from "./types";
 
 function AppContent() {
   const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard" | "products" | "settings">("pos");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState("");
 
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
-
-  useEffect(() => {
-    Promise.all([api.getCatalogCategories(), api.getCatalogProducts()])
-      .then(([c, p]) => {
-        setCategories(c);
-        setProducts(p);
-      })
-      .catch((e) =>
-        setError(
-          e instanceof Error
-            ? e.message
-            : "Could not connect to backend"
-        )
-      );
-  }, []);
-
-  // Products (price/stock) come from one backend source of truth. Re-fetch after a
-  // completed order or an inventory edit so POS never sells against a stale stock count.
-  const refreshProducts = useCallback(() => {
-    api.getCatalogProducts().then(setProducts).catch(() => {});
-  }, []);
 
   return (
     <div className="app-shell">
@@ -104,15 +80,9 @@ function AppContent() {
             Backend connection failed: {error}
           </div>
         )}
-        {page === "pos" && (
-          <POS
-            categories={categories}
-            products={products}
-            onOrderComplete={refreshProducts}
-          />
-        )}
+        {page === "pos" && <POS />}
         {page === "orders" && <Orders />}
-        {page === "inventory" && <Inventory onChange={refreshProducts} />}
+        {page === "inventory" && <Inventory />}
         {page === "dashboard" && <Dashboard />}
         {page === "products" && <Products />}
         {page === "settings" && <Settings />}
@@ -124,9 +94,11 @@ function AppContent() {
 export default function App() {
   return (
     <SettingsProvider>
-      <POSProvider>
-        <AppContent />
-      </POSProvider>
+      <CatalogProvider>
+        <POSProvider>
+          <AppContent />
+        </POSProvider>
+      </CatalogProvider>
     </SettingsProvider>
   );
 }
