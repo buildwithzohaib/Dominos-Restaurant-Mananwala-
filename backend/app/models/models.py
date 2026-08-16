@@ -30,7 +30,7 @@ class Category(Base):
     name_display: Mapped[str] = mapped_column(String(255))  # whitespace-normalized, for UI/display
     name_key: Mapped[str] = mapped_column(String(255), unique=True, index=True)  # lowercase alphanumeric, dedup detection
     active: Mapped[bool] = mapped_column(Boolean, default=True)
-    products: Mapped[list["Product"]] = relationship(back_populates="category", cascade="all, delete-orphan")
+    products: Mapped[list["Product"]] = relationship(back_populates="category")
 
 class Product(Base):
     __tablename__ = "products"

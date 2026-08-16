@@ -22,7 +22,7 @@ function AppContent() {
   const settings = settingsContext?.settings;
 
   useEffect(() => {
-    Promise.all([api.getCategories(), api.getProducts()])
+    Promise.all([api.getCategories(), api.getCatalogProducts()])
       .then(([c, p]) => {
         setCategories(c);
         setProducts(p);
@@ -39,7 +39,7 @@ function AppContent() {
   // Products (price/stock) come from one backend source of truth. Re-fetch after a
   // completed order or an inventory edit so POS never sells against a stale stock count.
   const refreshProducts = useCallback(() => {
-    api.getProducts().then(setProducts).catch(() => {});
+    api.getCatalogProducts().then(setProducts).catch(() => {});
   }, []);
 
   return (

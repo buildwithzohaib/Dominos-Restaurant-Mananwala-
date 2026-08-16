@@ -10,9 +10,13 @@ router = APIRouter(prefix="/api", tags=["catalog"])
 def categories(db: Session = Depends(get_db)):
     return db.query(Category).filter(Category.active.is_(True)).order_by(Category.name_display).all()
 
-@router.get("/products", response_model=list[ProductOut])
-def products(db: Session = Depends(get_db)):
-    return db.query(Product).filter(Product.available.is_(True)).order_by(Product.name_display).all()
+@router.get("/catalog/products", response_model=list[ProductOut])
+def catalog_products(db: Session = Depends(get_db)):
+    return db.query(Product)\
+        .join(Category, Product.category_id == Category.id)\
+        .filter(Product.available.is_(True), Category.active.is_(True))\
+        .order_by(Product.name_display)\
+        .all()
 
 @router.get("/tables", response_model=list[TableOut])
 def tables(db: Session = Depends(get_db)):

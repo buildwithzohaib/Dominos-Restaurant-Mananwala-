@@ -38,6 +38,12 @@ class CategoryOut(BaseModel):
     name_display: str
     active: bool
 
+class CategoryCreate(BaseModel):
+    name: str
+
+class CategoryUpdate(BaseModel):
+    name: str
+
 class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

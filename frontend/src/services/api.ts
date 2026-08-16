@@ -7,6 +7,7 @@ async function request<T>(path:string,options?:RequestInit):Promise<T>{
 }
 export const api={
  getCategories:()=>request<Category[]>("/api/categories"),
+ getCatalogProducts:()=>request<Product[]>("/api/catalog/products"),
  getProducts:(search?:string,includeDisabled?:boolean)=>{
   const q=new URLSearchParams();
   if(search&&search.trim())q.set("search",search.trim());
