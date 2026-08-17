@@ -1,10 +1,11 @@
-import { Plus, Search, Edit2, Power, PowerOff, Lock } from "lucide-react";
+import { Plus, Search, Edit2, Power, PowerOff, Lock, FolderOpen } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useState, useMemo } from "react";
 
 import { AddProductModal } from "../components/AddProductModal";
 import { EditProductModal } from "../components/EditProductModal";
 import { StatusBadge } from "../components/StatusBadge";
+import { CategoryListModal } from "../components/CategoryListModal";
 import { useCatalog } from "../context/CatalogContext";
 import { api } from "../services/api";
 
@@ -16,6 +17,7 @@ export function Products() {
   const [query, setQuery] = useState("");
   const [showDisabled, setShowDisabled] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
   // Filter products locally: by search and by availability
@@ -71,6 +73,13 @@ export function Products() {
         </div>
 
         <div className="inventory-actions">
+          <button
+            className="secondary-button"
+            onClick={() => setManageCategoriesOpen(true)}
+          >
+            <FolderOpen size={15} /> Manage Categories
+          </button>
+
           <button
             className={showDisabled ? "secondary-button active" : "secondary-button"}
             onClick={() => setShowDisabled(!showDisabled)}
@@ -164,6 +173,10 @@ export function Products() {
             refresh();
           }}
         />
+      )}
+
+      {manageCategoriesOpen && (
+        <CategoryListModal onClose={() => setManageCategoriesOpen(false)} />
       )}
     </div>
   );

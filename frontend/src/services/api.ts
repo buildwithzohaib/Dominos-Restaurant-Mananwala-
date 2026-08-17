@@ -8,6 +8,10 @@ async function request<T>(path:string,options?:RequestInit):Promise<T>{
 export const api={
  getCatalogCategories:()=>request<Category[]>("/api/catalog/categories"),
  getCategories:()=>request<Category[]>("/api/categories"),
+ createCategory:(name:string)=>request<Category>("/api/categories",{method:"POST",body:JSON.stringify({name})}),
+ updateCategory:(id:number,name:string)=>request<Category>(`/api/categories/${id}`,{method:"PUT",body:JSON.stringify({name})}),
+ activateCategory:(id:number)=>request<Category>(`/api/categories/${id}/activate`,{method:"PATCH",body:JSON.stringify({})}),
+ deactivateCategory:(id:number)=>request<Category>(`/api/categories/${id}/deactivate`,{method:"PATCH",body:JSON.stringify({})}),
  getCatalogProducts:()=>request<Product[]>("/api/catalog/products"),
  getProducts:(search?:string,includeDisabled?:boolean)=>{
   const q=new URLSearchParams();
