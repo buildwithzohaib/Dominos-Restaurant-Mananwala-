@@ -60,6 +60,7 @@ class ProductOut(BaseModel):
     price: int  # paisa
     stock: int
     image: str | None
+    image_hash: str | None
     available: bool
     status: str
     sku: str

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { X } from "lucide-react";
-import { api } from "../services/api";
+import { X, Upload } from "lucide-react";
+import { api, API_URL } from "../services/api";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
+import { useCatalog } from "../context/CatalogContext";
 import type { Category, Product, ProductUpdateInput } from "../types";
 
 export function EditProductModal({
@@ -15,6 +16,7 @@ export function EditProductModal({
   onClose: () => void;
   onSaved: (product: Product) => void;
 }) {
+  const { refresh } = useCatalog();
   const [formData, setFormData] = useState<ProductUpdateInput>({
     name: product.name_display,
     category_id: product.category_id,
@@ -26,6 +28,9 @@ export function EditProductModal({
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState("");
+  const [currentImageHash, setCurrentImageHash] = useState(product.image_hash);
 
   const [priceText, setPriceText] = useState(
     formData.price !== undefined ? String(paisaToRupees(formData.price)) : ""
@@ -33,6 +38,26 @@ export function EditProductModal({
   const [purchasePriceText, setPurchasePriceText] = useState(
     formData.purchase_price !== undefined ? String(paisaToRupees(formData.purchase_price)) : ""
   );
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setImageError("");
+    try {
+      const updated = await api.uploadProductImage(product.id, file);
+      setCurrentImageHash(updated.image_hash);
+      // Refresh catalog so all views (ProductCard, etc.) update with new image
+      await refresh();
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Could not upload image");
+    } finally {
+      setUploadingImage(false);
+      // Reset the input so the same file can be uploaded again if needed
+      e.target.value = "";
+    }
+  }
 
   async function submit() {
     setBusy(true);
@@ -144,11 +169,49 @@ export function EditProductModal({
           </label>
         </div>
 
+        {product.image && (
+          <div style={{ marginTop: "12px", marginBottom: "12px" }}>
+            <p style={{ fontSize: "12px", color: "#687385", marginBottom: "8px" }}>Current image:</p>
+            <img
+              src={`${API_URL}/images/${product.image}?v=${currentImageHash}`}
+              alt={product.name_display}
+              style={{ maxHeight: "80px", objectFit: "contain", borderRadius: "6px" }}
+            />
+          </div>
+        )}
+
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "10px 12px",
+            border: "1px solid #e2e6ec",
+            borderRadius: "6px",
+            cursor: uploadingImage ? "not-allowed" : "pointer",
+            opacity: uploadingImage ? 0.6 : 1,
+            marginBottom: "12px",
+          }}
+        >
+          <Upload size={18} />
+          <span style={{ fontSize: "14px" }}>
+            {uploadingImage ? "Uploading..." : "Upload Product Image (JPEG/PNG)"}
+          </span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png"
+            onChange={handleImageUpload}
+            disabled={uploadingImage}
+            style={{ display: "none" }}
+          />
+        </label>
+
         <p className="muted" style={{ fontSize: "12px", marginTop: "12px" }}>
           Note: Use Inventory page to modify stock quantity. Stock changes here create audit trail.
         </p>
 
         {error && <div className="error-box">{error}</div>}
+        {imageError && <div className="error-box">{imageError}</div>}
 
         <div className="modal-action-row">
           <button className="secondary-button" onClick={onClose} disabled={busy}>

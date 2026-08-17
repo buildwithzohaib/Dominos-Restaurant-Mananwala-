@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Product } from "../types";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
+import { API_URL } from "../services/api";
 
 export function ProductCard({
   product,
@@ -9,10 +11,12 @@ export function ProductCard({
   onAdd: (p: Product) => void;
 }) {
   const formatCurrency = useCurrencyFormat();
+  const [imageError, setImageError] = useState(false);
   // Reuse the backend's authoritative stock_status (Phase 3) rather than
   // re-deriving availability from stock/available locally — one status
   // calculation, computed on the server, read everywhere.
   const outOfStock = product.stock_status === "OUT_OF_STOCK";
+  const showImage = product.image && !imageError;
 
   return (
     <button
@@ -21,7 +25,15 @@ export function ProductCard({
       disabled={outOfStock}
     >
       <div className="product-thumb">
-        {product.name_display[0]}
+        {showImage ? (
+          <img
+            src={`${API_URL}/images/${product.image}?v=${product.image_hash}`}
+            alt={product.name_display}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          product.name_display[0]
+        )}
       </div>
 
       <div className="product-info">

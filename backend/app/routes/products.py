@@ -3,12 +3,13 @@ Product Management API Routes (Phase 10)
 Endpoints for creating, reading, updating, and managing products.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.models import Product
 from app.schemas.schemas import ProductCreate, ProductOut, ProductUpdate
-from app.services import product_service
+from app.services import product_service, image_service
 
 router = APIRouter(prefix="/api/products", tags=["products"])
 
@@ -103,3 +104,38 @@ def enable_product(
     Re-enables the product for sale in POS based on current stock status.
     """
     return product_service.enable_product(db, product_id)
+
+
+@router.post("/{product_id}/image", response_model=ProductOut)
+async def upload_product_image(
+    product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload or replace a product image.
+
+    Accepts JPEG and PNG images up to 2 MB. Images are resized to fit
+    400x300 pixels while preserving aspect ratio. Returns the updated product.
+
+    Raises 400 if:
+    - File exceeds 2 MB
+    - File is not a valid image
+    - Image format is not JPEG or PNG
+    """
+    # Check product exists
+    product = db.get(Product, product_id)
+    if not product:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Product not found.")
+
+    # Process image
+    filename, image_hash = await image_service.process_product_image(file, product_id)
+
+    # Update product
+    product.image = filename
+    product.image_hash = image_hash
+    db.commit()
+    db.refresh(product)
+
+    return product

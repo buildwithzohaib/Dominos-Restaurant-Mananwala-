@@ -1,8 +1,14 @@
 import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
-const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
+export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
  const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
  if(!r.ok){let m="Request failed.";try{const b=await r.json();m=b.detail||m;}catch{}throw new Error(m);}
+ return r.json();
+}
+async function uploadFile<T>(path:string,file:File):Promise<T>{
+ const fd=new FormData();fd.append("file",file);
+ const r=await fetch(`${API_URL}${path}`,{method:"POST",body:fd});
+ if(!r.ok){let m="Upload failed.";try{const b=await r.json();m=b.detail||m;}catch{}throw new Error(m);}
  return r.json();
 }
 export const api={
@@ -59,5 +65,6 @@ export const api={
  createProduct:(p:ProductCreateInput)=>request<Product>("/api/products",{method:"POST",body:JSON.stringify(p)}),
  updateProduct:(id:number,p:ProductUpdateInput)=>request<Product>(`/api/products/${id}`,{method:"PUT",body:JSON.stringify(p)}),
  disableProduct:(id:number)=>request<Product>(`/api/products/${id}/disable`,{method:"PATCH",body:JSON.stringify({})}),
- enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})})
+ enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})}),
+ uploadProductImage:(id:number,file:File)=>uploadFile<Product>(`/api/products/${id}/image`,file)
 };
