@@ -1,80 +1,51 @@
 import { Plus, Search, Edit2, Power, PowerOff, Lock } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 
 import { AddProductModal } from "../components/AddProductModal";
 import { EditProductModal } from "../components/EditProductModal";
 import { StatusBadge } from "../components/StatusBadge";
-
+import { useCatalog } from "../context/CatalogContext";
 import { api } from "../services/api";
-import type { Category, Product } from "../types";
+
+import type { Product } from "../types";
 
 export function Products() {
   const formatCurrency = useCurrencyFormat();
-  const [items, setItems] = useState<Product[]>([]);
-  const [allItems, setAllItems] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const { allProducts, allCategories, refresh, isLoading } = useCatalog();
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [showDisabled, setShowDisabled] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
-  const [showDisabled, setShowDisabled] = useState(false);
 
-  async function load() {
-    setLoading(true);
-    try {
-      setItems(
-        await api.getProducts(
-          query || undefined,
-          showDisabled
-        )
+  // Filter products locally: by search and by availability
+  const items = useMemo(() => {
+    let filtered = allProducts;
+
+    // Filter by search query (match on name_display, case-insensitive)
+    if (query.trim()) {
+      const lowerQuery = query.toLowerCase();
+      filtered = filtered.filter((p) =>
+        p.name_display.toLowerCase().includes(lowerQuery)
       );
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load products");
-    } finally {
-      setLoading(false);
     }
-  }
 
-  async function loadAll() {
-    try {
-      setAllItems(await api.getProducts(undefined, true));
-    } catch {
-      // Error already surfaced in main load
+    // Filter by availability
+    if (!showDisabled) {
+      filtered = filtered.filter((p) => p.available);
     }
-  }
 
-  useEffect(() => {
-    const timer = setTimeout(() => load(), 250);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, showDisabled]);
-
-  useEffect(() => {
-    loadAll();
-    api.getCategories()
-      .then(setCategories)
-      .catch(() => {
-        // Categories are not essential, silently fail
-      });
-  }, []);
-
-  function applyUpdated(updated: Product) {
-    setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    setAllItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-  }
+    return filtered;
+  }, [allProducts, query, showDisabled]);
 
   async function toggleProduct(product: Product) {
     try {
       if (product.available) {
-        const updated = await api.disableProduct(product.id);
-        applyUpdated(updated);
+        await api.disableProduct(product.id);
       } else {
-        const updated = await api.enableProduct(product.id);
-        applyUpdated(updated);
+        await api.enableProduct(product.id);
       }
+      await refresh();
     } catch (e) {
       alert(e instanceof Error ? e.message : "Could not update product");
     }
@@ -113,10 +84,8 @@ export function Products() {
         </div>
       </div>
 
-      {error && <div className="error-box">{error}</div>}
-
       <div className="inventory-card">
-        {loading ? (
+        {isLoading ? (
           <div className="loading">Loading products...</div>
         ) : !items.length ? (
           <div className="loading">No products found.</div>
@@ -176,11 +145,11 @@ export function Products() {
 
       {addOpen && (
         <AddProductModal
-          categories={categories}
+          categories={allCategories}
           onClose={() => setAddOpen(false)}
-          onSaved={(created) => {
-            applyUpdated(created);
+          onSaved={() => {
             setAddOpen(false);
+            refresh();
           }}
         />
       )}
@@ -188,11 +157,11 @@ export function Products() {
       {editing && (
         <EditProductModal
           product={editing}
-          categories={categories}
+          categories={allCategories}
           onClose={() => setEditing(null)}
-          onSaved={(updated) => {
-            applyUpdated(updated);
+          onSaved={() => {
             setEditing(null);
+            refresh();
           }}
         />
       )}

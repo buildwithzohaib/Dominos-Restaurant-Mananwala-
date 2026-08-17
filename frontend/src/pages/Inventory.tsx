@@ -1,67 +1,35 @@
 import { History, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
-import { useEffect, useState } from "react";
+import { useState, useMemo } from "react";
 
 import { AddStockModal } from "../components/AddStockModal";
 import { EditInventoryModal } from "../components/EditInventoryModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { StockAdjustmentModal } from "../components/StockAdjustmentModal";
 import { StockHistory } from "../components/StockHistory";
+import { useCatalog } from "../context/CatalogContext";
 
-import { api } from "../services/api";
 import type { Product } from "../types";
 
-export function Inventory({ onChange }: { onChange?: () => void }) {
+export function Inventory() {
   const formatCurrency = useCurrencyFormat();
-  const [items, setItems] = useState<Product[]>([]);
-  // Full, unfiltered product list — kept separate from the (possibly search-narrowed)
-  // `items` above so the Add Stock / Stock Adjustment product pickers always offer
-  // every item, not just whatever the inventory search happens to be showing.
-  const [allItems, setAllItems] = useState<Product[]>([]);
+  const { allProducts, refresh, isLoading } = useCatalog();
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [view, setView] = useState<"table" | "history">("table");
   const [addOpen, setAddOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
-  async function load(search: string) {
-    setLoading(true);
-    try {
-      setItems(await api.getInventory(search));
-      setError("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load inventory");
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Filter products locally: by search query (name or SKU, case-insensitive)
+  const items = useMemo(() => {
+    if (!query.trim()) return allProducts;
 
-  async function loadAll() {
-    try {
-      setAllItems(await api.getInventory());
-    } catch {
-      // Surfaced already via the main table's own load() error box.
-    }
-  }
-
-  // Debounced server-side search — item name or SKU, no full-page reload.
-  useEffect(() => {
-    const timer = setTimeout(() => load(query), 250);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
-  useEffect(() => {
-    loadAll();
-  }, []);
-
-  function applyUpdated(updated: Product) {
-    setItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    setAllItems((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
-    onChange?.();
-  }
+    const lowerQuery = query.toLowerCase();
+    return allProducts.filter((p) =>
+      p.name_display.toLowerCase().includes(lowerQuery) ||
+      p.sku.toLowerCase().includes(lowerQuery)
+    );
+  }, [allProducts, query]);
 
   return (
     <div className="inventory-page">
@@ -103,13 +71,11 @@ export function Inventory({ onChange }: { onChange?: () => void }) {
         </div>
       </div>
 
-      {error && view === "table" && <div className="error-box">{error}</div>}
-
       {view === "history" ? (
         <StockHistory />
       ) : (
         <div className="inventory-card">
-          {loading ? (
+          {isLoading ? (
             <div className="loading">Loading inventory...</div>
           ) : !items.length ? (
             <div className="loading">No inventory items found.</div>
@@ -160,22 +126,22 @@ export function Inventory({ onChange }: { onChange?: () => void }) {
 
       {addOpen && (
         <AddStockModal
-          products={allItems}
+          products={allProducts}
           onClose={() => setAddOpen(false)}
-          onSaved={(updated) => {
-            applyUpdated(updated);
+          onSaved={() => {
             setAddOpen(false);
+            refresh();
           }}
         />
       )}
 
       {adjustOpen && (
         <StockAdjustmentModal
-          products={allItems}
+          products={allProducts}
           onClose={() => setAdjustOpen(false)}
-          onSaved={(updated) => {
-            applyUpdated(updated);
+          onSaved={() => {
             setAdjustOpen(false);
+            refresh();
           }}
         />
       )}
@@ -184,9 +150,9 @@ export function Inventory({ onChange }: { onChange?: () => void }) {
         <EditInventoryModal
           product={editing}
           onClose={() => setEditing(null)}
-          onSaved={(updated) => {
-            applyUpdated(updated);
+          onSaved={() => {
             setEditing(null);
+            refresh();
           }}
         />
       )}
