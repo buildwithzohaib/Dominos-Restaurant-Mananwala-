@@ -14,6 +14,7 @@ class SettingsOut(BaseModel):
     currency_symbol: str
     tax_rate: int  # basis points (1600 = 16%)
     tax_enabled: bool
+    delivery_charge: int  # paisa (20000 = Rs. 200); default 0
     day_starts_at: str  # HH:MM format
     receipt_footer_text: str
     created_at: datetime
@@ -28,6 +29,7 @@ class SettingsUpdate(BaseModel):
     currency_symbol: str | None = None
     tax_rate: int | None = Field(default=None, ge=0, le=10000)  # basis points
     tax_enabled: bool | None = None
+    delivery_charge: int | None = Field(default=None, ge=0)  # paisa
     day_starts_at: str | None = None
     receipt_footer_text: str | None = None
 
@@ -93,11 +95,14 @@ class OrderCreate(BaseModel):
 
     tax_rate is always determined by settings at order time (Rule 7 snapshot).
     customer_id and delivery_address are optional and independent — no pairing required.
+    delivery_charge: defaults to settings.delivery_charge, but cashier can override
+      per order. Ignored (forced to 0) if order_type is not DELIVERY.
     """
     order_type: Literal["DINE_IN", "TAKEAWAY", "DELIVERY"] = "TAKEAWAY"
     table_id: int | None = None
     customer_id: int | None = None  # optional for all order types; validated in service
     delivery_address: str | None = None  # optional; no pairing with customer_id
+    delivery_charge: int | None = Field(default=None, ge=0)  # paisa; defaults to settings if not provided
     items: list[OrderItemCreate] = Field(min_length=1)
     discount: int = Field(default=0, ge=0)  # paisa
     payment_method: Literal["CASH", "CARD", "OTHER"] = "CASH"
@@ -126,6 +131,7 @@ class OrderOut(BaseModel):
     discount: int  # paisa
     tax: int  # paisa
     tax_rate: int | None  # basis points at order time (snapshot per Rule 7)
+    delivery_charge: int | None  # paisa at order time (snapshot per Rule 7); NULL for non-delivery
     total: int  # paisa
     payment_method: str
     amount_received: int  # paisa

@@ -88,6 +88,12 @@ export function OrderDetailsModal({
               <strong>{formatCurrency(order.tax)}</strong>
             </div>
           )}
+          {order.delivery_charge && order.delivery_charge > 0 && (
+            <div>
+              <span>Delivery</span>
+              <strong>{formatCurrency(order.delivery_charge)}</strong>
+            </div>
+          )}
           <div className="receipt-grand-total">
             <span>TOTAL</span>
             <strong>{formatCurrency(order.total)}</strong>

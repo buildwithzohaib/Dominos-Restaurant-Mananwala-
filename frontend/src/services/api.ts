@@ -34,7 +34,7 @@ export const api={
   const qs=q.toString();
   return request<Order[]>(`/api/orders${qs?`?${qs}`:""}`);
  },
- createOrder:(p:{order_type:OrderType;table_id:number|null;customer_id?:number|null;delivery_address?:string|null;items:{product_id:number;quantity:number}[];discount:number;payment_method:PaymentMethod;amount_received:number})=>request<Order>("/api/orders",{method:"POST",body:JSON.stringify(p)}),
+ createOrder:(p:{order_type:OrderType;table_id:number|null;customer_id?:number|null;delivery_address?:string|null;delivery_charge?:number|null;items:{product_id:number;quantity:number}[];discount:number;payment_method:PaymentMethod;amount_received:number})=>request<Order>("/api/orders",{method:"POST",body:JSON.stringify(p)}),
  // Order cancellation (Phase 7) — never deletes the order, just flips status to
  // CANCELLED with a required reason; inventory restoration is a Phase 8 concern.
  cancelOrder:(id:number,payload:OrderCancelInput)=>request<Order>(`/api/orders/${id}/cancel`,{method:"POST",body:JSON.stringify(payload)}),

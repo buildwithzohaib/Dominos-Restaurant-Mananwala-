@@ -20,6 +20,7 @@ export function Settings() {
   const [currencySymbol, setCurrencySymbol] = useState("");
   const [taxRateText, setTaxRateText] = useState(""); // Text state: % display
   const [taxEnabled, setTaxEnabled] = useState(false);
+  const [deliveryChargeText, setDeliveryChargeText] = useState(""); // Text state: Rupees display
   const [dayStartsAt, setDayStartsAt] = useState("");
   const [receiptFooterText, setReceiptFooterText] = useState("");
 
@@ -32,6 +33,7 @@ export function Settings() {
       setCurrencySymbol(settings.currency_symbol || "");
       setTaxRateText(String((settings.tax_rate || 0) / 100)); // Convert bp to %
       setTaxEnabled(settings.tax_enabled || false);
+      setDeliveryChargeText(String((settings.delivery_charge || 0) / 100)); // Convert paisa to Rupees
       setDayStartsAt(settings.day_starts_at || "06:00");
       setReceiptFooterText(settings.receipt_footer_text || "");
     }
@@ -57,6 +59,8 @@ export function Settings() {
     try {
       // Convert tax_rate from % string to basis points (integer)
       const taxRateBp = Math.round(parseFloat(taxRateText) * 100);
+      // Convert delivery_charge from Rupees string to paisa (integer)
+      const deliveryChargePaisa = Math.round(parseFloat(deliveryChargeText) * 100);
 
       const payload: SettingsUpdate = {
         restaurant_name: restaurantName.trim(),
@@ -65,6 +69,7 @@ export function Settings() {
         currency_symbol: currencySymbol.trim(),
         tax_rate: taxRateBp,
         tax_enabled: taxEnabled,
+        delivery_charge: deliveryChargePaisa,
         day_starts_at: dayStartsAt,
         receipt_footer_text: receiptFooterText.trim(),
       };
@@ -185,6 +190,18 @@ export function Settings() {
               />
             </label>
           )}
+
+          <label>
+            Default Delivery Charge
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={deliveryChargeText}
+              onChange={(e) => setDeliveryChargeText(e.target.value)}
+              placeholder="e.g., 200 for Rs. 200"
+            />
+          </label>
         </fieldset>
 
         {/* Operations Settings */}

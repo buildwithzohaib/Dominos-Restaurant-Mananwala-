@@ -15,6 +15,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
     subtotal,
     discount,
     tax,
+    deliveryCharge,
     total,
     setQty,
     removeProduct,
@@ -134,6 +135,13 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
           <div className="summary-row">
             <span>Tax</span>
             <b>{formatCurrency(tax)}</b>
+          </div>
+        )}
+
+        {deliveryCharge > 0 && (
+          <div className="summary-row">
+            <span>Delivery</span>
+            <b>{formatCurrency(deliveryCharge)}</b>
           </div>
         )}
 

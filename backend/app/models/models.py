@@ -14,6 +14,7 @@ class Settings(Base):
     currency_symbol: Mapped[str] = mapped_column(String(10), default="Rs. ")
     tax_rate: Mapped[int] = mapped_column(Integer, default=0)  # basis points (1600 = 16%)
     tax_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    delivery_charge: Mapped[int] = mapped_column(Integer, default=0)  # paisa, default 0 (no delivery charge)
     day_starts_at: Mapped[str] = mapped_column(String(5), default="06:00")  # HH:MM format
     receipt_footer_text: Mapped[str] = mapped_column(String(200), default="Please visit us again.")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -146,10 +147,11 @@ class Order(Base):
     # flipped to status="CANCELLED" with these two fields recorded alongside it. ---
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cancelled_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    # --- Customer and delivery (Phase 3.3) — snapshots per Rule 7 ---
+    # --- Customer and delivery (Phase 3.3-3.4) — snapshots per Rule 7 ---
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True)  # NULL for walk-ins
     delivery_address: Mapped[str | None] = mapped_column(String(300), nullable=True)  # snapshot of address at order time, NULL for non-delivery
     tax_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)  # basis points at order time (e.g., 1600 for 16%), Rule 7 snapshot
+    delivery_charge: Mapped[int | None] = mapped_column(Integer, nullable=True)  # paisa at order time (e.g., 20000 for Rs. 200), Rule 7 snapshot; NULL for non-delivery
     table: Mapped["RestaurantTable | None"] = relationship()
     customer: Mapped["Customer | None"] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")

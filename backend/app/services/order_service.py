@@ -59,15 +59,23 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         products[product_id] = product
         subtotal += product.price * quantity
 
-    # Get tax_rate from settings (Rule 7: snapshot at order time)
+    # Get tax_rate and delivery_charge from settings (Rule 7: snapshot at order time)
     settings = db.query(Settings).filter(Settings.id == 1).first()
     tax_rate = settings.tax_rate if settings and settings.tax_enabled else 0
+
+    # Delivery charge: use provided value if sent, else fall back to settings default.
+    # Only apply if order_type is DELIVERY; otherwise force 0.
+    if payload.order_type == "DELIVERY":
+        delivery_charge = payload.delivery_charge if payload.delivery_charge is not None else (settings.delivery_charge if settings else 0)
+    else:
+        delivery_charge = 0
 
     discount = min(payload.discount, subtotal)
     taxable = subtotal - discount
     # Half-up rounding: (taxable * rate + 5000) // 10000
+    # Delivery charge is NOT taxed (per Rule 7: tax applies only to goods/services taxed at POS)
     tax = (taxable * tax_rate + 5000) // 10000
-    total = taxable + tax
+    total = taxable + tax + delivery_charge
     received = payload.amount_received
 
     if payload.payment_method == "CASH" and received < total:
@@ -99,6 +107,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
             discount=discount,
             tax=tax,
             tax_rate=tax_rate,  # snapshot per Rule 7
+            delivery_charge=delivery_charge if payload.order_type == "DELIVERY" else None,  # snapshot per Rule 7; NULL for non-delivery
             total=total,
             payment_method=payload.payment_method,
             amount_received=received,

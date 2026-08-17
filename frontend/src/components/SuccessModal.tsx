@@ -54,6 +54,32 @@ export function SuccessModal({
 
           <div className="receipt-line" />
 
+          {/* Delivery section: shown only for DELIVERY orders with address */}
+          {receipt.orderType === "DELIVERY" && receipt.deliveryAddress && (
+            <>
+              <div className="receipt-delivery">
+                <div style={{ fontWeight: 700, textTransform: "uppercase", fontSize: "11px", marginBottom: "4px" }}>
+                  Delivery
+                </div>
+                {receipt.customerName && (
+                  <div style={{ fontSize: "12px", fontWeight: 500, marginBottom: "2px" }}>
+                    {receipt.customerName}
+                  </div>
+                )}
+                {receipt.customerPhone && (
+                  <div style={{ fontSize: "11px", color: "#667085", marginBottom: "2px" }}>
+                    {receipt.customerPhone}
+                  </div>
+                )}
+                <div style={{ fontSize: "12px", marginBottom: "2px", wordWrap: "break-word", whiteSpace: "pre-wrap" }}>
+                  {receipt.deliveryAddress}
+                </div>
+              </div>
+
+              <div className="receipt-line" />
+            </>
+          )}
+
           <div className="receipt-meta">
             <div>
               <span>Order</span>
@@ -107,6 +133,13 @@ export function SuccessModal({
               <div>
                 <span>Tax</span>
                 <strong>{formatBare(receipt.tax)}</strong>
+              </div>
+            )}
+
+            {receipt.deliveryCharge > 0 && (
+              <div>
+                <span>Delivery</span>
+                <strong>{formatBare(receipt.deliveryCharge)}</strong>
               </div>
             )}
 
@@ -172,6 +205,32 @@ export function SuccessModal({
 
         <div className="receipt-divider">--------------------------------</div>
 
+        {/* Delivery section: shown only for DELIVERY orders with address */}
+        {receipt.orderType === "DELIVERY" && receipt.deliveryAddress && (
+          <>
+            <div style={{ marginBottom: "8px" }}>
+              <div style={{ fontWeight: 800, fontSize: "10px", textTransform: "uppercase", marginBottom: "2px" }}>
+                Delivery
+              </div>
+              {receipt.customerName && (
+                <div style={{ fontSize: "11px", fontWeight: 700, marginBottom: "1px" }}>
+                  {receipt.customerName}
+                </div>
+              )}
+              {receipt.customerPhone && (
+                <div style={{ fontSize: "10px", marginBottom: "1px" }}>
+                  {receipt.customerPhone}
+                </div>
+              )}
+              <div style={{ fontSize: "11px", whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
+                {receipt.deliveryAddress}
+              </div>
+            </div>
+
+            <div className="receipt-divider">--------------------------------</div>
+          </>
+        )}
+
         <div className="receipt-info">
           <div>
             <span>Order</span>
@@ -227,6 +286,13 @@ export function SuccessModal({
             <div>
               <span>Tax</span>
               <strong>{formatBare(receipt.tax)}</strong>
+            </div>
+          )}
+
+          {receipt.deliveryCharge > 0 && (
+            <div>
+              <span>Delivery</span>
+              <strong>{formatBare(receipt.deliveryCharge)}</strong>
             </div>
           )}
 

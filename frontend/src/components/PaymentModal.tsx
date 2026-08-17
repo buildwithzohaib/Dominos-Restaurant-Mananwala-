@@ -15,16 +15,22 @@ import type { PaymentMethod, OrderItem } from "../types";
 
 export type ReceiptData = {
   orderNumber: string;
+  orderType: string;
   items: OrderItem[];
 
   subtotal: number;
   discount: number;
   tax: number;
+  deliveryCharge: number;
   total: number;
 
   paymentMethod: PaymentMethod;
   amountReceived: number;
   change: number;
+
+  deliveryAddress: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
 
   date: string;
   time: string;
@@ -45,6 +51,7 @@ export function PaymentModal({
     subtotal,
     discount,
     tax,
+    deliveryCharge,
     total,
     clear,
     setPaymentMethod,
@@ -67,6 +74,7 @@ export function PaymentModal({
         table_id: state.selectedTable?.id ?? null,
         customer_id: state.selectedCustomer?.id ?? null,
         delivery_address: state.deliveryAddress.trim() || null,
+        delivery_charge: state.orderType === "DELIVERY" ? Math.floor(parseFloat(state.deliveryChargeText) * 100 || 0) : undefined,
 
         items: state.cart.map((i) => ({
           product_id: i.product.id,
@@ -87,12 +95,14 @@ export function PaymentModal({
 
       const receipt: ReceiptData = {
         orderNumber: o.order_number,
+        orderType: o.order_type,
 
         items: o.items,
 
         subtotal: o.subtotal,
         discount: o.discount,
         tax: o.tax,
+        deliveryCharge: o.delivery_charge ?? 0,
         total: o.total,
 
         paymentMethod: o.payment_method,
@@ -100,6 +110,10 @@ export function PaymentModal({
         amountReceived: o.amount_received,
 
         change: o.change_amount,
+
+        deliveryAddress: o.delivery_address ?? null,
+        customerName: o.customer?.name_display ?? null,
+        customerPhone: o.customer?.phone_raw ?? null,
 
         date: now.toLocaleDateString(),
 
@@ -235,6 +249,12 @@ export function PaymentModal({
             <>
               {" · "}
               Tax {formatCurrency(tax)}
+            </>
+          )}
+          {deliveryCharge > 0 && (
+            <>
+              {" · "}
+              Delivery {formatCurrency(deliveryCharge)}
             </>
           )}
         </p>

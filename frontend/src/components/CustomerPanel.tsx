@@ -1,11 +1,16 @@
 import { useState, useCallback, useEffect } from "react";
 import { usePOS } from "../context/POSContext";
+import { SettingsContext } from "../context/SettingsContext";
 import { api } from "../services/api";
 import type { Customer, CustomerSearchResult } from "../types";
 import { X, Loader } from "lucide-react";
+import { paisaToRupees } from "../utils/money";
+import { useContext } from "react";
 
 export function CustomerPanel() {
-  const { state, setCustomer, setDeliveryAddress } = usePOS();
+  const { state, setCustomer, setDeliveryAddress, setDeliveryCharge } = usePOS();
+  const settingsContext = useContext(SettingsContext);
+  const settings = settingsContext?.settings;
 
   // Search state
   const [searchText, setSearchText] = useState("");
@@ -239,15 +244,29 @@ export function CustomerPanel() {
 
       {/* Delivery address for DELIVERY orders */}
       {state.orderType === "DELIVERY" && (
-        <div className="modal-field full">
-          <label>Delivery Address</label>
-          <textarea
-            value={state.deliveryAddress}
-            onChange={(e) => setDeliveryAddress(e.target.value)}
-            placeholder="Enter delivery address"
-            rows={3}
-          />
-        </div>
+        <>
+          <div className="modal-field full">
+            <label>Delivery Address</label>
+            <textarea
+              value={state.deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              placeholder="Enter delivery address"
+              rows={3}
+            />
+          </div>
+
+          <div className="modal-field full">
+            <label>Delivery Charge</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={state.deliveryChargeText}
+              onChange={(e) => setDeliveryCharge(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+        </>
       )}
     </div>
   );
