@@ -212,12 +212,11 @@ class ProductCreate(BaseModel):
     image: str | None = Field(default=None, max_length=500)
 
 class ProductUpdate(BaseModel):
-    """Update product. price and purchase_price in paisa."""
+    """Update product. price and purchase_price in paisa. SKU is immutable."""
     category_id: int | None = None
     name: str | None = Field(default=None, min_length=1, max_length=150)
     price: int | None = Field(default=None, gt=0)  # paisa
     purchase_price: int | None = Field(default=None, ge=0)  # paisa
     min_stock: int | None = Field(default=None, ge=0)
-    sku: str | None = Field(default=None, max_length=50)
     unit: str | None = Field(default=None, min_length=1, max_length=30)
     image: str | None = Field(default=None, max_length=500)

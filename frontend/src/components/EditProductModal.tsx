@@ -18,7 +18,6 @@ export function EditProductModal({
   const [formData, setFormData] = useState<ProductUpdateInput>({
     name: product.name_display,
     category_id: product.category_id,
-    sku: product.sku,
     price: Number(product.price),
     purchase_price: Number(product.purchase_price),
     min_stock: product.min_stock,
@@ -97,13 +96,10 @@ export function EditProductModal({
           </label>
 
           <label className="modal-field">
-            SKU
-            <input
-              value={formData.sku || ""}
-              onChange={(e) =>
-                setFormData({ ...formData, sku: e.target.value })
-              }
-            />
+            SKU (immutable)
+            <div style={{ padding: "8px 0", fontFamily: "monospace", fontSize: "13px", color: "#374151" }}>
+              {product.sku}
+            </div>
           </label>
 
           <label className="modal-field">

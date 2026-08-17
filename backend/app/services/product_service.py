@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.models import Product, Category
 from app.schemas.schemas import ProductCreate, ProductUpdate
 from app.utils.normalization import derive_key, normalize_display
+from app.services.sku_service import generate_sku
 
 
 def create_product(db: Session, payload: ProductCreate) -> Product:
@@ -59,6 +60,12 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
     if not payload.unit or not payload.unit.strip():
         raise HTTPException(400, "Unit is required.")
 
+    # Determine SKU: use provided SKU or generate a deterministic one
+    if payload.sku:
+        sku = payload.sku.strip()
+    else:
+        sku = generate_sku(db, payload.category_id, category.name_key, name_key)
+
     # Create product
     product = Product(
         category_id=payload.category_id,
@@ -67,7 +74,7 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
         name_key=name_key,
         price=payload.price,
         stock=payload.stock,
-        sku=payload.sku.strip() if payload.sku else f"AUTO-{datetime.utcnow().timestamp()}",
+        sku=sku,
         min_stock=payload.min_stock,
         unit=payload.unit.strip(),
         purchase_price=payload.purchase_price or 0,
@@ -153,18 +160,7 @@ def update_product(db: Session, product_id: int, payload: ProductUpdate) -> Prod
             raise HTTPException(400, "Cannot move product to inactive category.")
         product.category_id = payload.category_id
 
-    # Update SKU (check for duplicates)
-    if payload.sku is not None:
-        sku = payload.sku.strip()
-        if not sku:
-            raise HTTPException(400, "SKU cannot be empty.")
-        existing = db.query(Product).filter(
-            Product.sku == sku,
-            Product.id != product_id
-        ).first()
-        if existing:
-            raise HTTPException(400, f'SKU "{sku}" already in use.')
-        product.sku = sku
+    # Note: SKU is immutable after creation (see ProductUpdate schema) and cannot be changed here
 
     # Update unit
     if payload.unit is not None:
