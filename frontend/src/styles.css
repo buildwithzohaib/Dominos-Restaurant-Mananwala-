@@ -1860,3 +1860,80 @@ h2 {
   color: #9099a8;
   font-size: 12px;
 }
+
+/* Product Image Management (Task 2.7) */
+.modal-label {
+  font-size: 10px;
+  color: #7c8797;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.image-preview-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+.image-preview {
+  max-height: 150px;
+  object-fit: contain;
+  border-radius: 6px;
+  display: block;
+}
+
+.image-delete-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  color: #a21b1b;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.image-delete-button:hover {
+  background: #dc2626;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.image-delete-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.image-delete-confirm-block {
+  padding: 12px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #92400e;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.image-delete-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.image-delete-actions .secondary-button,
+.image-delete-actions .pay-button {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+}

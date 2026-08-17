@@ -115,11 +115,11 @@ async def upload_product_image(
     """
     Upload or replace a product image.
 
-    Accepts JPEG and PNG images up to 2 MB. Images are resized to fit
-    400x300 pixels while preserving aspect ratio. Returns the updated product.
+    Accepts JPEG and PNG images up to 10 MB. Images are center-cropped and
+    resized to exactly 400x300 pixels (no letterboxing). Returns the updated product.
 
     Raises 400 if:
-    - File exceeds 2 MB
+    - File exceeds 10 MB
     - File is not a valid image
     - Image format is not JPEG or PNG
     """
@@ -135,6 +135,52 @@ async def upload_product_image(
     # Update product
     product.image = filename
     product.image_hash = image_hash
+    db.commit()
+    db.refresh(product)
+
+    return product
+
+
+@router.delete("/{product_id}/image", response_model=ProductOut)
+def delete_product_image(
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a product's image and clear image metadata.
+
+    Deletes the image file from disk and clears the image and image_hash columns.
+    This is not a soft delete — the file is permanently removed. Uploaded files are
+    ephemeral artifacts (unlike database records) with no historical audit value.
+
+    Returns 200 whether the image existed or not (idempotent operation).
+    If the database says there is an image but the file is missing, the columns
+    are still cleared and no error is raised.
+
+    Raises 404 if the product does not exist.
+    """
+    import os
+    from fastapi import HTTPException
+
+    # Check product exists
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(404, "Product not found.")
+
+    # If product has an image, delete the file
+    if product.image:
+        filepath = os.path.join(image_service.STORAGE_DIR, product.image)
+        try:
+            if os.path.exists(filepath):
+                os.remove(filepath)
+        except Exception:
+            # If file is already missing or can't be deleted, continue anyway
+            # Clear the database columns regardless
+            pass
+
+    # Clear image metadata
+    product.image = None
+    product.image_hash = None
     db.commit()
     db.refresh(product)
 

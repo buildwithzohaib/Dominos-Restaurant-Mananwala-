@@ -66,5 +66,6 @@ export const api={
  updateProduct:(id:number,p:ProductUpdateInput)=>request<Product>(`/api/products/${id}`,{method:"PUT",body:JSON.stringify(p)}),
  disableProduct:(id:number)=>request<Product>(`/api/products/${id}/disable`,{method:"PATCH",body:JSON.stringify({})}),
  enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})}),
- uploadProductImage:(id:number,file:File)=>uploadFile<Product>(`/api/products/${id}/image`,file)
+ uploadProductImage:(id:number,file:File)=>uploadFile<Product>(`/api/products/${id}/image`,file),
+ deleteProductImage:(id:number)=>request<Product>(`/api/products/${id}/image`,{method:"DELETE",body:JSON.stringify({})})
 };

@@ -33,16 +33,22 @@ async def process_product_image(file: UploadFile, product_id: int) -> tuple[str,
 
     Raises:
         HTTPException 400 on validation errors:
-        - File exceeds 2 MB
+        - File exceeds 10 MB
         - File is not a valid image
         - Image format is not JPEG or PNG
+
+    Notes:
+        Upload limit is 10 MB (not a storage concern — resized files are 15-50 KB).
+        The limit prevents obviously-broken uploads (corrupted or non-image data).
+        Phone photos of food are typically 3-5 MB compressed; 10 MB is generous.
     """
-    # Check file size (2 MB = 2097152 bytes)
-    MAX_SIZE = 2 * 1024 * 1024
+    # Check file size (10 MB = 10485760 bytes)
+    # Storage cost is negligible — resized images are always 15-50 KB regardless of input
+    MAX_SIZE = 10 * 1024 * 1024
     content = await file.read()
 
     if len(content) > MAX_SIZE:
-        raise HTTPException(400, "Image file exceeds 2 MB limit.")
+        raise HTTPException(400, "Image file exceeds 10 MB limit.")
 
     # Validate image using Pillow
     try:

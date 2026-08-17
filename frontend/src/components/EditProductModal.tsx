@@ -31,6 +31,8 @@ export function EditProductModal({
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageError, setImageError] = useState("");
   const [currentImageHash, setCurrentImageHash] = useState(product.image_hash);
+  const [confirmDeleteImage, setConfirmDeleteImage] = useState(false);
+  const [deletingImage, setDeletingImage] = useState(false);
 
   const [priceText, setPriceText] = useState(
     formData.price !== undefined ? String(paisaToRupees(formData.price)) : ""
@@ -56,6 +58,22 @@ export function EditProductModal({
       setUploadingImage(false);
       // Reset the input so the same file can be uploaded again if needed
       e.target.value = "";
+    }
+  }
+
+  async function handleDeleteImage() {
+    setDeletingImage(true);
+    setImageError("");
+    try {
+      await api.deleteProductImage(product.id);
+      setCurrentImageHash(undefined);
+      setConfirmDeleteImage(false);
+      // Refresh catalog so all views (ProductCard, etc.) update without image
+      await refresh();
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : "Could not delete image");
+    } finally {
+      setDeletingImage(false);
     }
   }
 
@@ -171,14 +189,49 @@ export function EditProductModal({
 
         {product.image && (
           <div style={{ marginTop: "12px", marginBottom: "12px" }}>
-            <p style={{ fontSize: "12px", color: "#687385", marginBottom: "8px" }}>Current image:</p>
-            <img
-              src={`${API_URL}/images/${product.image}?v=${currentImageHash}`}
-              alt={product.name_display}
-              style={{ maxHeight: "80px", objectFit: "contain", borderRadius: "6px" }}
-            />
+            <p className="modal-label">Current image:</p>
+            <div className="image-preview-wrapper">
+              <img
+                src={`${API_URL}/images/${product.image}?v=${currentImageHash}`}
+                alt={product.name_display}
+                className="image-preview"
+              />
+              {!confirmDeleteImage && (
+                <button
+                  className="image-delete-button"
+                  onClick={() => setConfirmDeleteImage(true)}
+                  disabled={deletingImage}
+                  title="Remove image"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {confirmDeleteImage && (
+              <div className="image-delete-confirm-block">
+                <span>Remove this photo?</span>
+                <div className="image-delete-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={() => setConfirmDeleteImage(false)}
+                    disabled={deletingImage}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="pay-button danger"
+                    onClick={handleDeleteImage}
+                    disabled={deletingImage}
+                  >
+                    {deletingImage ? "Removing..." : "Remove"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
+
+        {imageError && <div className="error-box">{imageError}</div>}
 
         <label
           style={{
@@ -211,7 +264,6 @@ export function EditProductModal({
         </p>
 
         {error && <div className="error-box">{error}</div>}
-        {imageError && <div className="error-box">{imageError}</div>}
 
         <div className="modal-action-row">
           <button className="secondary-button" onClick={onClose} disabled={busy}>

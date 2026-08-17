@@ -178,9 +178,9 @@ class TestProductImageUpload:
         assert "cannot" in error["detail"].lower() or "image" in error["detail"].lower()
 
     def test_reject_oversized_file(self, client):
-        """Reject file over 2 MB."""
-        # Create a file that exceeds 2 MB
-        oversized_data = b"x" * (2 * 1024 * 1024 + 1)
+        """Reject file over 10 MB."""
+        # Create a file that exceeds 10 MB limit
+        oversized_data = b"x" * (10 * 1024 * 1024 + 1)
 
         response = client.post(
             "/api/products/1/image",
@@ -188,7 +188,7 @@ class TestProductImageUpload:
         )
 
         assert response.status_code == 400
-        assert "exceeds 2 MB" in response.json()["detail"]
+        assert "exceeds 10 MB" in response.json()["detail"]
 
     def test_reject_gif_format(self, client):
         """Reject GIF even though it's a valid image (format check, not extension)."""
@@ -267,4 +267,86 @@ class TestProductImageUpload:
         )
 
         assert response.status_code == 404
+
+
+class TestProductImageDelete:
+    """Tests for DELETE /api/products/{id}/image"""
+
+    def test_delete_existing_image(self, client, db_session, temp_storage):
+        """Delete an image clears both columns and removes the file."""
+        # First, upload an image
+        image_data = create_test_jpeg()
+        upload_response = client.post(
+            "/api/products/1/image",
+            files={"file": ("photo.jpg", BytesIO(image_data), "image/jpeg")},
+        )
+        assert upload_response.status_code == 200
+        assert upload_response.json()["image"] == "1.jpg"
+
+        # Verify file exists on disk
+        saved_path = os.path.join(temp_storage, "1.jpg")
+        assert os.path.exists(saved_path)
+
+        # Delete the image
+        delete_response = client.delete("/api/products/1/image")
+
+        assert delete_response.status_code == 200
+        data = delete_response.json()
+        assert data["image"] is None
+        assert data["image_hash"] is None
+
+        # Verify file was removed from disk
+        assert not os.path.exists(saved_path)
+
+        # Verify database was updated
+        db_session.refresh(db_session.query(Product).first())
+        product = db_session.query(Product).first()
+        assert product.image is None
+        assert product.image_hash is None
+
+    def test_delete_when_no_image(self, client, db_session):
+        """Delete when there is no image returns 200 (idempotent)."""
+        # Product 1 has no image initially
+        response = client.delete("/api/products/1/image")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["image"] is None
+        assert data["image_hash"] is None
+
+    def test_delete_when_file_missing_from_disk(self, client, db_session, temp_storage):
+        """Delete clears columns even if file is already missing from disk."""
+        # First, upload an image
+        image_data = create_test_jpeg()
+        upload_response = client.post(
+            "/api/products/1/image",
+            files={"file": ("photo.jpg", BytesIO(image_data), "image/jpeg")},
+        )
+        assert upload_response.status_code == 200
+
+        # Manually delete the file from disk to simulate missing file
+        saved_path = os.path.join(temp_storage, "1.jpg")
+        os.remove(saved_path)
+        assert not os.path.exists(saved_path)
+
+        # Delete should still work and clear the columns
+        delete_response = client.delete("/api/products/1/image")
+
+        assert delete_response.status_code == 200
+        data = delete_response.json()
+        assert data["image"] is None
+        assert data["image_hash"] is None
+
+        # Verify database was updated
+        db_session.refresh(db_session.query(Product).first())
+        product = db_session.query(Product).first()
+        assert product.image is None
+        assert product.image_hash is None
+
+    def test_delete_nonexistent_product(self, client):
+        """Reject delete for nonexistent product."""
+        response = client.delete("/api/products/999/image")
+
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"].lower()
         assert "not found" in response.json()["detail"].lower()
