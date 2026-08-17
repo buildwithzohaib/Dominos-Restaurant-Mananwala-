@@ -661,6 +661,40 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ## 7. KNOWN GAPS
 
+### Dine-In Table Service with Running Tabs (Stage 4)
+
+**Business Model:** The restaurant operates table service where customers sit at a table and place orders incrementally:
+1. Customer sits at a table
+2. Orders some items (first round)
+3. Later adds more items to the same order (second round)
+4. Possibly several more additions
+5. Finally pays and table is closed
+
+**Current Limitation:** The current order flow creates and pays an order in one atomic step. There is no concept of an OPEN order that can receive additional items over time.
+
+**What Must Change in Stage 4 (Tables + Orders + KOT):**
+- Add order status: OPEN (in addition to current PAID, CANCELLED)
+- Modify order creation: create OPEN order, do NOT collect payment yet
+- Add ability to append items to an OPEN order
+- Stock deduction: per batch/round, not once at order creation (CLAUDE.md Rule 8 already mandates "per KOT batch"—this is what that means)
+- Payment: separate step that closes the order (OPEN → PAID)
+- KOT (Kitchen Order Ticket): issued when items are added, not when order is created
+- Table management: associate OPEN order with table, release table when order closes
+
+**Schema Impact:** 
+- `orders.status` already supports OPEN (add as new value)
+- `orders.table_id` already exists (required for OPEN dine-in orders)
+- `order_items` may need batch/round tracking for KOT printing
+
+**Impact on Phases 11-13 (Customers, Delivery):**
+- Customer and delivery features must work with OPEN orders
+- Takeaway/Delivery orders go straight to PAID (no running tabs)
+- Dine-in orders (OPEN) are incompatible with delivery
+
+**Tables are therefore not optional—they are essential to the business model.**
+
+---
+
 ### orders.tax_rate Snapshot Missing (Rule 7)
 
 **Issue:** The `orders` table stores `tax` (paisa) but not `tax_rate` (basis points).  

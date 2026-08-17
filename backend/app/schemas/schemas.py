@@ -221,3 +221,33 @@ class ProductUpdate(BaseModel):
     min_stock: int | None = Field(default=None, ge=0)
     unit: str | None = Field(default=None, min_length=1, max_length=30)
     image: str | None = Field(default=None, max_length=500)
+
+# --- Customers (Phase 3.2) ---
+
+class CustomerCreate(BaseModel):
+    """Create a new customer. Phone is optional."""
+    name: str = Field(min_length=1, max_length=255)  # Will be normalized to name_raw/name_display/name_key
+    phone: str | None = Field(default=None, max_length=20)  # Will be normalized to phone_raw/phone_key
+
+class CustomerUpdate(BaseModel):
+    """Update customer. All fields optional."""
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    phone: str | None = Field(default=None, max_length=20)
+
+class CustomerSearchResult(BaseModel):
+    """Result item in search response."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name_display: str
+    phone_raw: str | None
+    is_active: bool
+
+class CustomerOut(BaseModel):
+    """Customer details response. No phone_key exposed (internal implementation detail)."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name_display: str
+    phone_raw: str | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime

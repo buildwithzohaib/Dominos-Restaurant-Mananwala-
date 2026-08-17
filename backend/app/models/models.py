@@ -98,6 +98,25 @@ class StockMovement(Base):
         Index('ix_stock_movements_item_type_item_id', 'item_type', 'item_id'),
     )
 
+class Customer(Base):
+    """Customer information for recurring orders and delivery.
+    Follows Rule 9 text normalization for names, phone_service for phone numbers.
+    No address field in Phase 3.2; addresses belong to orders (Rule 7 snapshots)
+    or will be in a separate delivery_addresses table (Phase 3.4)."""
+    __tablename__ = "customers"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Name: three-field normalization (Rule 9)
+    name_raw: Mapped[str] = mapped_column(String(255))  # exactly as typed, audit trail
+    name_display: Mapped[str] = mapped_column(String(255))  # Title Case with exceptions, for UI
+    name_key: Mapped[str] = mapped_column(String(255), index=True)  # lowercase no-space, for search; NOT unique (multiple "Ali"s OK)
+    # Phone: two fields (no display field; formatted on-demand)
+    phone_raw: Mapped[str | None] = mapped_column(String(20), nullable=True)  # as typed by user
+    phone_key: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)  # normalized 0XXX; NOT unique (family members share)
+    # Metadata
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # soft delete (Rule 6)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class RestaurantTable(Base):
     __tablename__ = "restaurant_tables"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

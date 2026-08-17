@@ -131,3 +131,30 @@ def derive_key(text: str) -> str:
     key = ''.join(c for c in lowered if c.isalnum())
 
     return key
+
+
+def normalize_name(raw: str) -> tuple[str, str, str]:
+    """
+    Normalize a name into three forms (Rule 9 pattern).
+
+    Args:
+        raw: Name as typed by user (may have extra whitespace, mixed case, etc.)
+
+    Returns:
+        Tuple of (name_raw, name_display, name_key)
+        - name_raw: exactly as typed, trimmed only
+        - name_display: whitespace-normalized, case preserved
+        - name_key: lowercase, alphanumeric only, deduplicated
+
+    Raises:
+        ValueError: if name_raw is empty (only whitespace)
+    """
+    name_raw = raw.strip() if raw else ""
+
+    if not name_raw:
+        raise ValueError("Name cannot be empty or only whitespace")
+
+    name_display = normalize_display(name_raw)
+    name_key = derive_key(name_raw)
+
+    return (name_raw, name_display, name_key)
