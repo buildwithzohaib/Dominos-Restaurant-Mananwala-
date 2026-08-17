@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { usePOS } from "../context/POSContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
+import { CustomerPanel } from "./CustomerPanel";
 
 export function OrderPanel({ onPay }: { onPay: () => void }) {
   const formatCurrency = useCurrencyFormat();
@@ -101,6 +102,8 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
       </div>
 
       <div className="order-summary">
+        <CustomerPanel />
+
         <div className="field-grid">
           <label>
             Discount

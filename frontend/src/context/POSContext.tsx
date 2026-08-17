@@ -1,9 +1,9 @@
 import {createContext,useCallback,useContext,useMemo,useReducer,type ReactNode} from "react";
-import type {CartItem,OrderType,PaymentMethod,Product,RestaurantTable} from "../types";
+import type {CartItem,Customer,OrderType,PaymentMethod,Product,RestaurantTable} from "../types";
 import { SettingsContext } from "./SettingsContext";
-interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;paymentMethod:PaymentMethod}
-type Action={type:"ADD";product:Product}|{type:"SET_QTY";productId:number;quantity:number}|{type:"REMOVE";productId:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]};
-const initialState:State={cart:[],orderType:"TAKEAWAY",selectedTable:null,discount:0,paymentMethod:"CASH"};
+interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;paymentMethod:PaymentMethod;selectedCustomer:Customer|null;deliveryAddress:string}
+type Action={type:"ADD";product:Product}|{type:"SET_QTY";productId:number;quantity:number}|{type:"REMOVE";productId:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]}|{type:"CUSTOMER";value:Customer|null}|{type:"DELIVERY_ADDRESS";value:string};
+const initialState:State={cart:[],orderType:"TAKEAWAY",selectedTable:null,discount:0,paymentMethod:"CASH",selectedCustomer:null,deliveryAddress:""};
 function reducer(s:State,a:Action):State{
  switch(a.type){
  // Soft, UI-side stock cap — mirrors the backend's authoritative check (order_service)
@@ -12,8 +12,10 @@ function reducer(s:State,a:Action):State{
  case"ADD":{const e=s.cart.find(i=>i.product.id===a.product.id);if(e)return e.quantity>=a.product.stock?s:{...s,cart:s.cart.map(i=>i.product.id===a.product.id?{...i,quantity:i.quantity+1}:i)};return a.product.stock<=0?s:{...s,cart:[...s.cart,{product:a.product,quantity:1}]};}
  case"SET_QTY":return{...s,cart:a.quantity<=0?s.cart.filter(i=>i.product.id!==a.productId):s.cart.map(i=>i.product.id===a.productId?{...i,quantity:Math.min(a.quantity,i.product.stock)}:i)};
  case"REMOVE":return{...s,cart:s.cart.filter(i=>i.product.id!==a.productId)};
- case"CLEAR":return{...initialState,orderType:s.orderType};
+ case"CLEAR":return{...initialState,orderType:s.orderType,selectedTable:s.orderType==="DINE_IN"?s.selectedTable:null};
  case"ORDER_TYPE":return{...s,orderType:a.value,selectedTable:a.value==="DINE_IN"?s.selectedTable:null};
+ case"CUSTOMER":return{...s,selectedCustomer:a.value};
+ case"DELIVERY_ADDRESS":return{...s,deliveryAddress:a.value};
  case"TABLE":return{...s,selectedTable:a.value};
  case"DISCOUNT":return{...s,discount:Math.max(0,a.value)};
  case"PAYMENT":return{...s,paymentMethod:a.value};
@@ -41,6 +43,8 @@ interface POSContextValue {
   setDiscount: (value: number) => void;
   setPaymentMethod: (value: PaymentMethod) => void;
   syncProducts: (products: Product[]) => void;
+  setCustomer: (value: Customer | null) => void;
+  setDeliveryAddress: (value: string) => void;
 }
 
 const C = createContext<POSContextValue | null>(null);
@@ -64,7 +68,9 @@ export function POSProvider({children}:{children:ReactNode}){
  setTable:useCallback((value:RestaurantTable|null)=>dispatch({type:"TABLE",value}),[]),
  setDiscount:useCallback((value:number)=>dispatch({type:"DISCOUNT",value}),[]),
  setPaymentMethod:useCallback((value:PaymentMethod)=>dispatch({type:"PAYMENT",value}),[]),
- syncProducts:useCallback((products:Product[])=>dispatch({type:"SYNC_PRODUCTS",products}),[])};
+ syncProducts:useCallback((products:Product[])=>dispatch({type:"SYNC_PRODUCTS",products}),[]),
+ setCustomer:useCallback((value:Customer|null)=>dispatch({type:"CUSTOMER",value}),[]),
+ setDeliveryAddress:useCallback((value:string)=>dispatch({type:"DELIVERY_ADDRESS",value}),[])};
  return <C.Provider value={value}>{children}</C.Provider>;
 }
 export function usePOS() {

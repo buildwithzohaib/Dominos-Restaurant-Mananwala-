@@ -6,7 +6,7 @@ from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement
+from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
 from app.schemas.schemas import OrderCancelIn, OrderCreate
 
 CANCEL_REASON_LABELS = {
@@ -18,6 +18,7 @@ CANCEL_REASON_LABELS = {
 }
 
 def create_order(db: Session, payload: OrderCreate) -> Order:
+    # Validate table
     if payload.order_type == "DINE_IN" and payload.table_id is None:
         raise HTTPException(400, "A table is required for dine-in orders.")
     if payload.order_type != "DINE_IN" and payload.table_id is not None:
@@ -26,6 +27,14 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         table = db.get(RestaurantTable, payload.table_id)
         if not table or not table.active:
             raise HTTPException(400, "Selected table is not available.")
+
+    # Validate customer if provided
+    if payload.customer_id is not None:
+        customer = db.get(Customer, payload.customer_id)
+        if not customer:
+            raise HTTPException(404, "Customer not found.")
+        if not customer.is_active:
+            raise HTTPException(400, f'"{customer.name_display}" is inactive.')
 
     # Aggregate by product in case the same product appears on more than one line,
     # so overselling checks compare against the *total* requested quantity.
@@ -50,10 +59,14 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         products[product_id] = product
         subtotal += product.price * quantity
 
+    # Get tax_rate from settings (Rule 7: snapshot at order time)
+    settings = db.query(Settings).filter(Settings.id == 1).first()
+    tax_rate = settings.tax_rate if settings and settings.tax_enabled else 0
+
     discount = min(payload.discount, subtotal)
     taxable = subtotal - discount
     # Half-up rounding: (taxable * rate + 5000) // 10000
-    tax = (taxable * payload.tax_rate + 5000) // 10000
+    tax = (taxable * tax_rate + 5000) // 10000
     total = taxable + tax
     received = payload.amount_received
 
@@ -79,10 +92,13 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
             order_number=f"ORD-{next_number:05d}",
             order_type=payload.order_type,
             table_id=payload.table_id,
+            customer_id=payload.customer_id,  # NULL for walk-ins
+            delivery_address=payload.delivery_address,  # NULL for non-delivery; snapshot per Rule 7
             status="PAID",
             subtotal=subtotal,
             discount=discount,
             tax=tax,
+            tax_rate=tax_rate,  # snapshot per Rule 7
             total=total,
             payment_method=payload.payment_method,
             amount_received=received,

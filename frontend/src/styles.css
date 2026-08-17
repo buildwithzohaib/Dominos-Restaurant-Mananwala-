@@ -1937,3 +1937,174 @@ h2 {
   padding: 8px 12px;
   font-size: 12px;
 }
+
+/* ============================= */
+/* CUSTOMER PANEL (Phase 3.2)    */
+/* ============================= */
+
+.customer-panel {
+  padding: 14px 0;
+  border-bottom: 1px solid #edf0f3;
+}
+
+.customer-results {
+  margin-top: 8px;
+  background: #f9fafb;
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.customer-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.customer-results li {
+  border-bottom: 1px solid #edf0f3;
+}
+
+.customer-results li:last-child {
+  border-bottom: 0;
+}
+
+.result-item {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.result-item:hover {
+  background: #f0f2f5;
+}
+
+.result-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #182235;
+}
+
+.result-phone {
+  font-size: 11px;
+  color: #8993a4;
+}
+
+.no-match-item {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: #667085;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+
+.no-match-item:hover {
+  background: #f0f2f5;
+}
+
+.create-form {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 1px solid #edf0f3;
+  border-radius: 8px;
+}
+
+.create-form .modal-field {
+  margin-bottom: 10px;
+}
+
+.create-form .modal-field:last-of-type {
+  margin-bottom: 0;
+}
+
+.create-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.create-actions .secondary-button,
+.create-actions .pay-button {
+  flex: 1;
+  margin: 0;
+}
+
+.customer-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f0f2f5;
+  border: 1px solid #e1e5ea;
+  border-radius: 20px;
+  padding: 8px 12px;
+  width: fit-content;
+}
+
+.chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.chip-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #182235;
+}
+
+.chip-phone {
+  font-size: 11px;
+  color: #8993a4;
+}
+
+.chip-close {
+  border: 0;
+  background: transparent;
+  color: #667085;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.chip-close:hover {
+  color: #182235;
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.modal-field textarea {
+  width: 100%;
+  border: 1px solid #dfe4ea;
+  border-radius: 7px;
+  padding: 9px 10px;
+  outline: 0;
+  font-size: 13px;
+  color: #172033;
+  background: #fff;
+  font-family: inherit;
+  resize: vertical;
+}

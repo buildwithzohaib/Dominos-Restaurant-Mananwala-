@@ -695,22 +695,31 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-### orders.tax_rate Snapshot Missing (Rule 7)
+### Foreign Key Enforcement is OFF (Decorative Only)
 
-**Issue:** The `orders` table stores `tax` (paisa) but not `tax_rate` (basis points).  
-**Impact:** The tax rate applied to an order cannot be recovered later. If settings change, historical orders show only the calculated tax amount, not the rate that produced it.
+**Status:** PRAGMA foreign_keys is OFF (SQLite default). Nothing in the application or Alembic turns it on.
 
-**Example:** Order ORD-00011 has `tax=4000` and was charged at 16% (1600 bp). If tax settings later change to 20%, we cannot tell from the order record alone whether 4000 was 16% or 20% of 25000.
+**Impact:**
+- Every foreign key in the schema is declarative only and NOT enforced by the database:
+  - `products.category_id`
+  - `orders.table_id`
+  - `orders.customer_id`
+  - `order_items.order_id` and `.product_id`
+- **Referential integrity currently depends entirely on service-layer checks.**
 
-**Rule Violated:** Rule 7 (Order snapshots must capture the state at time of sale)
+**Data Integrity Check:** `PRAGMA foreign_key_check` on 2026-08-18 returned no violations — the data is consistent today.
 
-**Fix:** Add `tax_rate` column to `orders` table in a migration (Stage 4, Orders phase).
-- Alembic migration: `ALTER TABLE orders ADD COLUMN tax_rate INTEGER DEFAULT 0;`
-- Backfill existing rows to 0 (since `tax_enabled` has been false throughout)
-- Once added, PaymentModal sends `tax_rate` with every order, and it is stored alongside `tax`
+**Why Not Enabled:**
+- `stock_movements.item_id` is deliberately polymorphic (Rule 5) and has no FK by design
+- Enforcement does not change that, but it shows the schema is not uniformly FK-enforced
+- Enabling it is a separate task requiring: decision on where the PRAGMA is issued (per-connection via SQLAlchemy event listener), verification that no code relies on current leniency, and full test coverage
 
-**Timeline:** 30 minutes (straightforward migration + backfill)  
-**Priority:** Low (not urgent while `tax_enabled` is false, but required for Rule 7 compliance)
+**To Enable in Future:**
+- Create a dedicated task (not a side effect of other work)
+- Add SQLAlchemy event listener to execute `PRAGMA foreign_keys=ON` on every connection
+- Audit all tests for FK violations
+- Run full suite to catch any new violations from recent code
+- Document the change as a breaking point for debugging (FK errors will now be DB-level, not app-level)
 
 ---
 

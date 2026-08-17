@@ -22,11 +22,17 @@ export interface StockMovement { id:number; item_type:string; /* 'PRODUCT' | 'IN
 export interface RestaurantTable { id:number; name:string; seats:number; active:boolean; }
 export interface CartItem { product:Product; quantity:number; }
 export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ }
+// Customers (Phase 3.2)
+export interface Customer { id:number; name_display:string; phone_raw:string|null; phone_key:string|null; is_active:boolean; created_at:string; updated_at:string; }
+export interface CustomerInfo { id:number; name_display:string; phone_raw:string|null; }
+export interface CustomerSearchResult { id:number; name_display:string; phone_raw:string|null; is_active:boolean; }
+export interface CustomerCreateInput { name:string; phone?:string|null; }
+export interface CustomerUpdateInput { name?:string; phone?:string|null; }
 // Order status (Phase 7) — PAID | CANCELLED. One status field, no separate flag.
 export type OrderStatus = "PAID" | "CANCELLED";
 export type CancellationReason = "CUSTOMER_CHANGED_ORDER" | "WRONG_ORDER" | "PAYMENT_ISSUE" | "DUPLICATE_ORDER" | "OTHER";
 export interface OrderCancelInput { reason:CancellationReason; note?:string; }
-export interface Order { id:number; order_number:string; order_type:OrderType; table_id?:number|null; status:OrderStatus; subtotal:number; /* paisa */ discount:number; /* paisa */ tax:number; /* paisa */ total:number; /* paisa */ payment_method:PaymentMethod; amount_received:number; /* paisa */ change_amount:number; /* paisa */ created_at:string; cancelled_at?:string|null; cancelled_reason?:string|null; items:OrderItem[]; }
+export interface Order { id:number; order_number:string; order_type:OrderType; table_id?:number|null; customer:CustomerInfo|null; delivery_address:string|null; tax_rate:number|null; status:OrderStatus; subtotal:number; /* paisa */ discount:number; /* paisa */ tax:number; /* paisa */ total:number; /* paisa */ payment_method:PaymentMethod; amount_received:number; /* paisa */ change_amount:number; /* paisa */ created_at:string; cancelled_at?:string|null; cancelled_reason?:string|null; items:OrderItem[]; }
 // Dashboard (Phase 9) — real-time business metrics
 export interface HourlySale { hour:number; revenue:number; /* paisa */ }
 export interface TopProduct { product_name:string; quantity_sold:number; revenue:number; /* paisa */ }

@@ -97,7 +97,7 @@ export function Orders() {
               <div className="orders-row" key={o.id}>
                 <strong>{o.order_number}</strong>
                 <span>{new Date(o.created_at).toLocaleString()}</span>
-                <span>Walk-in</span>
+                <span>{o.customer?.name_display || "Walk-in"}</span>
                 <strong>{formatCurrency(o.total)}</strong>
                 <span>
                   <OrderStatusBadge status={o.status} />

@@ -45,6 +45,13 @@ class CategoryNested(BaseModel):
     name_display: str
     active: bool
 
+class CustomerNested(BaseModel):
+    """Nested customer representation for OrderOut"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name_display: str
+    phone_raw: str | None
+
 class CategoryCreate(BaseModel):
     name: str
 
@@ -82,12 +89,17 @@ class OrderItemCreate(BaseModel):
     quantity: int = Field(gt=0)
 
 class OrderCreate(BaseModel):
-    """Create a new order. All money values in paisa; tax_rate in basis points."""
+    """Create a new order. All money values in paisa.
+
+    tax_rate is always determined by settings at order time (Rule 7 snapshot).
+    customer_id and delivery_address are optional and independent — no pairing required.
+    """
     order_type: Literal["DINE_IN", "TAKEAWAY", "DELIVERY"] = "TAKEAWAY"
     table_id: int | None = None
+    customer_id: int | None = None  # optional for all order types; validated in service
+    delivery_address: str | None = None  # optional; no pairing with customer_id
     items: list[OrderItemCreate] = Field(min_length=1)
     discount: int = Field(default=0, ge=0)  # paisa
-    tax_rate: int = Field(default=0, ge=0, le=10000)  # basis points
     payment_method: Literal["CASH", "CARD", "OTHER"] = "CASH"
     amount_received: int = Field(default=0, ge=0)  # paisa
 
@@ -107,10 +119,13 @@ class OrderOut(BaseModel):
     order_number: str
     order_type: str
     table_id: int | None
+    customer: CustomerNested | None  # NULL for walk-ins
+    delivery_address: str | None  # snapshot at order time; NULL for non-delivery
     status: str
     subtotal: int  # paisa
     discount: int  # paisa
     tax: int  # paisa
+    tax_rate: int | None  # basis points at order time (snapshot per Rule 7)
     total: int  # paisa
     payment_method: str
     amount_received: int  # paisa

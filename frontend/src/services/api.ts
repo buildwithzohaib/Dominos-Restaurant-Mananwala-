@@ -1,4 +1,4 @@
-import type {Category,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
+import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
 export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
  const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
@@ -34,7 +34,7 @@ export const api={
   const qs=q.toString();
   return request<Order[]>(`/api/orders${qs?`?${qs}`:""}`);
  },
- createOrder:(p:{order_type:OrderType;table_id:number|null;items:{product_id:number;quantity:number}[];discount:number;tax_rate:number;payment_method:PaymentMethod;amount_received:number})=>request<Order>("/api/orders",{method:"POST",body:JSON.stringify(p)}),
+ createOrder:(p:{order_type:OrderType;table_id:number|null;customer_id?:number|null;delivery_address?:string|null;items:{product_id:number;quantity:number}[];discount:number;payment_method:PaymentMethod;amount_received:number})=>request<Order>("/api/orders",{method:"POST",body:JSON.stringify(p)}),
  // Order cancellation (Phase 7) — never deletes the order, just flips status to
  // CANCELLED with a required reason; inventory restoration is a Phase 8 concern.
  cancelOrder:(id:number,payload:OrderCancelInput)=>request<Order>(`/api/orders/${id}/cancel`,{method:"POST",body:JSON.stringify(payload)}),
@@ -67,5 +67,17 @@ export const api={
  disableProduct:(id:number)=>request<Product>(`/api/products/${id}/disable`,{method:"PATCH",body:JSON.stringify({})}),
  enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})}),
  uploadProductImage:(id:number,file:File)=>uploadFile<Product>(`/api/products/${id}/image`,file),
- deleteProductImage:(id:number)=>request<Product>(`/api/products/${id}/image`,{method:"DELETE",body:JSON.stringify({})})
+ deleteProductImage:(id:number)=>request<Product>(`/api/products/${id}/image`,{method:"DELETE",body:JSON.stringify({})}),
+ // Customers (Phase 3.2)
+ searchCustomers:(query?:string)=>{
+  const q=new URLSearchParams();
+  if(query&&query.trim())q.set("search",query.trim());
+  const qs=q.toString();
+  return request<CustomerSearchResult[]>(`/api/customers${qs?`?${qs}`:""}`);
+ },
+ getCustomer:(id:number)=>request<Customer>(`/api/customers/${id}`),
+ createCustomer:(p:CustomerCreateInput)=>request<Customer>("/api/customers",{method:"POST",body:JSON.stringify(p)}),
+ updateCustomer:(id:number,p:CustomerUpdateInput)=>request<Customer>(`/api/customers/${id}`,{method:"PUT",body:JSON.stringify(p)}),
+ deactivateCustomer:(id:number)=>request<Customer>(`/api/customers/${id}/deactivate`,{method:"PATCH",body:JSON.stringify({})}),
+ activateCustomer:(id:number)=>request<Customer>(`/api/customers/${id}/activate`,{method:"PATCH",body:JSON.stringify({})})
 };

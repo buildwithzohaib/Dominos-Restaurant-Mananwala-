@@ -35,6 +35,28 @@ export function OrderDetailsModal({
 
         <div className="receipt-line" />
 
+        {/* Customer info */}
+        <div className="order-status-row">
+          <div>
+            <span>Customer</span>
+            <strong>
+              {order.customer
+                ? `${order.customer.name_display}${order.customer.phone_raw ? ` • ${order.customer.phone_raw}` : ""}`
+                : "Walk-in"}
+            </strong>
+          </div>
+        </div>
+
+        {/* Delivery address */}
+        {order.delivery_address && (
+          <div className="order-meta-row">
+            <span>Delivery Address</span>
+            <span>{order.delivery_address}</span>
+          </div>
+        )}
+
+        <div className="receipt-line" />
+
         <div className="receipt-items">
           {order.items.map((item) => (
             <div className="receipt-item" key={item.id}>

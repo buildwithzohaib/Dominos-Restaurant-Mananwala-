@@ -65,6 +65,8 @@ export function PaymentModal({
       const o = await api.createOrder({
         order_type: state.orderType,
         table_id: state.selectedTable?.id ?? null,
+        customer_id: state.selectedCustomer?.id ?? null,
+        delivery_address: state.deliveryAddress.trim() || null,
 
         items: state.cart.map((i) => ({
           product_id: i.product.id,
@@ -72,7 +74,6 @@ export function PaymentModal({
         })),
 
         discount: discount,
-        tax_rate: settings?.tax_rate ?? 0,
 
         payment_method: state.paymentMethod,
 
