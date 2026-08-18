@@ -134,6 +134,8 @@ class OrderItemOut(BaseModel):
     quantity: int
     price: int  # paisa
     line_total: int  # paisa
+    batch_id: int | None = None
+    sent_at: datetime | None = None
 
 class OrderOut(BaseModel):
     """Order details. All money values in paisa."""
@@ -157,6 +159,7 @@ class OrderOut(BaseModel):
     created_at: datetime
     cancelled_at: datetime | None
     cancelled_reason: str | None
+    paid_at: datetime | None = None
     items: list[OrderItemOut]
 
 # --- Order cancellation (Phase 7) -------------------------------------------
