@@ -14,7 +14,6 @@ import { usePOS } from "../context/POSContext";
 import { useCatalog } from "../context/CatalogContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { getRestaurantLetter } from "../utils/restaurant";
-import { tables } from "../data/tables";
 
 export function POS() {
   const {
@@ -25,7 +24,7 @@ export function POS() {
     syncProducts,
   } = usePOS();
 
-  const { catalogProducts, catalogCategories, refresh } = useCatalog();
+  const { catalogProducts, catalogCategories, tables, refresh } = useCatalog();
 
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
@@ -162,8 +161,7 @@ export function POS() {
                   key={table.id}
                   value={table.id}
                 >
-                  {table.name} ·{" "}
-                  {table.seats} seats
+                  {table.name}
                 </option>
 
               ))}

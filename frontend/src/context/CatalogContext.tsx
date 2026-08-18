@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
-import type { Category, Product } from "../types";
+import type { Category, Product, RestaurantTable } from "../types";
 
 interface CatalogContextType {
   // For POS grid — active products in active categories only
@@ -10,6 +10,9 @@ interface CatalogContextType {
   // For management screens — all products and all categories
   allProducts: Product[];
   allCategories: Category[];
+
+  // For table selection in DINE_IN orders
+  tables: RestaurantTable[];
 
   isLoading: boolean;
   error: string | null;
@@ -23,6 +26,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
   const [catalogCategories, setCatalogCategories] = useState<Category[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const [tables, setTables] = useState<RestaurantTable[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,17 +39,20 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         catalogCats,
         allProds,
         allCats,
+        tablesData,
       ] = await Promise.all([
         api.getCatalogProducts(),
         api.getCatalogCategories(),
         api.getProducts(undefined, true),
         api.getCategories(),
+        api.getTables(),
       ]);
 
       setCatalogProducts(catalogProds);
       setCatalogCategories(catalogCats);
       setAllProducts(allProds);
       setAllCategories(allCats);
+      setTables(tablesData);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not refresh catalog");
     } finally {
@@ -65,6 +72,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
         catalogCategories,
         allProducts,
         allCategories,
+        tables,
         isLoading,
         error,
         refresh,
