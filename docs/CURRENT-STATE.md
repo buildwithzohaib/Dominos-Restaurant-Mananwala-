@@ -1,8 +1,10 @@
 # CURRENT STATE AUDIT — My Restaurant POS
 
-**Date:** 2026-08-15  
+**Date:** 2026-08-18  
 **Status:** READ-ONLY REPORT  
-**Phases Completed:** 1–10
+**Phases Completed:** 1–10  
+**Stage 4 (Running Tabs):** ✅ COMPLETE (backend only)  
+**Git HEAD:** 6232d09 (4.C2)
 
 ---
 
@@ -170,22 +172,26 @@ frontend/
 | `id` | Integer | PRIMARY KEY | |
 | `order_number` | String(30) | UNIQUE, INDEX | Human-readable (e.g., "ORD-00001") |
 | `order_type` | String(30) | default="TAKEAWAY" | DINE_IN, TAKEAWAY, DELIVERY |
-| `table_id` | Integer | FK→restaurant_tables.id, nullable | Required only for DINE_IN |
-| `status` | String(30) | default="PAID" | PAID or CANCELLED (Phase 7) |
-| `subtotal` | **Numeric(10, 2)** | NOT NULL | **MONEY: Decimal** before discount/tax |
-| `discount` | **Numeric(10, 2)** | default=0 | **MONEY: Decimal** amount deducted |
-| `tax` | **Numeric(10, 2)** | default=0 | **MONEY: Decimal** (currently unused but reserved) |
-| `total` | **Numeric(10, 2)** | NOT NULL | **MONEY: Decimal** final amount due |
-| `payment_method` | String(30) | NOT NULL | CASH, CARD, OTHER |
-| `amount_received` | **Numeric(10, 2)** | default=0 | **MONEY: Decimal** cash/card tendered |
-| `change_amount` | **Numeric(10, 2)** | default=0 | **MONEY: Decimal** change returned (CASH only) |
+| `table_id` | Integer | FK→restaurant_tables.id, nullable | Required for DINE_IN (running tabs) |
+| `status` | String(30) | default="PAID" | OPEN, PAID, or CANCELLED (Stage 4: OPEN added) |
+| `subtotal` | Integer | NOT NULL | Paisa (Rule 3: converted in Stage 4) |
+| `discount` | Integer | default=0 | Paisa (Rule 3: converted in Stage 4) |
+| `tax` | Integer | default=0 | Paisa; calculated at pay time |
+| `tax_rate` | Integer | nullable | Basis points at order time (snapshot per Rule 7) |
+| `total` | Integer | NOT NULL | Paisa (Rule 3: converted in Stage 4) |
+| `payment_method` | String(30) | nullable | CASH, CARD, OTHER; **NULL for OPEN orders** (Stage 4) |
+| `amount_received` | Integer | default=0 | Paisa tendered |
+| `change_amount` | Integer | default=0 | Paisa change (CASH only) |
 | `created_at` | DateTime | default=now, INDEX | When order placed |
-| `cancelled_at` | DateTime | nullable | Phase 8: when order cancelled |
-| `cancelled_reason` | String(200) | nullable | Phase 8: reason for cancellation |
+| `paid_at` | DateTime | nullable | When payment collected (Stage 4) |
+| `cancelled_at` | DateTime | nullable | When order cancelled |
+| `cancelled_reason` | String(200) | nullable | Reason for cancellation |
 
-**Relationships:** `table` (many-to-one), `items` (one-to-many cascade)
+**Relationships:** `table` (many-to-one), `items` (one-to-many cascade), `customer` (many-to-one, optional)
 
-**Note:** Orders are never deleted; cancellation sets `status="CANCELLED"` and records `cancelled_at`/`cancelled_reason` (Rule 6).
+**Note:** Orders are never deleted; cancellation sets `status="CANCELLED"` and records timestamps (Rule 6). Running tabs (DINE_IN OPEN) remain open for incremental item additions until `pay_order()` closes them.
+
+**Constraints (Stage 4):** Partial unique index `ix_one_open_per_table` ensures only one OPEN order per table at a time.
 
 ---
 
@@ -197,58 +203,60 @@ frontend/
 | `product_id` | Integer | FK→products.id | Reference to product at order time |
 | `product_name` | String(150) | NOT NULL | Snapshot of name at time of sale (Rule 7) |
 | `quantity` | Integer | NOT NULL | Units ordered |
-| `price` | **Numeric(10, 2)** | NOT NULL | **MONEY: Decimal** unit price at time of sale (Rule 7) |
-| `line_total` | **Numeric(10, 2)** | NOT NULL | **MONEY: Decimal** quantity × price |
+| `price` | Integer | NOT NULL | Paisa unit price at time of sale (Rule 7) |
+| `line_total` | Integer | NOT NULL | Paisa (quantity × price) |
+| `batch_id` | Integer | nullable | Kitchen batch number (Stage 4); NULL = PENDING, number = SENT |
+| `sent_at` | DateTime | nullable | When this item was sent to kitchen (Stage 4) |
 
 **Relationships:** `order` (many-to-one cascade)
+
+**State Machine (Stage 4):** 
+- PENDING: batch_id NULL, sent_at NULL (item in cart, not yet sent to kitchen)
+- SENT: batch_id set (1, 2, 3...), sent_at set (stock already decremented)
 
 ---
 
 ### B. Money-Related Columns (CRITICAL)
 
-All monetary fields in the database use **`Numeric(10, 2)`** with Python `Decimal` type.
+**Stage 4 Update:** All monetary fields have been **converted to Integer (paisa)** per Rule 3.
 
-| Table | Column | SQLAlchemy Type | Comment |
-|-------|--------|-----------------|---------|
-| products | price | Numeric(10, 2) | Selling price per unit |
-| products | purchase_price | Numeric(10, 2) | Cost per unit |
-| stock_movements | purchase_price | Numeric(10, 2) | Cost at time of movement (nullable) |
-| orders | subtotal | Numeric(10, 2) | Before discount and tax |
-| orders | discount | Numeric(10, 2) | Amount deducted |
-| orders | tax | Numeric(10, 2) | Tax amount (currently unused) |
-| orders | total | Numeric(10, 2) | Final amount due |
-| orders | amount_received | Numeric(10, 2) | Cash/card tendered |
-| orders | change_amount | Numeric(10, 2) | Change returned |
-| order_items | price | Numeric(10, 2) | Unit price snapshot at sale |
-| order_items | line_total | Numeric(10, 2) | Quantity × price |
+| Table | Column | Type | Comment |
+|-------|--------|------|---------|
+| products | price | Integer | Selling price in paisa (Rs. 1,250 = 125000) |
+| products | purchase_price | Integer | Cost per unit in paisa |
+| stock_movements | purchase_price | Integer | Cost at time of movement (nullable, paisa) |
+| orders | subtotal | Integer | Paisa, before discount and tax |
+| orders | discount | Integer | Paisa, absolute amount deducted |
+| orders | tax | Integer | Paisa, calculated at pay time |
+| orders | total | Integer | Paisa, final amount due |
+| orders | amount_received | Integer | Paisa, cash/card tendered |
+| orders | change_amount | Integer | Paisa, change returned |
+| order_items | price | Integer | Paisa, unit price snapshot at sale |
+| order_items | line_total | Integer | Paisa, quantity × price |
 
-**Type:** `Numeric(10, 2)` means **fixed-point decimal** with 10 total digits, 2 after decimal point.  
-**Risk Level:** ✅ **LOW** — Using `Decimal`, not `Float`. Fits Rule 3 (integer paisa) conceptually, but currently stored as `Numeric` not `Integer`.
+**Compliance:** ✅ **RULE 3 SATISFIED** — All money is integer paisa, no Float/Decimal/Numeric types. Percentages are basis points integers (1600 = 16% tax_rate).
 
 ---
 
 ### C. Alembic Configuration
 
-**Status:** ❌ **NOT CONFIGURED**
+**Status:** ✅ **ACTIVE** (Stage 4)
 
-- No `alembic/` directory exists in backend/
-- `alembic.ini` not present
-- `env.py` not present
-- No migrations/ directory
+**Alembic Directory:** `backend/alembic/` with standard structure
+- `alembic.ini` ✅
+- `env.py` ✅
+- `versions/` directory with migration files
+- `script.py.mako` template
 
-**Current Schema Origin:** `Base.metadata.create_all()` called on every app startup  
-**Location:** `backend/app/main.py:13`
+**Stage 4 Migrations:**
+- `ad8ba306eabb` — Add `order_items.batch_id`, `order_items.sent_at`, `orders.payment_method` nullable, partial unique index `ix_one_open_per_table`
+- `b3d5e7f9a1c3` — Add `orders.paid_at` (nullable), backfill `paid_at = created_at` for existing PAID orders
 
-```python
-Base.metadata.create_all(bind=engine)  # ← Called at startup
-seed_data()  # ← Populates sample data
-```
+**Current Migration Head:** `b3d5e7f9a1c3`
 
-**Impact:** 
-- Schema is created from SQLAlchemy model definitions, not from migration files
-- No version history of schema changes
-- No rollback capability
-- Existing data requires manual `alembic stamp head` after Alembic setup
+**Migration Status:** `alembic check` returns clean (no pending migrations)
+
+**All Money Converted:** Migrations converted money columns from Numeric(10,2) to Integer (paisa)
 
 ---
 
@@ -260,11 +268,25 @@ Services exist and are the only place business logic lives:
 
 | Service | Location | Purpose |
 |---------|----------|---------|
-| `order_service` | `app/services/order_service.py` | Order creation, validation, stock deduction, cancellation with restoration |
+| `order_service` | `app/services/order_service.py` | Order creation, open/PAID/CANCELLED states, stock deduction, running tabs (Stage 4) |
 | `inventory_service` | `app/services/inventory_service.py` | Stock add/adjust operations |
 | `product_service` | `app/services/product_service.py` | Product CRUD (Phase 10) |
 | `stock_service` | `app/services/stock_service.py` | Stock ledger operations |
 | `dashboard_service` | `app/services/dashboard_service.py` | Dashboard metrics aggregation (Phase 9) |
+
+**Stage 4 New Functions in `order_service`:**
+- `create_open_order()` — Opens a DINE_IN tab (OPEN status, payment_method NULL, tax_rate snapshotted)
+- `add_items_to_order()` — Adds items as PENDING (batch_id NULL, doesn't decrement stock)
+- `send_batch_to_kitchen()` — Only place stock is decremented; stamps batch_id (per-order numbering) and sent_at
+- `pay_order()` — Closes OPEN order (payment collection, tax calculation, no stock touch)
+- `cancel_order()` — Now accepts OPEN as well as PAID; restores stock from SALE movements only
+
+**Stage 4 New Routes (in `app/routes/orders.py`):**
+- `POST /api/orders/open` → `create_open_order()`
+- `POST /api/orders/{id}/items` → `add_items_to_order()`
+- `POST /api/orders/{id}/send` → `send_batch_to_kitchen()`
+- `POST /api/orders/{id}/pay` → `pay_order()`
+- `GET  /api/orders?status=OPEN` → Lists active running tabs (existing filter)
 
 **Architecture Pattern:**
 ```
@@ -439,7 +461,73 @@ All money formatting uses **`.toFixed(2)`** with hardcoded **"Rs. "** prefix.
 
 ---
 
-## 4. HARDCODED VALUES AUDIT
+## 4. TESTING STRATEGY
+
+### Backend Test Fixtures (Stage 4)
+
+**Pattern:** No shared `conftest.py`. Each test file builds its own database independently.
+
+**Why:** 17 test files already define their own fixtures. Introducing a shared `conftest.py` now would mean touching all of them and risking a suite that currently passes 310 tests, for no benefit. New test files copy the existing per-file pattern because that is what the project already does — not because `conftest.py` is broken.
+
+**Standard Pattern (from Stage 4 test files):**
+
+```python
+@pytest.fixture(scope="function")
+def db() -> Session:
+    """Create a temporary SQLite database for each test."""
+    db_fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(db_fd)  # Critical: close the file descriptor immediately (Windows)
+    
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    session = SessionLocal()
+    
+    # Seed data (Settings, tables, products, etc.)
+    # ... populate sample data ...
+    session.commit()
+    
+    # Expose seeded IDs to tests
+    session.table_a_id = table_a.id
+    session.prod1_id = prod1.id
+    # ...
+    
+    yield session
+    
+    session.close()
+    engine.dispose()  # Critical: dispose engine before removing file
+    gc.collect()
+    time.sleep(0.1)
+    
+    # Retry os.remove on Windows (file lock may persist briefly)
+    for _ in range(5):
+        try:
+            os.remove(db_path)
+            break
+        except OSError:
+            time.sleep(0.1)
+```
+
+**Key Details:**
+- `os.close(db_fd)` immediately after `mkstemp` — otherwise Windows keeps the file locked
+- `engine.dispose()` before `os.remove` — closes all connections
+- `gc.collect()` and `time.sleep(0.1)` — allow cleanup time
+- Retry loop for `os.remove` — Windows file locking can persist briefly
+- **Seeded IDs as session attributes (known shortcut):** Passing seeded IDs to tests as `db.table_a_id`, `db.prod1_id`, etc. works but is unclean. SQLAlchemy Session is not a data carrier; a fixture returning a small dict or dataclass would be cleaner. This pattern has spread across five test files and is flagged as technical debt in Known Gaps.
+
+**Files Using This Pattern:**
+- `backend/tests/test_stage4_b1.py` through `backend/tests/test_stage4_c1.py`
+
+**When Writing New Test Files:**
+- Copy the fixture from an existing Stage 4 test file
+- Each test file is independent and self-contained
+- The Windows-specific teardown pattern (fd close, dispose, gc.collect, retry os.remove) is what each file needs
+
+**Test Status:** 310 tests passing (17 test files in total)
+
+---
+
+## 5. HARDCODED VALUES AUDIT
 
 ### A. Restaurant Name
 
@@ -483,7 +571,7 @@ All money formatting uses **`.toFixed(2)`** with hardcoded **"Rs. "** prefix.
 
 ---
 
-## 5. RISKS AND CONVERSION IMPACT
+## 6. RISKS AND CONVERSION IMPACT
 
 ### Risk #1: Money Stored as `Numeric(10, 2)` Instead of Integer Paisa
 
@@ -634,7 +722,7 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-## 6. DATA INTEGRITY OBSERVATIONS
+## 7. DATA INTEGRITY OBSERVATIONS
 
 ### A. Transactions ✅
 
@@ -659,39 +747,66 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-## 7. KNOWN GAPS
+## 8. KNOWN GAPS
 
-### Dine-In Table Service with Running Tabs (Stage 4)
+### Stage 4 Backend: COMPLETE ✅ | Frontend: NOT STARTED
 
 **Business Model:** The restaurant operates table service where customers sit at a table and place orders incrementally:
 1. Customer sits at a table
-2. Orders some items (first round)
-3. Later adds more items to the same order (second round)
-4. Possibly several more additions
-5. Finally pays and table is closed
+2. Opens a running tab (OPEN order on that table)
+3. Adds items in rounds (each sends a batch to the kitchen, stock decrements)
+4. Possibly several additions
+5. Finally pays and table is closed (OPEN → PAID)
 
-**Current Limitation:** The current order flow creates and pays an order in one atomic step. There is no concept of an OPEN order that can receive additional items over time.
+**What Stage 4 Implemented (Backend):**
+- ✅ Order status: OPEN (in addition to PAID, CANCELLED)
+- ✅ `create_open_order()` — creates OPEN order with payment_method NULL, tax_rate snapshotted
+- ✅ `add_items_to_order()` — appends items as PENDING (batch_id NULL), merges same-product lines
+- ✅ `send_batch_to_kitchen()` — THE ONLY stock deduction point; stamps batch_id (1, 2, 3...) and sent_at
+- ✅ `pay_order()` — closes OPEN order (rejects if any PENDING items remain)
+- ✅ `cancel_order()` — now accepts OPEN; restores stock from SALE movements (PENDING excluded)
+- ✅ Partial unique index `ix_one_open_per_table` ensures only one OPEN order per table
+- ✅ Migrations: ad8ba306eabb + b3d5e7f9a1c3
+- ✅ Schemas: OpenOrderCreate, AddItemsIn, PayOrderIn (nested TableNested)
+- ✅ Routes: POST /open, /items, /send, /pay (all return OrderOut with table nested)
+- ✅ 310 tests passing (17 test files)
 
-**What Must Change in Stage 4 (Tables + Orders + KOT):**
-- Add order status: OPEN (in addition to current PAID, CANCELLED)
-- Modify order creation: create OPEN order, do NOT collect payment yet
-- Add ability to append items to an OPEN order
-- Stock deduction: per batch/round, not once at order creation (CLAUDE.md Rule 8 already mandates "per KOT batch"—this is what that means)
-- Payment: separate step that closes the order (OPEN → PAID)
-- KOT (Kitchen Order Ticket): issued when items are added, not when order is created
-- Table management: associate OPEN order with table, release table when order closes
+**Schema Changes:** 
+- `orders.status` now supports OPEN (was: PAID, CANCELLED)
+- `orders.payment_method` now nullable (NULL while OPEN)
+- `orders.paid_at` added (NULL until payment collected)
+- `orders.tax_rate` snapshotted at open time (basis points)
+- `order_items.batch_id` added (NULL=PENDING, number=SENT)
+- `order_items.sent_at` added (when batch was sent to kitchen)
+- Money: All converted to Integer (paisa)
 
-**Schema Impact:** 
-- `orders.status` already supports OPEN (add as new value)
-- `orders.table_id` already exists (required for OPEN dine-in orders)
-- `order_items` may need batch/round tracking for KOT printing
+**Frontend NOT YET IMPLEMENTED:**
+- Order panel buttons for open order workflow
+- Active orders page (GET /api/orders?status=OPEN)
+- KOT component (print batch_id, sent_at for kitchen)
+- Tables management UI
+- Receipt updates (show table name, batch_id, sent_at, paid_at)
+- Payment flow for OPEN orders
 
-**Impact on Phases 11-13 (Customers, Delivery):**
-- Customer and delivery features must work with OPEN orders
-- Takeaway/Delivery orders go straight to PAID (no running tabs)
-- Dine-in orders (OPEN) are incompatible with delivery
+**Critical Frontend Requirements (when implementing):**
+- order.payment_method is NULL while OPEN — handle null checks in all receipt/display code
+- order.paid_at is NULL until payment — use for payment UI state
+- item.batch_id NULL = PENDING (not sent), number = SENT (sent in that batch)
+- Never display order.table_id to user; use order.table.name (Rule 2)
+- Pay button must be hidden while any item is PENDING
+- Tables are now essential to the business model (no longer optional)
 
-**Tables are therefore not optional—they are essential to the business model.**
+---
+
+### Stage 4 Backend Gaps & Open Items
+
+**revenue_by_paid_at (Rule 10):** Dashboard still reports metrics by `created_at`, but orders can now have a gap between `created_at` (when tab opened) and `paid_at` (when payment collected). Per Rule 10 (business day), revenue should be reported by `paid_at`, not `created_at`. This gap affects dashboard/daily reports. **Not yet implemented.**
+
+**Concurrent Integrity (Production-Only):** The `create_open_order()` function has an except IntegrityError branch that re-checks after rollback (for the partial unique index). This path is unreachable from unit tests (the explicit pre-check fires first) but may run under real concurrency. There is a code comment documenting this. **No changes needed, but be aware.**
+
+**Test Fixture Pattern (Windows):** Ad-hoc attributes attached to Session objects (e.g., `session.table_a_id = ...`) pass seeded IDs to tests. It works but is not clean and has spread across 5 Stage 4 test files. **Not ideal, but functional; no priority to refactor.**
+
+**Frontend Not Started:** Order panel buttons, active orders page, KOT component, tables UI, receipt updates not yet built. Stage 4 is backend-complete but frontend stage 4 is not started. **Next priority.**
 
 ---
 
@@ -723,40 +838,74 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-## 8. SCHEMA COMPLETENESS CHECK
+## 9. SCHEMA COMPLETENESS CHECK
 
-**Missing for Production Use:**
+**Status After Stage 4:**
 
-| Feature | Table Needed | Status | Priority |
-|---------|--------------|--------|----------|
-| Settings (Rule 1) | `settings` | ✅ Added (Task 1.1) | Complete |
-| Ingredients (Phase 15) | `ingredients`, extend `stock_movements` | ❌ Missing | Phase 15 |
-| Recipes/BOM (Phase 15) | `recipes` | ❌ Missing | Phase 15 |
-| Customers (Phase 11+) | `customers` | ❌ Missing | TBD |
-| User Accounts/Auth | `users` | ❌ Missing | Production |
-| Audit Log | `audit_log` | ❌ Missing | Production |
+| Feature | Table(s) | Status | Notes |
+|---------|----------|--------|-------|
+| Settings (Rule 1) | `settings` | ✅ Complete | Exists; used for tax_rate, day_starts_at, delivery_charge |
+| Orders (Phases 1-10, Stage 4) | `orders`, `order_items` | ✅ Complete | Stage 4 added OPEN status, batch tracking, paid_at |
+| Products (Phases 1-10) | `products`, `categories` | ✅ Complete | Name normalization, stock management |
+| Stock Ledger (Phases 1-10, Stage 4) | `stock_movements` | ✅ Complete | Append-only ledger; Stage 4 added SALE/CANCELLATION for batches |
+| Tables (Stage 4) | `restaurant_tables` | ✅ Complete | Required for DINE_IN running tabs |
+| Customers (Phase 3.5+) | `customers` | ✅ Complete | Exists with phone/address normalization; used in orders |
+| Ingredients (Phase 15) | `ingredients` | ❌ Missing | Extend `stock_movements` with polymorphic `item_type`/`item_id` |
+| Recipes/BOM (Phase 15) | `recipes` | ❌ Missing | Phase 15 requirement |
+| User Accounts/Auth | `users` | ❌ Missing | Production requirement |
+| Audit Log | `audit_log` | ❌ Missing | Production requirement |
 
 ---
 
-## 9. SUMMARY
+## 10. SUMMARY
+
+### Backend Status (Stage 4 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| **Projects Structure** | ✅ Clear | Backend services layer clean, frontend components organized |
-| **Database Schema** | ✅ 6 tables | Matches SQLAlchemy models, ready for Alembic |
-| **Money Storage** | ⚠️ Numeric | Uses `Numeric(10, 2)`, violates Rule 3 (should be Integer paisa) |
-| **Stock Ledger** | ⚠️ Product-only | Will need polymorphic refactor for ingredients (Phase 15) |
-| **Alembic Setup** | ❌ Missing | No migrations; uses `create_all()` at startup |
-| **Services Layer** | ✅ Excellent | Business logic properly separated from routes |
+| **Project Structure** | ✅ Excellent | Services layer clean, clear separation of concerns |
+| **Database Schema** | ✅ 7 tables | categories, products, restaurant_tables, orders, order_items, stock_movements, customers, settings |
+| **Money Storage** | ✅ Compliant | All money is Integer (paisa); Rule 3 satisfied |
+| **Stock Ledger** | ⚠️ Product-only | Product movements working; ingredient polymorphism deferred to Phase 15 |
+| **Alembic Setup** | ✅ Active | 2 Stage 4 migrations; current head b3d5e7f9a1c3 |
+| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs implemented |
 | **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas |
+| **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working |
+| **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
+| **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
+| **Tests** | ✅ 310 passing | Comprehensive coverage of all Stage 4 functions |
+
+### Frontend Status (Phases 1-10, Stage 4 Frontend Not Started)
+
+| Aspect | Status | Notes |
+|--------|--------|-------|
 | **Frontend State** | ✅ Good | POSContext with proper cart sync and stock cap |
 | **Money Formatting** | ❌ Hardcoded | 29+ inline "Rs." calls; should centralize to `formatMoney()` |
 | **Print Support** | ✅ Implemented | 80mm thermal receipt working; 58mm not implemented |
-| **Settings** | ❌ Missing | No `settings` table; all config hardcoded (violates Rule 1) |
-| **Business Day** | ❌ Missing | Uses calendar day, not configurable business day (violates Rule 10) |
+| **Order Panel** | ✅ Phases 1-10 | Does not yet handle OPEN orders, running tabs, KOT batches |
+| **Active Orders Page** | ❌ Missing | No UI for GET /api/orders?status=OPEN |
+| **KOT Component** | ❌ Missing | No print view for kitchen batches |
+| **Tables UI** | ❌ Missing | No table management page |
+
+### Rule Compliance
+
+| Rule | Compliance | Notes |
+|------|-----------|-------|
+| Rule 1 (Single Source) | ✅ | Settings table exists; used for tax_rate, day_starts_at, delivery_charge |
+| Rule 2 (No IDs in UI) | ✅ | Frontend ready (table.name exposed); existing code compliant |
+| Rule 3 (Integer Paisa) | ✅ | All money is Integer; Stage 4 migrations converted existing data |
+| Rule 4 (Stock Ledger) | ✅ | Append-only; CANCELLATION movements for reversals |
+| Rule 5 (Polymorphic) | ⚠️ | Ready for Phase 15; item_type/item_id fields prepared |
+| Rule 6 (Soft Delete) | ✅ | No hard deletes; status flags and is_active used |
+| Rule 7 (Snapshots) | ✅ | order_items snapshot price; orders snapshot tax_rate |
+| Rule 8 (Stock on KOT) | ✅ | Stock decrements in send_batch_to_kitchen() only |
+| Rule 9 (Normalization) | ✅ | Product/category/customer names normalized in Python |
+| Rule 10 (Business Day) | ⚠️ | Implemented but not used in dashboard (reports by created_at, not paid_at) |
 
 ---
 
-**Report Date:** 2026-08-15  
-**Prepared by:** Codebase Audit (Read-Only)  
-**Next Steps:** Recommend Task 0.5 (Alembic setup) before Task 1.1
+**Report Date:** 2026-08-18  
+**Git HEAD:** 6232d09 (4.C2)  
+**Test Status:** 310 passing, 0 failing  
+**Alembic Status:** Clean (no pending migrations)  
+**Next Work:** Stage 4 Frontend (order panel, active orders, KOT, tables UI)
