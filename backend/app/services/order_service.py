@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+import logging
 
 from fastapi import HTTPException
 from sqlalchemy import update
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
 from app.schemas.schemas import OrderCancelIn, OrderCreate
+
+logger = logging.getLogger(__name__)
 
 CANCEL_REASON_LABELS = {
     "CUSTOMER_CHANGED_ORDER": "Customer changed order",
@@ -177,7 +180,28 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
         ))
 
     db.commit()
-    return db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+    order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+
+    # Phase 3.5: Update customer address convenience field if DELIVERY order with customer and address
+    # This happens AFTER the main commit, in a separate transaction, so order is safe even if it fails
+    if (
+        payload.order_type == "DELIVERY"
+        and payload.customer_id is not None
+        and payload.delivery_address
+    ):
+        try:
+            addr_trimmed = payload.delivery_address.strip()
+            if addr_trimmed:  # Don't update if whitespace-only
+                customer = db.get(Customer, payload.customer_id)
+                if customer:
+                    customer.address = addr_trimmed
+                    db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to update customer {payload.customer_id} address: {e}")
+            # Order is already saved; don't fail the response over a convenience field
+
+    return order_result
 
 
 def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:

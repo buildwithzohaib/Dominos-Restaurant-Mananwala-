@@ -246,22 +246,27 @@ class ProductUpdate(BaseModel):
 # --- Customers (Phase 3.2) ---
 
 class CustomerCreate(BaseModel):
-    """Create a new customer. Phone is optional."""
+    """Create a new customer. Phone and address are optional."""
     name: str = Field(min_length=1, max_length=255)  # Will be normalized to name_raw/name_display/name_key
     phone: str | None = Field(default=None, max_length=20)  # Will be normalized to phone_raw/phone_key
+    address: str | None = Field(default=None, max_length=300)  # Last used delivery address (Phase 3.5)
 
 class CustomerUpdate(BaseModel):
     """Update customer. All fields optional."""
     name: str | None = Field(default=None, min_length=1, max_length=255)
     phone: str | None = Field(default=None, max_length=20)
+    address: str | None = Field(default=None, max_length=300)
 
 class CustomerSearchResult(BaseModel):
-    """Result item in search response."""
+    """Result item in search response (Phase 3.5: with order counts)."""
     model_config = ConfigDict(from_attributes=True)
     id: int
     name_display: str
     phone_raw: str | None
+    address: str | None
     is_active: bool
+    order_count: int  # Total orders (all statuses: PAID + CANCELLED)
+    paid_order_count: int  # Paid orders only (status = PAID)
 
 class CustomerOut(BaseModel):
     """Customer details response. No phone_key exposed (internal implementation detail)."""
@@ -269,6 +274,7 @@ class CustomerOut(BaseModel):
     id: int
     name_display: str
     phone_raw: str | None
+    address: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

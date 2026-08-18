@@ -22,12 +22,12 @@ export interface StockMovement { id:number; item_type:string; /* 'PRODUCT' | 'IN
 export interface RestaurantTable { id:number; name:string; seats:number; active:boolean; }
 export interface CartItem { product:Product; quantity:number; }
 export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ }
-// Customers (Phase 3.2)
-export interface Customer { id:number; name_display:string; phone_raw:string|null; phone_key:string|null; is_active:boolean; created_at:string; updated_at:string; }
+// Customers (Phase 3.2–3.5)
+export interface Customer { id:number; name_display:string; phone_raw:string|null; phone_key:string|null; address:string|null; /* Phase 3.5: last used delivery address */ is_active:boolean; created_at:string; updated_at:string; }
 export interface CustomerInfo { id:number; name_display:string; phone_raw:string|null; }
-export interface CustomerSearchResult { id:number; name_display:string; phone_raw:string|null; is_active:boolean; }
-export interface CustomerCreateInput { name:string; phone?:string|null; }
-export interface CustomerUpdateInput { name?:string; phone?:string|null; }
+export interface CustomerSearchResult { id:number; name_display:string; phone_raw:string|null; address:string|null; is_active:boolean; order_count:number; /* Phase 3.5 */ paid_order_count:number; /* Phase 3.5 */ }
+export interface CustomerCreateInput { name:string; phone?:string|null; address?:string|null; }
+export interface CustomerUpdateInput { name?:string; phone?:string|null; address?:string|null; }
 // Order status (Phase 7) — PAID | CANCELLED. One status field, no separate flag.
 export type OrderStatus = "PAID" | "CANCELLED";
 export type CancellationReason = "CUSTOMER_CHANGED_ORDER" | "WRONG_ORDER" | "PAYMENT_ISSUE" | "DUPLICATE_ORDER" | "OTHER";

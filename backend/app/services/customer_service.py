@@ -8,8 +8,8 @@ Phone can be omitted; if blank, both phone_raw and phone_key are stored as NULL.
 """
 
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
-from app.models.models import Customer
+from sqlalchemy import or_, func, case
+from app.models.models import Customer, Order
 from app.utils.normalization import normalize_name
 from app.utils.phone import normalize_phone
 
@@ -19,7 +19,7 @@ class EmptyNameKeyError(ValueError):
     pass
 
 
-def create(db: Session, name: str, phone: str | None = None) -> Customer:
+def create(db: Session, name: str, phone: str | None = None, address: str | None = None) -> Customer:
     """
     Create a new customer.
 
@@ -27,6 +27,7 @@ def create(db: Session, name: str, phone: str | None = None) -> Customer:
         db: database session
         name: customer name (required, will be normalized)
         phone: phone number (optional, will be normalized; NULL if blank)
+        address: delivery address (optional, Phase 3.5; NULL if blank)
 
     Returns:
         The newly created Customer
@@ -50,6 +51,9 @@ def create(db: Session, name: str, phone: str | None = None) -> Customer:
             phone_raw = None
             phone_key = None
 
+    # Normalize address (Phase 3.5): store as-is if provided, NULL if blank
+    address_normalized = address.strip() if address and address.strip() else None
+
     # Create customer
     customer = Customer(
         name_raw=name_raw,
@@ -57,6 +61,7 @@ def create(db: Session, name: str, phone: str | None = None) -> Customer:
         name_key=name_key,
         phone_raw=phone_raw,
         phone_key=phone_key,
+        address=address_normalized,
         is_active=True
     )
 
@@ -66,15 +71,16 @@ def create(db: Session, name: str, phone: str | None = None) -> Customer:
     return customer
 
 
-def update(db: Session, customer_id: int, name: str | None = None, phone: str | None = None) -> Customer:
+def update(db: Session, customer_id: int, name: str | None = None, phone: str | None = None, address: str | None = None) -> Customer:
     """
-    Update customer name and/or phone.
+    Update customer name, phone, and/or address.
 
     Args:
         db: database session
         customer_id: customer to update
         name: new name (optional; if provided, normalized)
         phone: new phone (optional; NULL if blank)
+        address: new address (optional, Phase 3.5; NULL if blank)
 
     Returns:
         Updated Customer
@@ -113,6 +119,10 @@ def update(db: Session, customer_id: int, name: str | None = None, phone: str | 
             customer.phone_raw = None
             customer.phone_key = None
 
+    # Update address if provided (Phase 3.5)
+    if address is not None:
+        customer.address = address.strip() if address.strip() else None
+
     db.commit()
     db.refresh(customer)
     return customer
@@ -147,9 +157,9 @@ def activate(db: Session, customer_id: int) -> Customer:
     return customer
 
 
-def search(db: Session, query: str = "", include_inactive: bool = False) -> list[Customer]:
+def search(db: Session, query: str = "", include_inactive: bool = False) -> list[dict]:
     """
-    Search customers by name or phone.
+    Search customers by name or phone, with order counts (Phase 3.5).
 
     If query is empty, returns all active customers sorted by name_display.
 
@@ -162,13 +172,31 @@ def search(db: Session, query: str = "", include_inactive: bool = False) -> list
         include_inactive: if True, include deactivated customers
 
     Returns:
-        List of matching customers
+        List of dicts: {id, name_display, phone_raw, address, is_active,
+                        order_count, paid_order_count}
     """
+    # Base query with order counts (Phase 3.5)
+    base_query = db.query(
+        Customer.id,
+        Customer.name_display,
+        Customer.phone_raw,
+        Customer.address,
+        Customer.is_active,
+        func.count(Order.id).label('order_count'),
+        func.coalesce(
+            func.sum(case((Order.status == "PAID", 1), else_=0)),
+            0
+        ).label('paid_order_count')
+    ).outerjoin(Order, Order.customer_id == Customer.id)
+
+    # Apply active/inactive filter
+    if not include_inactive:
+        base_query = base_query.filter(Customer.is_active == True)
+
     if not query or not query.strip():
-        # Empty query: return all active, sorted by name
-        return db.query(Customer).filter(
-            Customer.is_active == (not include_inactive) if not include_inactive else True
-        ).order_by(Customer.name_display).all()
+        # Empty query: return all matching, sorted by name
+        results = base_query.group_by(Customer.id).order_by(Customer.name_display).all()
+        return [dict(r._mapping) for r in results]
 
     query = query.strip()
     results = []
@@ -177,29 +205,27 @@ def search(db: Session, query: str = "", include_inactive: bool = False) -> list
     # Try phone search (if query looks like phone)
     phone_key = normalize_phone(query)
     if phone_key:  # non-empty string
-        phone_results = db.query(Customer).filter(
-            Customer.phone_key == phone_key,
-            is_active_filter
-        ).all()
+        phone_results = base_query.filter(
+            Customer.phone_key == phone_key
+        ).group_by(Customer.id).all()
         results.extend(phone_results)
 
     # Always try name search (substring match on name_key)
-    # Split query into words and search for all words (OR logic)
     words = query.lower().split()
     filters = [Customer.name_key.contains(word) for word in words]
     if filters:
-        name_results = db.query(Customer).filter(
-            or_(*filters),
-            is_active_filter
-        ).all()
+        name_results = base_query.filter(
+            or_(*filters)
+        ).group_by(Customer.id).all()
         results.extend(name_results)
 
     # Deduplicate by id (phone search might also match name)
     seen = set()
     unique = []
-    for customer in results:
-        if customer.id not in seen:
-            seen.add(customer.id)
-            unique.append(customer)
+    for row in results:
+        row_dict = dict(row._mapping)
+        if row_dict['id'] not in seen:
+            seen.add(row_dict['id'])
+            unique.append(row_dict)
 
     return unique

@@ -68,10 +68,11 @@ export const api={
  enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})}),
  uploadProductImage:(id:number,file:File)=>uploadFile<Product>(`/api/products/${id}/image`,file),
  deleteProductImage:(id:number)=>request<Product>(`/api/products/${id}/image`,{method:"DELETE",body:JSON.stringify({})}),
- // Customers (Phase 3.2)
- searchCustomers:(query?:string)=>{
+ // Customers (Phase 3.2–3.5)
+ searchCustomers:(query?:string,includeInactive:boolean=false)=>{
   const q=new URLSearchParams();
   if(query&&query.trim())q.set("search",query.trim());
+  if(includeInactive)q.set("include_inactive","true");
   const qs=q.toString();
   return request<CustomerSearchResult[]>(`/api/customers${qs?`?${qs}`:""}`);
  },

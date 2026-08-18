@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import { ClipboardList, LayoutDashboard, Package, ShoppingCart, Settings as SettingsIcon } from "lucide-react";
+import { ClipboardList, LayoutDashboard, Package, ShoppingCart, Settings as SettingsIcon, Users } from "lucide-react";
 import { SettingsProvider, SettingsContext } from "./context/SettingsContext";
 import { CatalogProvider } from "./context/CatalogContext";
 import { POSProvider } from "./context/POSContext";
@@ -8,11 +8,12 @@ import { Orders } from "./pages/Orders";
 import { Inventory } from "./pages/Inventory";
 import { Dashboard } from "./pages/Dashboard";
 import { Products } from "./pages/Products";
+import { Customers } from "./pages/Customers";
 import { Settings } from "./pages/Settings";
 import { getRestaurantLetter } from "./utils/restaurant";
 
 function AppContent() {
-  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard" | "products" | "settings">("pos");
+  const [page, setPage] = useState<"pos" | "orders" | "inventory" | "dashboard" | "products" | "customers" | "settings">("pos");
   const [error, setError] = useState("");
 
   const settingsContext = useContext(SettingsContext);
@@ -65,6 +66,13 @@ function AppContent() {
             <span>Products</span>
           </button>
           <button
+            className={page === "customers" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("customers")}
+          >
+            <Users size={21} />
+            <span>Customers</span>
+          </button>
+          <button
             className={page === "settings" ? "nav-item active" : "nav-item"}
             onClick={() => setPage("settings")}
           >
@@ -85,6 +93,7 @@ function AppContent() {
         {page === "inventory" && <Inventory />}
         {page === "dashboard" && <Dashboard />}
         {page === "products" && <Products />}
+        {page === "customers" && <Customers />}
         {page === "settings" && <Settings />}
       </div>
     </div>

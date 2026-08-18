@@ -10,8 +10,9 @@ import tempfile
 import os
 import gc
 import time
+from datetime import datetime
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session, sessionmaker
 from app.database import Base, get_db
 from app.models.models import Customer
@@ -159,6 +160,39 @@ class TestCustomerCreate:
         # Verify in DB that phone_key was normalized
         customer = db_session.query(Customer).filter(Customer.id == data["id"]).first()
         assert customer.phone_key == "03001234567"  # ASCII normalized
+
+    def test_create_with_address_phase_3_5(self, test_client):
+        """Create customer with address (Phase 3.5)"""
+        response = test_client.post("/api/customers", json={
+            "name": "Ali Ahmed",
+            "phone": "0300-1234567",
+            "address": "123 Main Street, Karachi"
+        })
+        assert response.status_code == 201
+        data = response.json()
+        assert data["name_display"] == "Ali Ahmed"
+        assert data["address"] == "123 Main Street, Karachi"
+
+    def test_create_with_blank_address_stores_null(self, test_client):
+        """Create with empty/whitespace address -> NULL in database"""
+        response = test_client.post("/api/customers", json={
+            "name": "Ali",
+            "phone": "0300-1234567",
+            "address": "   "
+        })
+        assert response.status_code == 201
+        data = response.json()
+        assert data["address"] is None
+
+    def test_create_without_address_field_is_null(self, test_client):
+        """Create without address field -> address is NULL"""
+        response = test_client.post("/api/customers", json={
+            "name": "Ali",
+            "phone": "0300-1234567"
+        })
+        assert response.status_code == 201
+        data = response.json()
+        assert data["address"] is None
 
 
 # ============================================================================
@@ -350,6 +384,66 @@ class TestCustomerUpdate:
         customer = db_session.query(Customer).filter(Customer.id == customer_id).first()
         assert customer.name_display == "Original Name"
 
+    def test_update_address_phase_3_5(self, test_client, db_session):
+        """Update customer address (Phase 3.5)"""
+        # Create without address
+        response = test_client.post("/api/customers", json={
+            "name": "Ali",
+            "phone": "0300-1234567"
+        })
+        customer_id = response.json()["id"]
+        assert response.json()["address"] is None
+
+        # Update with address
+        response = test_client.put(f"/api/customers/{customer_id}", json={
+            "address": "456 Oak Avenue, Lahore"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] == "456 Oak Avenue, Lahore"
+
+        # Verify in DB
+        customer = db_session.query(Customer).filter(Customer.id == customer_id).first()
+        assert customer.address == "456 Oak Avenue, Lahore"
+
+    def test_update_address_overwrites_previous(self, test_client, db_session):
+        """Update address to new value -> overwrites previous address"""
+        # Create with address
+        response = test_client.post("/api/customers", json={
+            "name": "Ali",
+            "address": "Old Address"
+        })
+        customer_id = response.json()["id"]
+
+        # Update to new address
+        response = test_client.put(f"/api/customers/{customer_id}", json={
+            "address": "New Address"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] == "New Address"
+
+    def test_update_clear_address_sets_to_null(self, test_client, db_session):
+        """Update address to empty string -> NULL"""
+        # Create with address
+        response = test_client.post("/api/customers", json={
+            "name": "Ali",
+            "address": "123 Street"
+        })
+        customer_id = response.json()["id"]
+
+        # Clear address
+        response = test_client.put(f"/api/customers/{customer_id}", json={
+            "address": "   "
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["address"] is None
+
+        # Verify in DB
+        customer = db_session.query(Customer).filter(Customer.id == customer_id).first()
+        assert customer.address is None
+
 
 # ============================================================================
 # DEACTIVATE / ACTIVATE TESTS
@@ -460,3 +554,144 @@ class TestCustomerEdgeCases:
         """PATCH activate for non-existent -> 404"""
         response = test_client.patch("/api/customers/9999/activate")
         assert response.status_code == 404
+
+
+# ============================================================================
+# PHASE 3.5: ORDER COUNT TESTS
+# ============================================================================
+
+class TestCustomerOrderCounts:
+    """Phase 3.5: Order count (paid vs total) tests."""
+
+    @pytest.fixture(autouse=True)
+    def setup_with_orders(self, test_client, db_session):
+        """Create customers with various order scenarios."""
+        from app.models.models import Settings, Category, Product, Order, RestaurantTable
+
+        # Ensure settings exist
+        settings = db_session.query(Settings).filter(Settings.id == 1).first()
+        if not settings:
+            settings = Settings(id=1)
+            db_session.add(settings)
+            db_session.flush()
+
+        # Category and product
+        cat = Category(name_raw="Test", name_display="Test", name_key="test", active=True)
+        db_session.add(cat)
+        db_session.flush()
+
+        prod = Product(
+            category_id=cat.id, name_raw="Item", name_display="Item", name_key="item",
+            price=10000, stock=100, available=True, sku="SKU-001", min_stock=5, unit="pc"
+        )
+        db_session.add(prod)
+        db_session.flush()
+
+        # Customer 1: No orders
+        c1 = Customer(
+            name_raw="NoOrders", name_display="No Orders", name_key="noorders",
+            is_active=True
+        )
+        db_session.add(c1)
+        db_session.flush()
+
+        # Customer 2: 2 paid, 1 cancelled
+        c2 = Customer(
+            name_raw="MixedOrders", name_display="Mixed Orders", name_key="mixedorders",
+            is_active=True
+        )
+        db_session.add(c2)
+        db_session.flush()
+
+        o1 = Order(
+            order_number="ORD-00001", order_type="TAKEAWAY", customer_id=c2.id,
+            status="PAID", subtotal=10000, discount=0, tax=0, total=10000,
+            payment_method="CASH", amount_received=10000, change_amount=0
+        )
+        o2 = Order(
+            order_number="ORD-00002", order_type="TAKEAWAY", customer_id=c2.id,
+            status="PAID", subtotal=10000, discount=0, tax=0, total=10000,
+            payment_method="CASH", amount_received=10000, change_amount=0
+        )
+        o3 = Order(
+            order_number="ORD-00003", order_type="TAKEAWAY", customer_id=c2.id,
+            status="CANCELLED", subtotal=10000, discount=0, tax=0, total=10000,
+            payment_method="CASH", amount_received=10000, change_amount=0,
+            cancelled_at=datetime.utcnow(),
+            cancelled_reason="CUSTOMER_CHANGED_ORDER"
+        )
+        db_session.add_all([o1, o2, o3])
+
+        # Customer 3: Deactivated with orders
+        c3 = Customer(
+            name_raw="Inactive", name_display="Inactive", name_key="inactive",
+            is_active=False
+        )
+        db_session.add(c3)
+        db_session.flush()
+
+        o4 = Order(
+            order_number="ORD-00004", order_type="TAKEAWAY", customer_id=c3.id,
+            status="PAID", subtotal=10000, discount=0, tax=0, total=10000,
+            payment_method="CASH", amount_received=10000, change_amount=0
+        )
+        db_session.add(o4)
+        db_session.commit()
+
+        return {
+            "c1_id": c1.id,  # No orders
+            "c2_id": c2.id,  # 2 paid, 1 cancelled
+            "c3_id": c3.id   # Deactivated, 1 paid
+        }
+
+    def test_customer_with_no_orders_returns_zero_counts(self, test_client, setup_with_orders):
+        """Customer with no orders -> order_count=0, paid_order_count=0"""
+        c1_id = setup_with_orders["c1_id"]
+
+        response = test_client.get(f"/api/customers?search=NoOrders")
+        assert response.status_code == 200
+        results = response.json()
+
+        assert len(results) == 1
+        customer = results[0]
+        assert customer["order_count"] == 0
+        assert customer["paid_order_count"] == 0
+
+    def test_customer_with_mixed_orders_correct_counts(self, test_client, setup_with_orders):
+        """Customer with 2 paid + 1 cancelled -> order_count=3, paid_order_count=2"""
+        c2_id = setup_with_orders["c2_id"]
+
+        response = test_client.get(f"/api/customers?search=MixedOrders")
+        assert response.status_code == 200
+        results = response.json()
+
+        assert len(results) == 1
+        customer = results[0]
+        assert customer["order_count"] == 3, "Should count all orders (2 paid + 1 cancelled)"
+        assert customer["paid_order_count"] == 2, "Should count only paid orders"
+
+    def test_include_inactive_false_excludes_deactivated(self, test_client, setup_with_orders):
+        """include_inactive=false (default) -> excludes deactivated customers"""
+        response = test_client.get("/api/customers")  # No include_inactive param
+        assert response.status_code == 200
+        results = response.json()
+
+        # Should not include c3 (inactive)
+        result_ids = [r["id"] for r in results]
+        assert setup_with_orders["c3_id"] not in result_ids
+
+    def test_include_inactive_true_includes_deactivated(self, test_client, setup_with_orders):
+        """include_inactive=true -> includes deactivated customers"""
+        response = test_client.get("/api/customers?include_inactive=true")
+        assert response.status_code == 200
+        results = response.json()
+
+        # Should include c3 (inactive)
+        result_ids = [r["id"] for r in results]
+        assert setup_with_orders["c3_id"] in result_ids
+
+        # Verify the inactive customer's order count is correct
+        c3 = next(r for r in results if r["id"] == setup_with_orders["c3_id"])
+        assert c3["order_count"] == 1
+        assert c3["paid_order_count"] == 1
+        assert c3["is_active"] is False

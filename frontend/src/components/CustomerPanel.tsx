@@ -57,8 +57,14 @@ export function CustomerPanel() {
       setSearchText("");
       setSearchResults([]);
       setShowCreateForm(false);
+
+      // Phase 3.5: Prefill delivery address if customer selected AND orderType is DELIVERY
+      // AND the address field is currently empty (don't overwrite what was already typed)
+      if (state.orderType === "DELIVERY" && state.deliveryAddress.trim() === "" && customer.address) {
+        setDeliveryAddress(customer.address);
+      }
     },
-    [setCustomer]
+    [setCustomer, setDeliveryAddress, state.orderType, state.deliveryAddress]
   );
 
   const extractDigits = (text: string): string => {

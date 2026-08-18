@@ -26,7 +26,8 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
         customer = customer_service.create(
             db=db,
             name=payload.name,
-            phone=payload.phone
+            phone=payload.phone,
+            address=payload.address
         )
         return customer
     except (ValueError, customer_service.EmptyNameKeyError) as e:
@@ -36,19 +37,23 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
 @router.get("", response_model=list[CustomerSearchResult])
 def search_customers(
     search: str | None = Query(default=None),
+    include_inactive: bool = Query(default=False),
     db: Session = Depends(get_db)
 ):
     """
-    Search customers by name or phone.
+    Search customers by name or phone (Phase 3.5: with order counts).
 
-    If 'search' parameter is omitted or empty, returns all active customers
+    If 'search' parameter is omitted or empty, returns all matching customers
     ordered by name_display.
 
     If 'search' contains digits, also matches by normalized phone number.
     Always searches by name (substring match on name_key).
+
+    By default, returns only active customers. Set include_inactive=true to
+    include deactivated customers in results.
     """
     query = search if search else ""
-    results = customer_service.search(db=db, query=query, include_inactive=False)
+    results = customer_service.search(db=db, query=query, include_inactive=include_inactive)
     return results
 
 
@@ -67,13 +72,14 @@ def update_customer(
     payload: CustomerUpdate,
     db: Session = Depends(get_db)
 ):
-    """Update customer name and/or phone."""
+    """Update customer name, phone, and/or address."""
     try:
         customer = customer_service.update(
             db=db,
             customer_id=customer_id,
             name=payload.name,
-            phone=payload.phone
+            phone=payload.phone,
+            address=payload.address
         )
         return customer
     except ValueError as e:

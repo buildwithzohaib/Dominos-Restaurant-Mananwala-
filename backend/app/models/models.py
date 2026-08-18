@@ -102,8 +102,12 @@ class StockMovement(Base):
 class Customer(Base):
     """Customer information for recurring orders and delivery.
     Follows Rule 9 text normalization for names, phone_service for phone numbers.
-    No address field in Phase 3.2; addresses belong to orders (Rule 7 snapshots)
-    or will be in a separate delivery_addresses table (Phase 3.4)."""
+
+    address: Convenience prefill for delivery orders (Phase 3.5). Stores the last
+    delivery address used with this customer so repeat customers don't re-type it.
+    This is NOT the source of truth: order.delivery_address (Rule 7 snapshot) is.
+    Automatically updated when a DELIVERY order is confirmed; manually editable.
+    Nullable because not all customers use delivery."""
     __tablename__ = "customers"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # Name: three-field normalization (Rule 9)
@@ -113,6 +117,8 @@ class Customer(Base):
     # Phone: two fields (no display field; formatted on-demand)
     phone_raw: Mapped[str | None] = mapped_column(String(20), nullable=True)  # as typed by user
     phone_key: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)  # normalized 0XXX; NOT unique (family members share)
+    # Address: convenience prefill only (Rule 7 source of truth is order.delivery_address)
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)  # last used delivery address, for prefilling; NOT authoritative
     # Metadata
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # soft delete (Rule 6)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
