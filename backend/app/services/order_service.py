@@ -209,22 +209,28 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
     """Phase 7–8: mark an order CANCELLED with a required reason, then restore its inventory.
 
     Phase 7: The order row is never deleted — only its status/cancellation fields change —
-    and cancellation is a single atomic conditional UPDATE (WHERE status = 'PAID'), not a
-    read-then-write, so two concurrent cancel requests for the same order can't both
-    succeed: only the one that actually flips PAID -> CANCELLED wins, the other gets a
+    and cancellation is a single atomic conditional UPDATE (WHERE status IN ('OPEN', 'PAID')),
+    not a read-then-write, so two concurrent cancel requests for the same order can't both
+    succeed: only the one that actually flips to CANCELLED wins, the other gets a
     clean 400 instead of double-cancelling.
 
-    Phase 8: Inventory restoration (reversing the order's SALE StockMovements, identifiable
-    via StockMovement.reference == order.order_number) now happens in the same transaction
-    as the status change. The original SALE movements remain untouched; new CANCELLATION
-    movements are created for the restored quantities. If the status change fails (order
-    already cancelled or not found), the entire transaction is rolled back and no inventory
-    is restored. If inventory restoration fails after the status change succeeded, the
-    entire transaction is rolled back, so the order remains PAID.
+    Phase 8 (Stage 4 B3 onwards): Inventory restoration (reversing the order's SALE
+    StockMovements, identifiable via StockMovement.reference == order.order_number) happens
+    in the same transaction as the status change. The original SALE movements remain untouched;
+    new CANCELLATION movements are created for the restored quantities. PENDING items (never
+    sent to kitchen) have no SALE movements, so they are automatically excluded.
+    If the status change fails (order already cancelled or not found), the entire transaction
+    is rolled back and no inventory is restored. If inventory restoration fails after the
+    status change succeeded, the entire transaction is rolled back, so the order remains
+    in its previous state.
     """
     order = db.get(Order, order_id)
     if not order:
         raise HTTPException(404, "Order not found.")
+
+    # No status branching needed: PENDING items never produced a SALE movement, so an
+    # OPEN order's unsent items are excluded automatically. The same stock restoration
+    # path works correctly for both OPEN and PAID orders.
 
     label = CANCEL_REASON_LABELS[payload.reason]
     if payload.reason == "OTHER" and payload.note and payload.note.strip():
@@ -232,7 +238,7 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
 
     result = db.execute(
         update(Order)
-        .where(Order.id == order_id, Order.status == "PAID")
+        .where(Order.id == order_id, Order.status.in_(["OPEN", "PAID"]))
         .values(status="CANCELLED", cancelled_at=datetime.utcnow(), cancelled_reason=label)
     )
     if result.rowcount == 0:
@@ -240,7 +246,7 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
         current = db.get(Order, order_id)
         if current and current.status == "CANCELLED":
             raise HTTPException(400, "This order has already been cancelled.")
-        raise HTTPException(400, "Only a paid order can be cancelled.")
+        raise HTTPException(400, "Only an open or paid order can be cancelled.")
 
     # --- Phase 8: Inventory restoration, within the same transaction. ---
     # Find the original SALE movements for this order and restore each product's stock.
