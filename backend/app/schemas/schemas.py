@@ -119,6 +119,13 @@ class AddItemsIn(BaseModel):
     items: list[OrderItemCreate] = Field(min_length=1)
 
 
+class PayOrderIn(BaseModel):
+    """Close an OPEN order by taking payment. All money in paisa."""
+    payment_method: Literal["CASH", "CARD", "OTHER"] = "CASH"
+    discount: int = Field(default=0, ge=0)
+    amount_received: int = Field(default=0, ge=0)
+
+
 class OrderItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

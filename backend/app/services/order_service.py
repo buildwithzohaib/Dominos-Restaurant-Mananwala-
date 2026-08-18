@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
-from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate
+from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, PayOrderIn
 
 logger = logging.getLogger(__name__)
 
@@ -584,6 +584,81 @@ def send_batch_to_kitchen(db: Session, order_id: int) -> Order:
         item.sent_at = datetime.utcnow()
 
     # Do NOT change order's money fields or payment_method
+    db.commit()
+    order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+    return order_result
+
+
+def pay_order(db: Session, order_id: int, payload: PayOrderIn) -> Order:
+    """
+    Close an OPEN dine-in order by taking payment.
+
+    An order must be OPEN, have all items sent to kitchen (no PENDING items),
+    and pass payment validation before it can be paid. Payment details are
+    written only after all validations pass — a rejected payment leaves the
+    order exactly as it was.
+
+    Stock is NOT decremented here (Rule 8): it already moved in send_batch_to_kitchen.
+
+    Args:
+        db: database session
+        order_id: the order to pay
+        payload: PayOrderIn with payment_method, discount, amount_received
+
+    Returns:
+        Updated Order with status="PAID", paid_at set, and money fields finalized
+
+    Raises:
+        HTTPException for validation errors
+    """
+    # Load order and validate
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found.")
+    if order.status != "OPEN":
+        raise HTTPException(400, "Only an open order can be paid.")
+
+    # Order must have at least one item
+    if not order.items:
+        raise HTTPException(400, "This order has no items.")
+
+    # Reject if any item is still PENDING (batch_id IS NULL)
+    pending_count = db.query(OrderItem).filter(
+        OrderItem.order_id == order_id,
+        OrderItem.batch_id.is_(None),
+    ).count()
+    if pending_count > 0:
+        raise HTTPException(400, "Send all items to the kitchen before taking payment.")
+
+    # Recompute subtotal from ALL items
+    subtotal = sum(item.line_total for item in order.items)
+
+    # Clamp discount to subtotal
+    discount = min(payload.discount, subtotal)
+
+    # Compute tax using the order's snapshotted tax_rate
+    taxable = subtotal - discount
+    tax = (taxable * order.tax_rate + 5000) // 10000
+    total = taxable + tax
+
+    # Validate payment
+    change = 0
+    if payload.payment_method == "CASH":
+        if payload.amount_received < total:
+            raise HTTPException(400, f"Cash received must be at least {total}.")
+        change = payload.amount_received - total
+
+    # All validations passed. Write payment details.
+    order.status = "PAID"
+    order.payment_method = payload.payment_method
+    order.subtotal = subtotal
+    order.discount = discount
+    order.tax = tax
+    order.total = total
+    order.amount_received = payload.amount_received
+    order.change_amount = change
+    order.paid_at = datetime.utcnow()
+
     db.commit()
     order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
     return order_result
