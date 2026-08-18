@@ -489,3 +489,100 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
     db.commit()
     order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
     return order_result
+
+
+def send_batch_to_kitchen(db: Session, order_id: int) -> Order:
+    """
+    Send all currently PENDING items on an OPEN order to the kitchen as one batch.
+
+    This is the FIRST and ONLY place stock is decremented (Rule 8). Items are stamped
+    with a batch_id (1, 2, 3...) and sent_at timestamp. If ANY item cannot be decremented
+    (insufficient stock), the ENTIRE transaction is rolled back (all-or-nothing).
+
+    Batch numbering is per-order: order 5 and order 9 each start at batch 1.
+
+    Args:
+        db: database session
+        order_id: the order to send to kitchen
+
+    Returns:
+        Updated Order with PENDING items now stamped and stock decremented
+
+    Raises:
+        HTTPException for validation errors
+    """
+    # Load order and validate
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found.")
+    if order.status != "OPEN":
+        raise HTTPException(400, "Only an open order can be sent to the kitchen.")
+
+    # Collect PENDING items (batch_id IS NULL)
+    pending_items = db.query(OrderItem).filter(
+        OrderItem.order_id == order_id,
+        OrderItem.batch_id.is_(None),
+    ).all()
+    if not pending_items:
+        raise HTTPException(400, "There are no new items to send.")
+
+    # Determine next batch number for this order
+    max_batch = db.query(func.max(OrderItem.batch_id)).filter(
+        OrderItem.order_id == order_id
+    ).scalar()
+    next_batch = (max_batch or 0) + 1
+
+    # Aggregate PENDING items by product_id
+    requested: dict[int, int] = defaultdict(int)
+    for item in pending_items:
+        requested[item.product_id] += item.quantity
+
+    # Decrement stock and write StockMovements for each product (all-or-nothing).
+    # Each product: decrement, refresh, create movement — all in one iteration
+    # to prevent another transaction from changing stock between operations.
+    for product_id, quantity in requested.items():
+        product = db.get(Product, product_id)
+        if not product:
+            raise HTTPException(400, "Product not found.")
+
+        # Atomic conditional decrement
+        result = db.execute(
+            update(Product)
+            .where(Product.id == product_id, Product.stock >= quantity)
+            .values(stock=Product.stock - quantity, updated_at=datetime.utcnow())
+        )
+        if result.rowcount == 0:
+            db.rollback()
+            product = db.get(Product, product_id)
+            name = product.name_display if product else product_id
+            available = product.stock if product else 0
+            raise HTTPException(400, f'Only {available} of "{name}" available.')
+
+        # Refresh to get the new stock value and write StockMovement immediately
+        db.refresh(product)
+        stock_after = product.stock
+        stock_before = stock_after + quantity
+
+        db.add(StockMovement(
+            item_type="PRODUCT",
+            item_id=product.id,
+            item_name=product.name_display,
+            movement_type="SALE",
+            quantity_change=-quantity,
+            reason="Sale",
+            supplier=None,
+            purchase_price=None,
+            stock_before=stock_before,
+            stock_after=stock_after,
+            reference=order.order_number,
+        ))
+
+    # Stamp every PENDING item with batch_id and sent_at
+    for item in pending_items:
+        item.batch_id = next_batch
+        item.sent_at = datetime.utcnow()
+
+    # Do NOT change order's money fields or payment_method
+    db.commit()
+    order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+    return order_result
