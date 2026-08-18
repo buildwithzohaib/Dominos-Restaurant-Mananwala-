@@ -108,6 +108,11 @@ class OrderCreate(BaseModel):
     payment_method: Literal["CASH", "CARD", "OTHER"] = "CASH"
     amount_received: int = Field(default=0, ge=0)  # paisa
 
+class OpenOrderCreate(BaseModel):
+    """Create an open dine-in order (running tab). No items, no payment yet."""
+    table_id: int
+    customer_id: int | None = None
+
 class OrderItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

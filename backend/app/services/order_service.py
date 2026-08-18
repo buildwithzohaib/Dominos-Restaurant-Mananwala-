@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
-from app.schemas.schemas import OrderCancelIn, OrderCreate
+from app.schemas.schemas import OrderCancelIn, OrderCreate, OpenOrderCreate
 
 logger = logging.getLogger(__name__)
 
@@ -286,3 +286,94 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
 
     db.commit()
     return db.query(Order).options(joinedload(Order.items)).filter(Order.id == order_id).first()
+
+
+def create_open_order(db: Session, payload: OpenOrderCreate) -> Order:
+    """
+    Create an OPEN dine-in order for a table (running tab).
+
+    Order starts with status="OPEN", no items, no payment, no stock deduction.
+    Items are added later via add_items_to_order (not yet implemented).
+    Payment is taken later via pay_order (not yet implemented).
+
+    Args:
+        db: database session
+        payload: OpenOrderCreate with table_id and optional customer_id
+
+    Returns:
+        Order with status="OPEN", empty items, all monetary fields = 0
+
+    Raises:
+        HTTPException for validation errors
+    """
+    # Validate table
+    table = db.get(RestaurantTable, payload.table_id)
+    if not table or not table.active:
+        raise HTTPException(400, "Selected table is not available.")
+
+    # Validate customer if provided
+    if payload.customer_id is not None:
+        customer = db.get(Customer, payload.customer_id)
+        if not customer:
+            raise HTTPException(404, "Customer not found.")
+        if not customer.is_active:
+            raise HTTPException(400, f'"{customer.name_display}" is inactive.')
+
+    # Explicit check: no other OPEN order on this table
+    existing_open = db.query(Order).filter(
+        Order.table_id == payload.table_id,
+        Order.status == "OPEN"
+    ).first()
+    if existing_open:
+        raise HTTPException(400, f'"{table.name}" already has an open order.')
+
+    # Get tax_rate from settings (snapshot per Rule 7)
+    settings = db.query(Settings).filter(Settings.id == 1).first()
+    tax_rate = settings.tax_rate if settings and settings.tax_enabled else 0
+
+    # Insert order with retry loop for order_number uniqueness
+    order = None
+    for _ in range(5):
+        next_number = db.query(Order).count() + 1
+        candidate = Order(
+            order_number=f"ORD-{next_number:05d}",
+            order_type="DINE_IN",
+            table_id=payload.table_id,
+            customer_id=payload.customer_id,
+            status="OPEN",
+            payment_method=None,  # NULL, never ""
+            subtotal=0,
+            discount=0,
+            tax=0,
+            total=0,
+            amount_received=0,
+            change_amount=0,
+            tax_rate=tax_rate,
+            delivery_charge=None,
+            delivery_address=None,
+        )
+        db.add(candidate)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            # This branch handles the race condition where another concurrent request
+            # creates an OPEN order on the same table between our explicit pre-check
+            # (above) and our INSERT. It is unreachable in unit tests (the explicit
+            # pre-check always fires first) but necessary for production concurrency.
+            existing_open = db.query(Order).filter(
+                Order.table_id == payload.table_id,
+                Order.status == "OPEN"
+            ).first()
+            if existing_open:
+                raise HTTPException(400, f'"{table.name}" already has an open order.')
+            continue
+        order = candidate
+        break
+
+    if order is None:
+        raise HTTPException(409, "Could not create the order, please try again.")
+
+    db.commit()
+    order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+    return order_result
