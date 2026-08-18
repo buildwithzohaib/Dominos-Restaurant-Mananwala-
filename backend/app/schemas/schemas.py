@@ -133,7 +133,7 @@ class OrderOut(BaseModel):
     tax_rate: int | None  # basis points at order time (snapshot per Rule 7)
     delivery_charge: int | None  # paisa at order time (snapshot per Rule 7); NULL for non-delivery
     total: int  # paisa
-    payment_method: str
+    payment_method: str | None = None  # NULL while the order is OPEN (not yet paid)
     amount_received: int  # paisa
     change_amount: int  # paisa, can be negative
     created_at: datetime

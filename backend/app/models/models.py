@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -137,15 +137,20 @@ class Order(Base):
     order_number: Mapped[str] = mapped_column(String(30), unique=True, index=True)
     order_type: Mapped[str] = mapped_column(String(30), default="TAKEAWAY")
     table_id: Mapped[int | None] = mapped_column(ForeignKey("restaurant_tables.id"), nullable=True)
-    # PAID | CANCELLED — the one status field for an order (Phase 7). Renamed from
-    # the old "COMPLETED" default to match the terminology Phase 7's Orders page
-    # uses; see seed.py's migration for the one-time backfill of pre-existing rows.
+    # OPEN | PAID | CANCELLED — the one status field for an order.
+    # OPEN (Stage 4) is a dine-in running tab: items may still be added, and the
+    # order has not been paid yet. It becomes PAID or CANCELLED exactly once.
+    # Default stays "PAID" so the existing single-shot takeaway/delivery flow
+    # (create + pay in one call) is unchanged; create_open_order() sets "OPEN"
+    # explicitly.
     status: Mapped[str] = mapped_column(String(30), default="PAID")
     subtotal: Mapped[int] = mapped_column(Integer)
     discount: Mapped[int] = mapped_column(Integer, default=0)
     tax: Mapped[int] = mapped_column(Integer, default=0)
     total: Mapped[int] = mapped_column(Integer)
-    payment_method: Mapped[str] = mapped_column(String(30))
+    # CASH | CARD | OTHER, or NULL while the order is still OPEN (not yet paid).
+    # NULL is the only representation of "unpaid" — never use an empty string.
+    payment_method: Mapped[str | None] = mapped_column(String(30), nullable=True)
     amount_received: Mapped[int] = mapped_column(Integer, default=0)
     change_amount: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
@@ -162,6 +167,19 @@ class Order(Base):
     customer: Mapped["Customer | None"] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
 
+    # Stage 4 A1: at most one OPEN order per table. PAID and CANCELLED rows are
+    # excluded by the WHERE clause, so a table can be re-seated any number of times.
+    # Declared here as well as in migration ad8ba306eabb so that databases built by
+    # Base.metadata.create_all() (the test suite) also get the constraint —
+    # otherwise a "reject second OPEN order" test would pass without enforcing it.
+    # Must be Index, not UniqueConstraint: UniqueConstraint ignores sqlite_where and
+    # would create an unconditional unique index, limiting each table to one order
+    # for all time.
+    __table_args__ = (
+        Index('ix_one_open_per_table', 'table_id', unique=True,
+              sqlite_where=text("status = 'OPEN'")),
+    )
+
 class OrderItem(Base):
     __tablename__ = "order_items"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -171,4 +189,10 @@ class OrderItem(Base):
     quantity: Mapped[int] = mapped_column(Integer)
     price: Mapped[int] = mapped_column(Integer)
     line_total: Mapped[int] = mapped_column(Integer)
+    # --- Stage 4: KOT batching ---
+    # batch_id: NULL = PENDING (not sent to kitchen yet); 1, 2, 3... = sent in that
+    # batch. Stock is deducted once per batch when it is sent (Rule 8), not on payment.
+    batch_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # sent_at: timestamp the batch was sent to the kitchen; NULL while PENDING.
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     order: Mapped["Order"] = relationship(back_populates="items")
