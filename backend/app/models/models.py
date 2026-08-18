@@ -158,6 +158,8 @@ class Order(Base):
     # flipped to status="CANCELLED" with these two fields recorded alongside it. ---
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cancelled_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # --- Payment timestamp (Stage 4) — records when the order was paid, NULL while OPEN ---
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # --- Customer and delivery (Phase 3.3-3.4) — snapshots per Rule 7 ---
     customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True)  # NULL for walk-ins
     delivery_address: Mapped[str | None] = mapped_column(String(300), nullable=True)  # snapshot of address at order time, NULL for non-delivery

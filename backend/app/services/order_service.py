@@ -115,6 +115,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
             payment_method=payload.payment_method,
             amount_received=received,
             change_amount=change,
+            paid_at=datetime.utcnow(),
         )
         db.add(candidate)
         try:
