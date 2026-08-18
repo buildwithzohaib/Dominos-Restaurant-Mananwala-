@@ -419,3 +419,59 @@ def test_get_order_has_paid_at_and_batch_id(test_client, setup_test_data):
     data = response.json()
     assert data["paid_at"] is not None
     assert all(item["batch_id"] is not None for item in data["items"])
+
+
+def test_post_open_returns_table_name(test_client, setup_test_data):
+    """POST /api/orders/open returns a body where table.name equals the seeded table's name."""
+    response = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_a_id']})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["table"] is not None
+    assert data["table"]["name"] == "Patio A"
+    assert data["table"]["id"] == setup_test_data['table_a_id']
+
+
+def test_get_orders_open_returns_table_name(test_client, setup_test_data):
+    """GET /api/orders?status=OPEN returns orders whose table.name is populated."""
+    # Create an open order
+    open_response = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_a_id']})
+    order_id = open_response.json()["id"]
+
+    # Query for OPEN orders
+    response = test_client.get("/api/orders?status=OPEN")
+
+    assert response.status_code == 200
+    data = response.json()
+    order = next((o for o in data if o["id"] == order_id), None)
+    assert order is not None
+    assert order["table"] is not None
+    assert order["table"]["name"] == "Patio A"
+
+
+def test_takeaway_order_has_null_table(test_client, setup_test_data):
+    """A TAKEAWAY order (table_id null) returns table as null, not an error."""
+    response = test_client.post(
+        "/api/orders",
+        json={
+            "order_type": "TAKEAWAY",
+            "items": [{"product_id": setup_test_data['prod1_id'], "quantity": 1}],
+            "payment_method": "CASH",
+            "amount_received": 50000,
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["table_id"] is None
+    assert data["table"] is None
+
+
+def test_table_id_still_present(test_client, setup_test_data):
+    """table_id is still present in the response (it was not removed)."""
+    response = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_a_id']})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "table_id" in data
+    assert data["table_id"] == setup_test_data['table_a_id']

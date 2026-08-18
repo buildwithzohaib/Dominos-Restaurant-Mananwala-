@@ -21,7 +21,7 @@ def list_orders(
     status: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    query = db.query(Order).options(joinedload(Order.items))
+    query = db.query(Order).options(joinedload(Order.items), joinedload(Order.table))
     if search and search.strip():
         query = query.filter(Order.order_number.ilike(f"%{search.strip()}%"))
     if status and status.strip():
@@ -30,7 +30,7 @@ def list_orders(
 
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(order_id: int, db: Session = Depends(get_db)):
-    order = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order_id).first()
+    order = db.query(Order).options(joinedload(Order.items), joinedload(Order.table)).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(404, "Order not found.")
     return order

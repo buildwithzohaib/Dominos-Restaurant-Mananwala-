@@ -54,6 +54,13 @@ class CustomerNested(BaseModel):
     name_display: str
     phone_raw: str | None
 
+class TableNested(BaseModel):
+    """Nested table representation for OrderOut"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    seats: int
+
 class CategoryCreate(BaseModel):
     name: str
 
@@ -144,6 +151,7 @@ class OrderOut(BaseModel):
     order_number: str
     order_type: str
     table_id: int | None
+    table: TableNested | None = None
     customer: CustomerNested | None  # NULL for walk-ins
     delivery_address: str | None  # snapshot at order time; NULL for non-delivery
     status: str
