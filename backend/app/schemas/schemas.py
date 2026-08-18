@@ -113,6 +113,12 @@ class OpenOrderCreate(BaseModel):
     table_id: int
     customer_id: int | None = None
 
+
+class AddItemsIn(BaseModel):
+    """Add items to an existing OPEN order. Items start PENDING (batch_id NULL)."""
+    items: list[OrderItemCreate] = Field(min_length=1)
+
+
 class OrderItemOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

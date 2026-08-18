@@ -3,12 +3,12 @@ from datetime import datetime
 import logging
 
 from fastapi import HTTPException
-from sqlalchemy import update
+from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
-from app.schemas.schemas import OrderCancelIn, OrderCreate, OpenOrderCreate
+from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate
 
 logger = logging.getLogger(__name__)
 
@@ -373,6 +373,118 @@ def create_open_order(db: Session, payload: OpenOrderCreate) -> Order:
 
     if order is None:
         raise HTTPException(409, "Could not create the order, please try again.")
+
+    db.commit()
+    order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+    return order_result
+
+
+def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order:
+    """
+    Add items to an existing OPEN dine-in order (running tab).
+
+    Items are inserted with batch_id=None (PENDING), sent_at=None. No stock is
+    deducted (per Rule 8: stock moves only on Send to Kitchen, per batch in B3).
+    Order's money fields (subtotal, tax, total) are recomputed from ALL items
+    (existing + new) using the order's snapshotted tax_rate.
+
+    Args:
+        db: database session
+        order_id: the order to add items to
+        payload: AddItemsIn with items list
+
+    Returns:
+        Updated Order with all items (existing + new), with recomputed totals
+
+    Raises:
+        HTTPException for validation errors
+    """
+    # Load order and validate it exists and is OPEN
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found.")
+    if order.status != "OPEN":
+        raise HTTPException(400, "Only an open order can be modified.")
+
+    # Aggregate incoming items by product_id
+    requested: dict[int, int] = defaultdict(int)
+    for item in payload.items:
+        requested[item.product_id] += item.quantity
+
+    # Validate each product and check stock, accounting for PENDING items
+    products: dict[int, Product] = {}
+    for product_id, quantity in requested.items():
+        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(400, "Product not found.")
+        if not product.available:
+            raise HTTPException(400, f'"{product.name_display}" is disabled.')
+        if not product.category.active:
+            raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
+        if product.stock <= 0:
+            raise HTTPException(400, f'"{product.name_display}" is out of stock.')
+
+        # Stock check must account for PENDING items already on this order
+        # Sum the quantities of this order's existing PENDING items (batch_id IS NULL)
+        pending_total = db.query(
+            func.coalesce(func.sum(OrderItem.quantity), 0)
+        ).filter(
+            OrderItem.order_id == order_id,
+            OrderItem.product_id == product_id,
+            OrderItem.batch_id.is_(None),
+        ).scalar()
+        total_needed = pending_total + quantity
+
+        if product.stock < total_needed:
+            available = product.stock - pending_total
+            raise HTTPException(400, f'Only {available} of "{product.name_display}" available.')
+
+        products[product_id] = product
+
+    # Add or merge OrderItem rows for each aggregated product
+    # Do NOT decrement stock; no StockMovement rows are created
+    # For each product: if a PENDING line (batch_id IS NULL) exists, merge into it.
+    # Otherwise, create a new line. Never merge into sent lines (batch_id NOT NULL).
+    for product_id, quantity in requested.items():
+        product = products[product_id]
+
+        # Look for an existing PENDING line (batch_id IS NULL) for this product
+        existing_pending = db.query(OrderItem).filter(
+            OrderItem.order_id == order.id,
+            OrderItem.product_id == product_id,
+            OrderItem.batch_id.is_(None),
+        ).first()
+
+        if existing_pending:
+            # Merge: increase quantity and recompute line_total using the line's original price
+            existing_pending.quantity += quantity
+            existing_pending.line_total = existing_pending.price * existing_pending.quantity
+        else:
+            # No PENDING line exists; create a new one
+            db.add(OrderItem(
+                order_id=order.id,
+                product_id=product.id,
+                product_name=product.name_display,
+                quantity=quantity,
+                price=product.price,
+                line_total=product.price * quantity,
+                batch_id=None,
+                sent_at=None,
+            ))
+
+    # Recompute order's money fields from ALL items (existing + new)
+    db.flush()  # Ensure new items are in the session before we query
+    all_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    subtotal = sum(item.line_total for item in all_items)
+    taxable = subtotal - order.discount
+    tax = (taxable * order.tax_rate + 5000) // 10000
+    total = taxable + tax
+
+    # Update order's money fields
+    order.subtotal = subtotal
+    order.tax = tax
+    order.total = total
+    # Leave discount, amount_received, change_amount, payment_method, delivery_charge unchanged
 
     db.commit()
     order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
