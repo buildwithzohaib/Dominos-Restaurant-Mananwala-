@@ -1,10 +1,10 @@
 # CURRENT STATE AUDIT — My Restaurant POS
 
-**Date:** 2026-08-18  
+**Date:** 2026-08-19  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
 **Stage 4 (Running Tabs):** ✅ COMPLETE (backend only)  
-**Git HEAD:** 6232d09 (4.C2)
+**Git HEAD:** 266502f (4.B6)
 
 ---
 
@@ -276,7 +276,8 @@ Services exist and are the only place business logic lives:
 
 **Stage 4 New Functions in `order_service`:**
 - `create_open_order()` — Opens a DINE_IN tab (OPEN status, payment_method NULL, tax_rate snapshotted)
-- `add_items_to_order()` — Adds items as PENDING (batch_id NULL, doesn't decrement stock)
+- `add_items_to_order()` — Adds items as PENDING (batch_id NULL, doesn't decrement stock); merges repeat products into existing PENDING line
+- `update_pending_item()` — Modifies or deletes a PENDING item; quantity=0 deletes the item; availability/category checks only on increases (decreases/deletes always allowed)
 - `send_batch_to_kitchen()` — Only place stock is decremented; stamps batch_id (per-order numbering) and sent_at
 - `pay_order()` — Closes OPEN order (payment collection, tax calculation, no stock touch)
 - `cancel_order()` — Now accepts OPEN as well as PAID; restores stock from SALE movements only
@@ -284,6 +285,7 @@ Services exist and are the only place business logic lives:
 **Stage 4 New Routes (in `app/routes/orders.py`):**
 - `POST /api/orders/open` → `create_open_order()`
 - `POST /api/orders/{id}/items` → `add_items_to_order()`
+- `PATCH /api/orders/{order_id}/items/{item_id}` → `update_pending_item()` (Stage 4.B6)
 - `POST /api/orders/{id}/send` → `send_batch_to_kitchen()`
 - `POST /api/orders/{id}/pay` → `pay_order()`
 - `GET  /api/orders?status=OPEN` → Lists active running tabs (existing filter)
@@ -467,7 +469,7 @@ All money formatting uses **`.toFixed(2)`** with hardcoded **"Rs. "** prefix.
 
 **Pattern:** No shared `conftest.py`. Each test file builds its own database independently.
 
-**Why:** 17 test files already define their own fixtures. Introducing a shared `conftest.py` now would mean touching all of them and risking a suite that currently passes 310 tests, for no benefit. New test files copy the existing per-file pattern because that is what the project already does — not because `conftest.py` is broken.
+**Why:** 18 test files already define their own fixtures. Introducing a shared `conftest.py` now would mean touching all of them and risking a suite that currently passes 328 tests, for no benefit. New test files copy the existing per-file pattern because that is what the project already does — not because `conftest.py` is broken.
 
 **Standard Pattern (from Stage 4 test files):**
 
@@ -523,7 +525,7 @@ def db() -> Session:
 - Each test file is independent and self-contained
 - The Windows-specific teardown pattern (fd close, dispose, gc.collect, retry os.remove) is what each file needs
 
-**Test Status:** 310 tests passing (17 test files in total)
+**Test Status:** 328 tests passing (18 test files in total)
 
 ---
 
@@ -761,15 +763,16 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 **What Stage 4 Implemented (Backend):**
 - ✅ Order status: OPEN (in addition to PAID, CANCELLED)
 - ✅ `create_open_order()` — creates OPEN order with payment_method NULL, tax_rate snapshotted
-- ✅ `add_items_to_order()` — appends items as PENDING (batch_id NULL), merges same-product lines
+- ✅ `add_items_to_order()` — appends items as PENDING (batch_id NULL), merges same-product lines (defensive: multiple PENDING lines of same product cannot be created through service layer)
+- ✅ `update_pending_item()` — modifies or deletes PENDING items; quantity=0 deletes; availability checks only on increases (Stage 4.B6)
 - ✅ `send_batch_to_kitchen()` — THE ONLY stock deduction point; stamps batch_id (1, 2, 3...) and sent_at
 - ✅ `pay_order()` — closes OPEN order (rejects if any PENDING items remain)
 - ✅ `cancel_order()` — now accepts OPEN; restores stock from SALE movements (PENDING excluded)
 - ✅ Partial unique index `ix_one_open_per_table` ensures only one OPEN order per table
-- ✅ Migrations: ad8ba306eabb + b3d5e7f9a1c3
-- ✅ Schemas: OpenOrderCreate, AddItemsIn, PayOrderIn (nested TableNested)
-- ✅ Routes: POST /open, /items, /send, /pay (all return OrderOut with table nested)
-- ✅ 310 tests passing (17 test files)
+- ✅ Migrations: ad8ba306eabb + b3d5e7f9a1c3 (no new migrations for B6)
+- ✅ Schemas: OpenOrderCreate, AddItemsIn, UpdatePendingItemIn, PayOrderIn (nested TableNested)
+- ✅ Routes: POST /open, /items, PATCH /items/{item_id}, /send, /pay (all return OrderOut with table nested)
+- ✅ 328 tests passing across 18 test files
 
 **Schema Changes:** 
 - `orders.status` now supports OPEN (was: PAID, CANCELLED)
@@ -779,6 +782,12 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 - `order_items.batch_id` added (NULL=PENDING, number=SENT)
 - `order_items.sent_at` added (when batch was sent to kitchen)
 - Money: All converted to Integer (paisa)
+
+**Pydantic Schemas (in `app/schemas/schemas.py`):**
+- `OpenOrderCreate` — Create OPEN running tab (table_id, optional customer_id)
+- `AddItemsIn` — Add items to OPEN order (items list with product_id, quantity)
+- `UpdatePendingItemIn` — Update quantity of PENDING item (quantity; 0 = delete)
+- `PayOrderIn` — Close OPEN order (payment_method, discount, amount_received)
 
 **Frontend NOT YET IMPLEMENTED:**
 - Order panel buttons for open order workflow
@@ -873,7 +882,7 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 | **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working |
 | **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
-| **Tests** | ✅ 310 passing | Comprehensive coverage of all Stage 4 functions |
+| **Tests** | ✅ 328 passing | Comprehensive coverage of all Stage 4 functions across 18 test files |
 
 ### Frontend Status (Phases 1-10, Stage 4 Frontend Not Started)
 
@@ -904,8 +913,8 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-**Report Date:** 2026-08-18  
-**Git HEAD:** 6232d09 (4.C2)  
-**Test Status:** 310 passing, 0 failing  
-**Alembic Status:** Clean (no pending migrations)  
+**Report Date:** 2026-08-19  
+**Git HEAD:** 266502f (4.B6)  
+**Test Status:** 328 passing, 0 failing  
+**Alembic Status:** Clean (no pending migrations; head b3d5e7f9a1c3)  
 **Next Work:** Stage 4 Frontend (order panel, active orders, KOT, tables UI)
