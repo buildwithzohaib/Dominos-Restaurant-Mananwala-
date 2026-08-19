@@ -1,7 +1,7 @@
 import {createContext,useCallback,useContext,useMemo,useReducer,type ReactNode} from "react";
 import type {CartItem,Customer,OrderType,PaymentMethod,Product,RestaurantTable} from "../types";
 import { SettingsContext } from "./SettingsContext";
-interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;paymentMethod:PaymentMethod;selectedCustomer:Customer|null;deliveryAddress:string;deliveryChargeText:string}
+interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;paymentMethod:PaymentMethod;selectedCustomer:Customer|null;deliveryAddress:string;deliveryChargeText:string;serverId?:number}
 type Action={type:"ADD";product:Product}|{type:"SET_QTY";productId:number;quantity:number}|{type:"REMOVE";productId:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]}|{type:"CUSTOMER";value:Customer|null}|{type:"DELIVERY_ADDRESS";value:string}|{type:"DELIVERY_CHARGE";value:string};
 const initialState:State={cart:[],orderType:"TAKEAWAY",selectedTable:null,discount:0,paymentMethod:"CASH",selectedCustomer:null,deliveryAddress:"",deliveryChargeText:""};
 function reducer(s:State,a:Action):State{

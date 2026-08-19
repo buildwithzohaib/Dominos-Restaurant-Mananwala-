@@ -80,5 +80,11 @@ export const api={
  createCustomer:(p:CustomerCreateInput)=>request<Customer>("/api/customers",{method:"POST",body:JSON.stringify(p)}),
  updateCustomer:(id:number,p:CustomerUpdateInput)=>request<Customer>(`/api/customers/${id}`,{method:"PUT",body:JSON.stringify(p)}),
  deactivateCustomer:(id:number)=>request<Customer>(`/api/customers/${id}/deactivate`,{method:"PATCH",body:JSON.stringify({})}),
- activateCustomer:(id:number)=>request<Customer>(`/api/customers/${id}/activate`,{method:"PATCH",body:JSON.stringify({})})
+ activateCustomer:(id:number)=>request<Customer>(`/api/customers/${id}/activate`,{method:"PATCH",body:JSON.stringify({})}),
+ // DINE_IN running tab (Phase 4.D2)
+ openOrder:(p:{table_id:number;customer_id?:number|null})=>request<Order>("/api/orders/open",{method:"POST",body:JSON.stringify(p)}),
+ addItemsToOrder:(id:number,p:{items:{product_id:number;quantity:number}[]})=>request<Order>(`/api/orders/${id}/items`,{method:"POST",body:JSON.stringify(p)}),
+ updatePendingItem:(id:number,item_id:number,p:{quantity:number})=>request<Order>(`/api/orders/${id}/items/${item_id}`,{method:"PATCH",body:JSON.stringify(p)}),
+ sendBatchToKitchen:(id:number)=>request<Order>(`/api/orders/${id}/send`,{method:"POST",body:JSON.stringify({})}),
+ payOrderDineIn:(id:number,p:{payment_method:PaymentMethod;discount:number;amount_received:number})=>request<Order>(`/api/orders/${id}/pay`,{method:"POST",body:JSON.stringify(p)})
 };
