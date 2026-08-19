@@ -20,6 +20,7 @@ export interface StockPurchaseInput { quantity:number; purchase_price?:number; /
 export interface StockAdjustmentInput { quantity_change:number; reason:AdjustmentReason; note?:string; }
 export interface StockMovement { id:number; item_type:string; /* 'PRODUCT' | 'INGREDIENT' */ item_id:number; item_name:string; movement_type:MovementType; quantity_change:number; reason:string; supplier?:string|null; purchase_price?:number|null; /* paisa */ stock_before:number; stock_after:number; reference?:string|null; created_at:string; }
 export interface RestaurantTable { id:number; name:string; seats:number; active:boolean; }
+export interface RestaurantTableNested { id:number; name:string; seats:number; }
 export type CartItem={kind:"local";product:Product;quantity:number}|{kind:"server";itemId:number;productId:number;productName:string;price:number;lineTotal:number;quantity:number;batchId:number|null;sentAt:string|null};
 export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ batch_id:number|null; sent_at:string|null; }
 // Customers (Phase 3.2–3.5)
@@ -32,7 +33,7 @@ export interface CustomerUpdateInput { name?:string; phone?:string|null; address
 export type OrderStatus = "PAID" | "CANCELLED";
 export type CancellationReason = "CUSTOMER_CHANGED_ORDER" | "WRONG_ORDER" | "PAYMENT_ISSUE" | "DUPLICATE_ORDER" | "OTHER";
 export interface OrderCancelInput { reason:CancellationReason; note?:string; }
-export interface Order { id:number; order_number:string; order_type:OrderType; table_id?:number|null; customer:CustomerInfo|null; delivery_address:string|null; tax_rate:number|null; delivery_charge:number|null; /* paisa */ status:OrderStatus; subtotal:number; /* paisa */ discount:number; /* paisa */ tax:number; /* paisa */ total:number; /* paisa */ payment_method:PaymentMethod; amount_received:number; /* paisa */ change_amount:number; /* paisa */ created_at:string; cancelled_at?:string|null; cancelled_reason?:string|null; items:OrderItem[]; }
+export interface Order { id:number; order_number:string; order_type:OrderType; table_id?:number|null; table:RestaurantTableNested|null; customer:CustomerInfo|null; delivery_address:string|null; tax_rate:number|null; delivery_charge:number|null; /* paisa */ status:OrderStatus; subtotal:number; /* paisa */ discount:number; /* paisa */ tax:number; /* paisa */ total:number; /* paisa */ payment_method:PaymentMethod; amount_received:number; /* paisa */ change_amount:number; /* paisa */ created_at:string; paid_at:string|null; cancelled_at?:string|null; cancelled_reason?:string|null; items:OrderItem[]; }
 // Dashboard (Phase 9) — real-time business metrics
 export interface HourlySale { hour:number; revenue:number; /* paisa */ }
 export interface TopProduct { product_name:string; quantity_sold:number; revenue:number; /* paisa */ }

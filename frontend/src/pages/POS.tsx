@@ -17,7 +17,7 @@ import { getRestaurantLetter } from "../utils/restaurant";
 import { api } from "../services/api";
 import type { OrderType, Product, RestaurantTable } from "../types";
 
-export function POS() {
+export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void }) {
   const {
     addProduct,
     state,
@@ -235,9 +235,13 @@ export function POS() {
 
 
         {openOrderCount > 0 && (
-          <div className="topbar-indicator">
+          <button
+            className="topbar-indicator"
+            onClick={onActiveOrdersClick}
+            title="View active orders"
+          >
             Open orders: {openOrderCount}
-          </div>
+          </button>
         )}
 
         <div className="topbar-user">

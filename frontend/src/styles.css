@@ -813,6 +813,46 @@ h2 {
   color: #667085;
 }
 
+/* Active Orders page — larger, higher-contrast for quick scanning */
+.active-orders-table .orders-row {
+  font-size: 13px;
+  padding: 16px 18px;
+  color: #334155;
+}
+
+.active-orders-table-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.active-orders-table-cell strong {
+  font-size: 14px;
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.active-orders-order-number {
+  font-size: 11px;
+  color: #7c8797;
+}
+
+.active-orders-items {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.active-orders-elapsed {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.active-orders-total {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 14px;
+}
+
 .loading {
   text-align: center;
   padding: 50px;
