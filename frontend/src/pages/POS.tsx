@@ -354,6 +354,8 @@ export function POS() {
             // refetch so the menu/cart never sell against a now-stale stock count.
             refresh();
           }}
+
+          onPaymentSuccess={refreshOpenOrders}
         />
 
       )}

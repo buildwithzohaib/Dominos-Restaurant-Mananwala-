@@ -16,13 +16,11 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
   const {
     state,
     subtotal,
-    discount,
     tax,
     deliveryCharge,
     total,
     setQty,
     removeProduct,
-    setDiscount,
     setQtyOnServerItem,
     removeServerItem,
     clear,
@@ -32,10 +30,6 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
   const [error, setError] = useState("");
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
-
-  const [discountText, setDiscountText] = useState(
-    String(paisaToRupees(state.discount))
-  );
 
   const handleSendToKitchen = async () => {
     if (!state.serverId) return;
@@ -180,32 +174,9 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
       <div className="order-summary">
         <CustomerPanel />
 
-        {state.orderType !== "DINE_IN" && (
-          <div className="field-grid">
-            <label>
-              Discount
-
-              <input
-                type="number"
-                min="0"
-                value={discountText}
-                onChange={(e) => {
-                  setDiscountText(e.target.value);
-                  setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
-                }}
-              />
-            </label>
-          </div>
-        )}
-
         <div className="summary-row">
           <span>Subtotal</span>
           <b>{formatCurrency(subtotal)}</b>
-        </div>
-
-        <div className="summary-row">
-          <span>Discount</span>
-          <b>- {formatCurrency(discount)}</b>
         </div>
 
         {settings?.tax_enabled && (

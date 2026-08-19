@@ -39,9 +39,11 @@ export type ReceiptData = {
 export function PaymentModal({
   onClose,
   onSuccess,
+  onPaymentSuccess,
 }: {
   onClose: () => void;
   onSuccess: (receipt: ReceiptData) => void;
+  onPaymentSuccess?: () => void;
 }) {
   const formatCurrency = useCurrencyFormat();
   const settingsContext = useContext(SettingsContext);
@@ -55,9 +57,11 @@ export function PaymentModal({
     total,
     clear,
     setPaymentMethod,
+    setDiscount,
   } = usePOS();
 
   const [receivedText, setReceivedText] = useState(String(paisaToRupees(total)));
+  const [discountText, setDiscountText] = useState(String(paisaToRupees(discount)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -69,27 +73,39 @@ export function PaymentModal({
     setError("");
 
     try {
-      const o = await api.createOrder({
-        order_type: state.orderType,
-        table_id: state.selectedTable?.id ?? null,
-        customer_id: state.selectedCustomer?.id ?? null,
-        delivery_address: state.deliveryAddress.trim() || null,
-        delivery_charge: state.orderType === "DELIVERY" ? Math.floor(parseFloat(state.deliveryChargeText) * 100 || 0) : undefined,
+      let o;
 
-        items: state.cart.map((i) => ({
-          product_id: i.kind==="local"?i.product.id:i.productId,
-          quantity: i.quantity,
-        })),
+      if (state.serverId) {
+        // DINE_IN order — use payOrderDineIn
+        o = await api.payOrderDineIn(state.serverId, {
+          payment_method: state.paymentMethod,
+          discount: discount,
+          amount_received: state.paymentMethod === "CASH" ? received : 0,
+        });
+      } else {
+        // TAKEAWAY/DELIVERY — use createOrder
+        o = await api.createOrder({
+          order_type: state.orderType,
+          table_id: state.selectedTable?.id ?? null,
+          customer_id: state.selectedCustomer?.id ?? null,
+          delivery_address: state.deliveryAddress.trim() || null,
+          delivery_charge: state.orderType === "DELIVERY" ? Math.floor(parseFloat(state.deliveryChargeText) * 100 || 0) : undefined,
 
-        discount: discount,
+          items: state.cart.map((i) => ({
+            product_id: i.kind==="local"?i.product.id:i.productId,
+            quantity: i.quantity,
+          })),
 
-        payment_method: state.paymentMethod,
+          discount: discount,
 
-        amount_received:
-          state.paymentMethod === "CASH"
-            ? received
-            : total,
-      });
+          payment_method: state.paymentMethod,
+
+          amount_received:
+            state.paymentMethod === "CASH"
+              ? received
+              : total,
+        });
+      }
 
       const now = new Date();
 
@@ -124,6 +140,7 @@ export function PaymentModal({
       };
 
       clear();
+      onPaymentSuccess?.();
 
       onSuccess(receipt);
     } catch (e) {
@@ -194,6 +211,21 @@ export function PaymentModal({
             </button>
           ))}
         </div>
+
+        <label className="large-input">
+          Discount
+
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={discountText}
+            onChange={(e) => {
+              setDiscountText(e.target.value);
+              setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
+            }}
+          />
+        </label>
 
         {state.paymentMethod === "CASH" && (
           <label className="large-input">

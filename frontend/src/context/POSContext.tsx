@@ -65,7 +65,9 @@ export function POSProvider({children}:{children:ReactNode}){
  const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+(i.kind==="local"?i.product.price:i.price)*i.quantity,0),[state.cart]);
  const discountAmount=Math.min(state.discount,subtotal);
  const taxable=subtotal-discountAmount;
- const taxRate=settings?.tax_enabled?(settings?.tax_rate??0):0;
+ const taxRate = state.serverId && state.order
+  ? (state.order.tax_rate ?? 0)
+  : (settings?.tax_enabled ? (settings?.tax_rate ?? 0) : 0);
  const tax=Math.floor((taxable*taxRate+5000)/10000);
  const deliveryChargeAmount=state.orderType==="DELIVERY"?Math.max(0,Math.floor(parseFloat(state.deliveryChargeText)||0)*100):0;
  const total=taxable+tax+deliveryChargeAmount;
