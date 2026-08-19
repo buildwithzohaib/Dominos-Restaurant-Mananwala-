@@ -1,14 +1,60 @@
 import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
+
 export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
+
+/**
+ * APIError extends Error to preserve structured error details from the backend.
+ * When the server returns detail as an object (e.g., {message: "...", inactive_table_id: 7}),
+ * the message property contains the user-facing string, and the full object is available
+ * via the detail property. This preserves backward compatibility: existing code checking
+ * e instanceof Error and reading e.message continues to work unchanged.
+ */
+export class APIError extends Error {
+ detail: any;
+ constructor(message: string, detail?: any) {
+  super(message);
+  this.detail = detail;
+  this.name = "APIError";
+  Object.setPrototypeOf(this, APIError.prototype);
+ }
+}
+
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
  const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
- if(!r.ok){let m="Request failed.";try{const b=await r.json();m=b.detail||m;}catch{}throw new Error(m);}
+ if(!r.ok){
+  let message="Request failed.";
+  let detail:any=undefined;
+  try{
+   const b=await r.json();
+   detail=b.detail;
+   if(typeof detail==="string"){
+    message=detail;
+   }else if(detail&&typeof detail==="object"&&detail.message){
+    message=detail.message;
+   }
+  }catch{}
+  throw new APIError(message,detail);
+ }
  return r.json();
 }
+
 async function uploadFile<T>(path:string,file:File):Promise<T>{
  const fd=new FormData();fd.append("file",file);
  const r=await fetch(`${API_URL}${path}`,{method:"POST",body:fd});
- if(!r.ok){let m="Upload failed.";try{const b=await r.json();m=b.detail||m;}catch{}throw new Error(m);}
+ if(!r.ok){
+  let message="Upload failed.";
+  let detail:any=undefined;
+  try{
+   const b=await r.json();
+   detail=b.detail;
+   if(typeof detail==="string"){
+    message=detail;
+   }else if(detail&&typeof detail==="object"&&detail.message){
+    message=detail.message;
+   }
+  }catch{}
+  throw new APIError(message,detail);
+ }
  return r.json();
 }
 export const api={
@@ -26,7 +72,16 @@ export const api={
   const qs=q.toString();
   return request<Product[]>(`/api/products${qs?`?${qs}`:""}`);
  },
- getTables:()=>request<RestaurantTable[]>("/api/tables"),
+ getTables:(includeInactive?:boolean)=>{
+  const q=new URLSearchParams();
+  if(includeInactive)q.set("include_inactive","true");
+  const qs=q.toString();
+  return request<RestaurantTable[]>(`/api/tables${qs?`?${qs}`:""}`);
+ },
+ createTable:(name:string)=>request<RestaurantTable>("/api/tables",{method:"POST",body:JSON.stringify({name})}),
+ renameTable:(id:number,name:string)=>request<RestaurantTable>(`/api/tables/${id}`,{method:"PUT",body:JSON.stringify({name})}),
+ deactivateTable:(id:number)=>request<RestaurantTable>(`/api/tables/${id}/deactivate`,{method:"PATCH",body:JSON.stringify({})}),
+ activateTable:(id:number)=>request<RestaurantTable>(`/api/tables/${id}/activate`,{method:"PATCH",body:JSON.stringify({})}),
  getOrders:(params?:{search?:string;status?:string})=>{
   const q=new URLSearchParams();
   if(params?.search&&params.search.trim())q.set("search",params.search.trim());
