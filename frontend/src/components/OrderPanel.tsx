@@ -26,6 +26,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
     removeServerItem,
     clear,
     sendBatchAndLoad,
+    loadOrder,
   } = usePOS();
 
   const [error, setError] = useState("");
@@ -165,10 +166,25 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                   </button>
 
                   <button
-                    disabled={isSent}
                     onClick={async () => {
                       try {
-                        if (i.kind === "local") {
+                        if (isSent) {
+                          // B8: Remove SENT item with confirmation and optional reason
+                          if (!window.confirm("Remove this item from the order? The kitchen has already started it.")) {
+                            return;
+                          }
+                          const reason = window.prompt("Reason for removal (optional):", "");
+                          // Abort if user clicks Cancel on reason prompt (null means Cancel, not empty string)
+                          if (reason === null) {
+                            return;
+                          }
+                          // reason is now guaranteed to be a string (empty string "" or user-typed text)
+                          const updated = await api.updatePendingItem(state.serverId!, i.itemId, {
+                            quantity: 0,
+                            reason: reason || undefined,
+                          });
+                          loadOrder(updated);
+                        } else if (i.kind === "local") {
                           removeProduct(productId);
                         } else {
                           await removeServerItem(state.serverId!, i.itemId);

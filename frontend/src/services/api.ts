@@ -139,7 +139,7 @@ export const api={
  // DINE_IN running tab (Phase 4.D2)
  openOrder:(p:{table_id:number;customer_id?:number|null})=>request<Order>("/api/orders/open",{method:"POST",body:JSON.stringify(p)}),
  addItemsToOrder:(id:number,p:{items:{product_id:number;quantity:number}[]})=>request<Order>(`/api/orders/${id}/items`,{method:"POST",body:JSON.stringify(p)}),
- updatePendingItem:(id:number,item_id:number,p:{quantity:number})=>request<Order>(`/api/orders/${id}/items/${item_id}`,{method:"PATCH",body:JSON.stringify(p)}),
+ updatePendingItem:(id:number,item_id:number,p:{quantity:number;reason?:string})=>request<Order>(`/api/orders/${id}/items/${item_id}`,{method:"PATCH",body:JSON.stringify(p)}),
  sendBatchToKitchen:(id:number)=>request<Order>(`/api/orders/${id}/send`,{method:"POST",body:JSON.stringify({})}),
  payOrderDineIn:(id:number,p:{payment_method:PaymentMethod;discount:number;amount_received:number})=>request<Order>(`/api/orders/${id}/pay`,{method:"POST",body:JSON.stringify(p)})
 };
