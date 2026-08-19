@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState, useRef } from "react";
 
 import { CategoryBar } from "../components/CategoryBar";
 import { OrderPanel } from "../components/OrderPanel";
@@ -36,6 +36,8 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
 
   const [addError, setAddError] = useState("");
   const [openOrderCount, setOpenOrderCount] = useState(0);
+  const [isAddingToDineIn, setIsAddingToDineIn] = useState(false);
+  const addingRef = useRef(false);
 
   // Fetch open order count
   const refreshOpenOrders = async () => {
@@ -55,6 +57,8 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
 
   // Handle adding product to DINE_IN order
   const handleAddProduct = async (product: Product) => {
+    if (addingRef.current) return; // Refuse if request already in flight
+
     if (state.orderType === "DINE_IN") {
       if (!state.selectedTable) {
         setAddError("Select a table first");
@@ -62,6 +66,8 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
       }
       try {
         setAddError("");
+        addingRef.current = true;
+        setIsAddingToDineIn(true);
         const isNewOrder = !state.serverId;
         await addProductToDineIn(state.selectedTable.id, product);
         // If this was the first item (new order opened), update the count immediately
@@ -77,6 +83,9 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
           const detail = state.serverId && state.selectedTable ? ` The tab is open on ${state.selectedTable.name} and can be managed from Active Orders.` : "";
           setAddError(msg + detail);
         }
+      } finally {
+        addingRef.current = false;
+        setIsAddingToDineIn(false);
       }
     } else {
       addProduct(product);
@@ -334,6 +343,7 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
                 key={product.id}
                 product={product}
                 onAdd={handleAddProduct}
+                isDisabled={isAddingToDineIn}
               />
 
             ))}

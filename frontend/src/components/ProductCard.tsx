@@ -6,9 +6,11 @@ import { API_URL } from "../services/api";
 export function ProductCard({
   product,
   onAdd,
+  isDisabled,
 }: {
   product: Product;
   onAdd: (p: Product) => void;
+  isDisabled?: boolean;
 }) {
   const formatCurrency = useCurrencyFormat();
   const [imageError, setImageError] = useState(false);
@@ -22,7 +24,7 @@ export function ProductCard({
     <button
       className={outOfStock ? "product-card out-of-stock" : "product-card"}
       onClick={() => !outOfStock && onAdd(product)}
-      disabled={outOfStock}
+      disabled={outOfStock || isDisabled}
     >
       <div className="product-thumb">
         {showImage ? (
