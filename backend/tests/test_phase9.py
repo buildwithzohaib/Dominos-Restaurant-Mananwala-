@@ -4,14 +4,14 @@ Verifies dashboard metrics are calculated correctly from order data
 """
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytest
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.database import Base
-from app.models.models import Product, Category, Order, OrderItem
+from app.models.models import Product, Category, Order, OrderItem, Settings
 from app.services.order_service import create_order
 from app.schemas.schemas import OrderCreate, OrderItemCreate
 from app.services.dashboard_service import get_dashboard_overview
@@ -113,8 +113,9 @@ def test_basic_dashboard_metrics(db_session):
     db.commit()
     print(f"Created order 2: {order2.order_number}, Total: {order2.total}")
 
-    # Order 3: Tomorrow (should not be included in dashboard)
-    tomorrow = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    # Order 3: Tomorrow at or after day_starts_at (should not be included in dashboard)
+    # Business day runs from today 06:00 to tomorrow 06:00, so order3 must be at/after tomorrow 06:00
+    tomorrow = datetime.utcnow().replace(hour=6, minute=0, second=1, microsecond=0) + timedelta(days=1)
     order3 = Order(
         order_number="ORD-TOMORROW",
         order_type="TAKEAWAY",
@@ -335,6 +336,238 @@ def test_low_stock_detection(db_session):
     print("[PASS] Low stock detection correct")
     print(f"  Low/Out-of-Stock: {dashboard.low_stock} (excluded disabled products)")
 
+def test_business_day_after_boundary(db_session):
+    """Test dashboard boundary when current time is AFTER day_starts_at (default 06:00)"""
+    print("\nTEST: Business Day After Boundary (06:00)")
+    print("-" * 60)
+
+    db = db_session
+    category, products = setup_test_data(db)
+    product_a = products[0]
+
+    # Ensure settings with default day_starts_at (06:00)
+    settings = db.query(Settings).first()
+    if not settings:
+        settings = Settings(day_starts_at="06:00")
+        db.add(settings)
+    else:
+        settings.day_starts_at = "06:00"
+    db.commit()
+
+    # Simulate: current time is 2026-08-19 14:00 (after 06:00 boundary)
+    # Business day should run from 2026-08-19 06:00 to 2026-08-20 06:00
+    # Use naive datetimes (matching what database stores)
+    now = datetime(2026, 8, 19, 14, 0, 0)
+    boundary_start = datetime(2026, 8, 19, 6, 0, 0)
+    boundary_end = datetime(2026, 8, 20, 6, 0, 0)
+
+    # Order paid AT the boundary (06:00) — should be included
+    order_at_boundary = Order(
+        order_number="ORD-BOUNDARY",
+        order_type="TAKEAWAY",
+        status="PAID",
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
+        payment_method="CASH",
+        amount_received=10000,
+        change_amount=0,
+        created_at=boundary_start,
+        paid_at=boundary_start,
+    )
+    db.add(order_at_boundary)
+    db.flush()
+    db.add(OrderItem(
+        order_id=order_at_boundary.id,
+        product_id=product_a.id,
+        product_name="Product A",
+        quantity=1,
+        price=10000,
+        line_total=10000,
+    ))
+
+    # Order paid after boundary (14:00) — should be included
+    order_after_boundary = Order(
+        order_number="ORD-AFTER",
+        order_type="TAKEAWAY",
+        status="PAID",
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
+        payment_method="CASH",
+        amount_received=10000,
+        change_amount=0,
+        created_at=now,
+        paid_at=now,
+    )
+    db.add(order_after_boundary)
+    db.flush()
+    db.add(OrderItem(
+        order_id=order_after_boundary.id,
+        product_id=product_a.id,
+        product_name="Product A",
+        quantity=1,
+        price=10000,
+        line_total=10000,
+    ))
+
+    # Order paid BEFORE boundary (05:00 on same day) — should NOT be included
+    order_before_boundary = Order(
+        order_number="ORD-BEFORE",
+        order_type="TAKEAWAY",
+        status="PAID",
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
+        payment_method="CASH",
+        amount_received=10000,
+        change_amount=0,
+        created_at=boundary_start - timedelta(hours=1),
+        paid_at=boundary_start - timedelta(hours=1),
+    )
+    db.add(order_before_boundary)
+    db.flush()
+    db.add(OrderItem(
+        order_id=order_before_boundary.id,
+        product_id=product_a.id,
+        product_name="Product A",
+        quantity=1,
+        price=10000,
+        line_total=10000,
+    ))
+    db.commit()
+
+    # Mock the current time for get_dashboard_overview
+    from app.utils.dates import get_business_day_boundaries
+    start, end = get_business_day_boundaries(db, now)
+
+    print(f"Current time: {now}")
+    print(f"Day starts at: 06:00")
+    print(f"Business day: {start} to {end}")
+
+    assert start == boundary_start, f"Expected start {boundary_start}, got {start}"
+    assert end == boundary_end, f"Expected end {boundary_end}, got {end}"
+    print("[PASS] Business day boundary correct (after 06:00)")
+
+def test_business_day_before_boundary(db_session):
+    """Test dashboard boundary when current time is BEFORE day_starts_at (custom 14:00)"""
+    print("\nTEST: Business Day Before Boundary (14:00)")
+    print("-" * 60)
+
+    db = db_session
+    category, products = setup_test_data(db)
+    product_a = products[0]
+
+    # Set a custom day_starts_at (14:00)
+    settings = db.query(Settings).first()
+    if not settings:
+        settings = Settings(day_starts_at="14:00")
+        db.add(settings)
+    else:
+        settings.day_starts_at = "14:00"
+    db.commit()
+
+    # Simulate: current time is 2026-08-19 10:00 (BEFORE 14:00 boundary)
+    # Business day should run from 2026-08-18 14:00 to 2026-08-19 14:00
+    # Use naive datetimes (matching what database stores)
+    now = datetime(2026, 8, 19, 10, 0, 0)
+    boundary_start = datetime(2026, 8, 18, 14, 0, 0)
+    boundary_end = datetime(2026, 8, 19, 14, 0, 0)
+
+    # Order paid before boundary (from yesterday afternoon) — should be included
+    order_from_yesterday = Order(
+        order_number="ORD-YESTERDAY",
+        order_type="TAKEAWAY",
+        status="PAID",
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
+        payment_method="CASH",
+        amount_received=10000,
+        change_amount=0,
+        created_at=boundary_start,
+        paid_at=boundary_start,
+    )
+    db.add(order_from_yesterday)
+    db.flush()
+    db.add(OrderItem(
+        order_id=order_from_yesterday.id,
+        product_id=product_a.id,
+        product_name="Product A",
+        quantity=1,
+        price=10000,
+        line_total=10000,
+    ))
+
+    # Order paid today before boundary (10:00) — should be included
+    order_today_before_boundary = Order(
+        order_number="ORD-TODAY-BEFORE",
+        order_type="TAKEAWAY",
+        status="PAID",
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
+        payment_method="CASH",
+        amount_received=10000,
+        change_amount=0,
+        created_at=now,
+        paid_at=now,
+    )
+    db.add(order_today_before_boundary)
+    db.flush()
+    db.add(OrderItem(
+        order_id=order_today_before_boundary.id,
+        product_id=product_a.id,
+        product_name="Product A",
+        quantity=1,
+        price=10000,
+        line_total=10000,
+    ))
+
+    # Order paid today AFTER boundary (15:00) — should NOT be included
+    order_after_boundary = Order(
+        order_number="ORD-AFTER-BOUNDARY",
+        order_type="TAKEAWAY",
+        status="PAID",
+        subtotal=10000,
+        discount=0,
+        tax=0,
+        total=10000,
+        payment_method="CASH",
+        amount_received=10000,
+        change_amount=0,
+        created_at=boundary_end + timedelta(hours=1),
+        paid_at=boundary_end + timedelta(hours=1),
+    )
+    db.add(order_after_boundary)
+    db.flush()
+    db.add(OrderItem(
+        order_id=order_after_boundary.id,
+        product_id=product_a.id,
+        product_name="Product A",
+        quantity=1,
+        price=10000,
+        line_total=10000,
+    ))
+    db.commit()
+
+    # Test the boundary calculation
+    from app.utils.dates import get_business_day_boundaries
+    start, end = get_business_day_boundaries(db, now)
+
+    print(f"Current time: {now}")
+    print(f"Day starts at: 14:00")
+    print(f"Business day: {start} to {end}")
+
+    assert start == boundary_start, f"Expected start {boundary_start}, got {start}"
+    assert end == boundary_end, f"Expected end {boundary_end}, got {end}"
+    print("[PASS] Business day boundary correct (before 14:00)")
+
 def run_all_tests():
     """Run all Phase 9 dashboard tests"""
     print("\n" + "="*60)
@@ -345,6 +578,8 @@ def run_all_tests():
         test_basic_dashboard_metrics,
         test_cancelled_orders_excluded,
         test_low_stock_detection,
+        test_business_day_after_boundary,
+        test_business_day_before_boundary,
     ]
 
     results = []

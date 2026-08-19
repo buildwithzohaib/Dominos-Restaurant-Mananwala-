@@ -3,12 +3,13 @@ Dashboard service for calculating business metrics.
 Phase 9: Provides real-time overview of restaurant performance.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.models import Order, OrderItem, Product, StockMovement
 from app.schemas.schemas import DashboardOverviewOut, HourlySaleItem, TopProductItem
+from app.utils.dates import get_business_day_boundaries
 
 
 def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
@@ -22,9 +23,8 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
     - Top 5 selling products by quantity
     """
 
-    # Define today's date range
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timedelta(days=1)
+    # Define business day range (respects settings.day_starts_at, not UTC midnight)
+    today_start, today_end = get_business_day_boundaries(db, datetime.now(timezone.utc))
 
     # === SALES CALCULATION ===
     # Sum of totals from PAID orders paid today (in paisa).
