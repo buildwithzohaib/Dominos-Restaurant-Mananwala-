@@ -68,32 +68,34 @@ export function Customers() {
 
   return (
     <div className="products-page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">OPERATIONS</p>
-          <h1>Customers</h1>
-        </div>
-      </div>
-
-      <div className="inventory-toolbar">
-        <div className="search-box">
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customers..."
-          />
+      <div className="page-header-toolbar">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">OPERATIONS</p>
+            <h1>Customers</h1>
+          </div>
         </div>
 
-        <div className="inventory-actions">
-          <button
-            className={
-              showDisabled ? "secondary-button active" : "secondary-button"
-            }
-            onClick={() => setShowDisabled(!showDisabled)}
-          >
-            <Lock size={15} /> {showDisabled ? "Hide Disabled" : "Show Disabled"}
-          </button>
+        <div className="inventory-toolbar">
+          <div className="search-box">
+            <Search size={18} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search customers..."
+            />
+          </div>
+
+          <div className="inventory-actions">
+            <button
+              className={
+                showDisabled ? "secondary-button active" : "secondary-button"
+              }
+              onClick={() => setShowDisabled(!showDisabled)}
+            >
+              <Lock size={15} /> {showDisabled ? "Hide Disabled" : "Show Disabled"}
+            </button>
+          </div>
         </div>
       </div>
 

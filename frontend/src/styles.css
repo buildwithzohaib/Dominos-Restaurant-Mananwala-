@@ -781,6 +781,13 @@ h2 {
   padding: 32px;
 }
 
+.page-header-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: #f4f6f8;
+}
+
 .page-header {
   display: flex;
   align-items: end;
@@ -792,7 +799,8 @@ h2 {
   background: #fff;
   border: 1px solid #e2e6ec;
   border-radius: 13px;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: calc(100vh - 250px);
 }
 
 .orders-head,
@@ -810,6 +818,9 @@ h2 {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .orders-row {
@@ -913,8 +924,9 @@ h2 {
   background: #fff;
   border: 1px solid #e2e6ec;
   border-radius: 13px;
-  overflow: hidden;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 250px);
 }
 
 .inventory-head,
@@ -933,6 +945,9 @@ h2 {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .inventory-row {

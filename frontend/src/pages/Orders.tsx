@@ -46,33 +46,35 @@ export function Orders() {
 
   return (
     <div className="orders-page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">SALES</p>
-          <h1>Order History</h1>
-        </div>
-      </div>
-
-      <div className="inventory-toolbar">
-        <div className="search-box">
-          <Search size={18} />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by order number..."
-          />
+      <div className="page-header-toolbar">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">SALES</p>
+            <h1>Order History</h1>
+          </div>
         </div>
 
-        <div className="order-type-switcher">
-          {(["", "PAID", "CANCELLED"] as const).map((value) => (
-            <button
-              key={value}
-              className={statusFilter === value ? "active" : ""}
-              onClick={() => setStatusFilter(value)}
-            >
-              {value === "" ? "All" : value === "PAID" ? "Paid" : "Cancelled"}
-            </button>
-          ))}
+        <div className="inventory-toolbar">
+          <div className="search-box">
+            <Search size={18} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by order number..."
+            />
+          </div>
+
+          <div className="order-type-switcher">
+            {(["", "PAID", "CANCELLED"] as const).map((value) => (
+              <button
+                key={value}
+                className={statusFilter === value ? "active" : ""}
+                onClick={() => setStatusFilter(value)}
+              >
+                {value === "" ? "All" : value === "PAID" ? "Paid" : "Cancelled"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

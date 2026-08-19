@@ -55,41 +55,43 @@ export function Products() {
 
   return (
     <div className="products-page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">CATALOG</p>
-          <h1>Products</h1>
-        </div>
-      </div>
-
-      <div className="inventory-toolbar">
-        <div className="search-box">
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search products..."
-          />
+      <div className="page-header-toolbar">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">CATALOG</p>
+            <h1>Products</h1>
+          </div>
         </div>
 
-        <div className="inventory-actions">
-          <button
-            className="secondary-button"
-            onClick={() => setManageCategoriesOpen(true)}
-          >
-            <FolderOpen size={15} /> Manage Categories
-          </button>
+        <div className="inventory-toolbar">
+          <div className="search-box">
+            <Search size={18} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products..."
+            />
+          </div>
 
-          <button
-            className={showDisabled ? "secondary-button active" : "secondary-button"}
-            onClick={() => setShowDisabled(!showDisabled)}
-          >
-            <Lock size={15} /> {showDisabled ? "Hide Disabled" : "Show Disabled"}
-          </button>
+          <div className="inventory-actions">
+            <button
+              className="secondary-button"
+              onClick={() => setManageCategoriesOpen(true)}
+            >
+              <FolderOpen size={15} /> Manage Categories
+            </button>
 
-          <button className="add-stock-button" onClick={() => setAddOpen(true)}>
-            <Plus size={16} /> Add Product
-          </button>
+            <button
+              className={showDisabled ? "secondary-button active" : "secondary-button"}
+              onClick={() => setShowDisabled(!showDisabled)}
+            >
+              <Lock size={15} /> {showDisabled ? "Hide Disabled" : "Show Disabled"}
+            </button>
+
+            <button className="add-stock-button" onClick={() => setAddOpen(true)}>
+              <Plus size={16} /> Add Product
+            </button>
+          </div>
         </div>
       </div>
 

@@ -34,41 +34,43 @@ export function Inventory() {
 
   return (
     <div className="inventory-page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">STOCK</p>
-          <h1>Inventory</h1>
-        </div>
-      </div>
-
-      <div className="inventory-toolbar">
-        <div className="search-box">
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search inventory..."
-          />
+      <div className="page-header-toolbar">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">STOCK</p>
+            <h1>Inventory</h1>
+          </div>
         </div>
 
-        <div className="inventory-actions">
-          <button
-            className="secondary-button"
-            onClick={() => setAdjustOpen(true)}
-          >
-            <SlidersHorizontal size={15} /> Stock Adjustment
-          </button>
+        <div className="inventory-toolbar">
+          <div className="search-box">
+            <Search size={18} />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search inventory..."
+            />
+          </div>
 
-          <button
-            className={view === "history" ? "secondary-button active" : "secondary-button"}
-            onClick={() => setView((v) => (v === "history" ? "table" : "history"))}
-          >
-            <History size={15} /> {view === "history" ? "Back to Inventory" : "Stock History"}
-          </button>
+          <div className="inventory-actions">
+            <button
+              className="secondary-button"
+              onClick={() => setAdjustOpen(true)}
+            >
+              <SlidersHorizontal size={15} /> Stock Adjustment
+            </button>
 
-          <button className="add-stock-button" onClick={() => setAddOpen(true)}>
-            <Plus size={16} /> Add Stock
-          </button>
+            <button
+              className={view === "history" ? "secondary-button active" : "secondary-button"}
+              onClick={() => setView((v) => (v === "history" ? "table" : "history"))}
+            >
+              <History size={15} /> {view === "history" ? "Back to Inventory" : "Stock History"}
+            </button>
+
+            <button className="add-stock-button" onClick={() => setAddOpen(true)}>
+              <Plus size={16} /> Add Stock
+            </button>
+          </div>
         </div>
       </div>
 
