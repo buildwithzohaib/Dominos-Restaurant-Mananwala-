@@ -93,6 +93,14 @@ class TableOut(BaseModel):
     seats: int
     active: bool
 
+class TableCreate(BaseModel):
+    """Create a new table. Seats defaults to 6 in the service."""
+    name: str = Field(max_length=50)
+
+class TableRename(BaseModel):
+    """Rename a table."""
+    name: str = Field(max_length=50)
+
 class OrderItemCreate(BaseModel):
     product_id: int
     quantity: int = Field(gt=0)
