@@ -3,8 +3,12 @@
 **Date:** 2026-08-19  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
-**Stage 4 (Running Tabs):** ✅ COMPLETE (backend + frontend)  
-**Git HEAD:** 58d2eba (4.D2)
+**Stage 4 Extensions:** ✅ Running Tabs (backend + frontend), Table Management (backend + frontend)  
+**Git HEAD:** 37605fe  
+**Backend Tests:** 359 passing, 0 failing  
+**Alembic Head:** b3d5e7f9a1c3 (unchanged since Phase 10)  
+**Frontend Tests:** 27 vitest tests passing  
+**Frontend Build:** ✅ Clean
 
 ---
 
@@ -401,7 +405,205 @@ interface State {
 
 ---
 
-### D. DINE_IN Running-Tab Frontend Architecture (Stage 4.D2)
+### C. Active Orders Page (Stage 4 Extension)
+
+**Location:** `frontend/src/pages/ActiveOrders.tsx` + wired into `App.tsx`
+
+**Purpose:** Displays running tabs (OPEN orders) across all tables; allows resuming a detached tab mid-session.
+
+**Functionality:**
+- `GET /api/orders?status=OPEN` called on mount and via 30s polling interval
+- Displays table name, order number, total items, elapsed time (h:mm format), total, and send status
+- Send status shows "All sent" (green badge) when no PENDING items, or "{N} pending" (yellow) when items await kitchen
+- Resume button loads order into POSContext and navigates to POS
+- Stale-order detection: if order is no longer OPEN (was paid/cancelled on another terminal), displays error and refreshes list
+- Stale detection triggered by status field check before loading
+
+**Code Entry Points:**
+- POS.tsx renders a click handler bound to `onActiveOrdersClick` (calls `setPage("activeorders")`)
+- App.tsx wires ActiveOrders with `onResume={() => setPage("pos")}` callback
+- POSContext provides `setOrderType("DINE_IN")`, `setTable()`, `loadOrder()`, `openOrder()` for state restoration
+
+**Integration:**
+- Reuses existing `formatCurrency()` hook and `parseServerDate()` utilities
+- Uses `.table` nested object (Rule 2: table.name, never table_id)
+- Reuses existing `.orders-card`, `.orders-row` CSS classes
+
+**Recovery Behavior:**
+- Detects stale order via `order.status !== "OPEN"` comparison (lines 71-76)
+- Displays message: "Order #{order_number} is no longer open — it may have been paid or cancelled on another terminal."
+- Automatically refreshes list so user can see current state
+
+---
+
+### C. Table Management (Stage 4 Extension)
+
+**Backend Service:** `app/services/table_service.py`
+
+Functions:
+- `list_tables(db, include_inactive=False)` — List active or all tables
+- `create_table(db, payload)` — Create table with name normalization; case-insensitive duplicate check
+- `rename_table(db, table_id, payload)` — Rename table; allows rename-to-own-name for capitalization fixes
+- `deactivate_table(db, table_id)` — Soft-delete; refuses if table has OPEN order or is last active table
+- `activate_table(db, table_id)` — Restore soft-deleted table
+
+**Validation Logic:**
+- Name normalization: strip and collapse whitespace via `_normalize_name()`
+- Case-insensitive duplicate detection: `ilike()` query; clash with inactive table returns structured detail object with `inactive_table_id`
+- OPEN order guard: queries `Order.status == "OPEN"` before deactivating; blocks with table name (not ID, Rule 2)
+- Last-active guard: refuses deactivation if only one active table remains
+- Idempotent state transitions: activating already-active returns 400; deactivating already-inactive returns 400
+
+**Backend Routes:** `app/routes/catalog.py`
+- `GET /api/tables?include_inactive=true` — List all tables (active + removed)
+- `POST /api/tables` — Create table
+- `PUT /api/tables/{id}` — Rename table
+- `PATCH /api/tables/{id}/deactivate` — Deactivate table
+- `PATCH /api/tables/{id}/activate` — Activate table
+
+**Frontend Component:** Settings page "Table Management" fieldset
+
+Features:
+- List active tables with editable names and Remove buttons
+- Add table form with name input and Add button
+- "Show removed tables" toggle; when enabled, displays inactive tables muted and labeled, each with Restore button
+- Active count footer
+- Error handling with special case for inactive table name clash: displays "Restore this table" button for `detail.inactive_table_id`
+- Independent table fetch: Settings loads all tables with `includeInactive=true` on mount and after each operation; CatalogContext continues loading active-only for POS dropdown
+
+**Key Design Decision:**
+- Settings UI holds its own tables list (fetched with `includeInactive=true`) separate from CatalogContext
+- After table operations: refresh Settings list AND call `refreshCatalog()` to keep POS dropdown current
+- POS dropdown never shows removed tables (CatalogContext loads active-only via `getTables()` with no argument)
+
+**Tests:** `backend/tests/test_tables.py` — 31 tests covering:
+- Create, duplicate names (exact and case-insensitive), clash with removed table
+- Rename, rename to own name, rename to removed table name
+- Deactivate (with OPEN order guard, last-active guard, already-inactive guard)
+- Activate, already-active guard
+- List with/without `include_inactive` flag
+- Include-inactive filtering
+
+---
+
+### D. API Error Handling Pattern: Structured HTTPException Detail
+
+**Problem Addressed:** Backend errors with structured data (e.g., `{message: "...", inactive_table_id: 7}`) were flattened to `[object Object]` strings in the frontend.
+
+**Solution:** `APIError` class (frontend) + `HTTPException(detail={...})` pattern (backend)
+
+**Frontend Implementation** (`src/services/api.ts` lines 12-20):
+```typescript
+export class APIError extends Error {
+  detail: any;
+  constructor(message: string, detail?: any) {
+    super(message);
+    this.detail = detail;
+  }
+}
+```
+
+**Request Function Behavior** (`src/services/api.ts` lines 22-39):
+- If response is not ok, tries to parse JSON body
+- Extracts `detail` field
+- If `detail` is a string: uses it as message
+- If `detail` is an object with `message` field: uses `detail.message` as message
+- Otherwise: uses default "Request failed." fallback
+- Throws `APIError(message, detail)` so both message and full object are available
+
+**Backward Compatibility:**
+- Existing code doing `e instanceof Error ? e.message : "..."` continues to work unchanged
+- `e.message` read from APIError works as before
+- New code can check `e instanceof APIError && e.detail?.inactive_table_id` for programmatic decisions
+
+**Table Management Application:**
+When user tries to create/rename table with name of an inactive table, backend returns:
+```json
+{
+  "detail": {
+    "message": "Table \"Name\" already exists but is inactive. Restore it or use a different name.",
+    "inactive_table_id": 7
+  }
+}
+```
+
+Frontend catches the error, detects `detail.inactive_table_id`, and displays "Restore this table" button alongside the message.
+
+**This pattern is reusable** for any feature needing to return a database ID to the UI without exposing it in user-facing text (Rule 2).
+
+---
+
+### E. Layout Fixes (Commit 13e1bed)
+
+**Problem:** Sidebar and page headers/toolbars were scrolling with content, causing layout instability and header disappearance.
+
+**Solution:** Fixed positioning with proper scrolling context
+
+**Changed CSS Rules:**
+
+1. **`.app-shell`:**
+   ```css
+   display: flex;
+   height: 100vh;
+   overflow: hidden;
+   ```
+   - Changed from `min-height: 100vh` to `height: 100vh`
+   - Added `overflow: hidden` to prevent body/html scrolling
+   - Flex container for sidebar and main-shell
+
+2. **`.main-shell`:**
+   ```css
+   flex: 1;
+   height: 100vh;
+   overflow-y: auto;
+   ```
+   - Flex fills remaining space (sidebar grows sidebar, main-shell takes rest)
+   - `height: 100vh` constrains to viewport
+   - `overflow-y: auto` enables internal scrolling
+
+3. **`.sidebar`:**
+   ```css
+   overflow-y: auto;
+   flex-shrink: 0;
+   ```
+   - `overflow-y: auto` allows sidebar scrolling independently
+   - `flex-shrink: 0` prevents flex layout from compressing sidebar
+
+**Impact:** Sidebar stays fixed-width and scrollable independently. Content in main-shell scrolls without sidebar moving. Page headers remain stable in sticky containers above scrollable content.
+
+**No magic numbers:** Layout relies on flexbox distribution, not hardcoded heights.
+
+---
+
+### F. Timestamp Handling and UTC Parsing (Commit fe980f9)
+
+**Backend:** All timestamps stored as naive UTC via `datetime.utcnow()` (no Z suffix in JSON)
+
+**Frontend Problem:** Browsers interpret naive ISO strings (e.g., "2025-08-19T12:34:56") as LOCAL time, causing ~5-hour display errors in Asia/Karachi timezone.
+
+**Solution:** `parseServerDate()` utility (`frontend/src/utils/dates.ts`)
+
+```typescript
+export function parseServerDate(backendDateString: string): Date {
+  const hasTimezone = /[Z]$|[+-]\d{2}:\d{2}$/.test(backendDateString);
+  if (hasTimezone) return new Date(backendDateString);
+  return new Date(`${backendDateString}Z`);  // Append Z to treat as UTC
+}
+```
+
+**Usage:** `parseServerDate(order.created_at)` returns Date parsed as UTC, eliminating timezone drift on display.
+
+**Affected Components:**
+- ActiveOrders.tsx: elapsed time calculation (line 36)
+- Orders.tsx: order timestamp display
+- StockHistory.tsx: movement timestamp display
+- All components calling `.toLocaleString()` on the Date object
+
+**Display Result:** `toLocaleString()` then formats the Date using browser's locale, displaying in local timezone (Asia/Karachi in production) correctly.
+
+---
+
+### G. DINE_IN Running-Tab Frontend Architecture (Stage 4.D2)
 
 **Location:** Frontend cart/order state lives in `POSContext.tsx`; payment flow in `PaymentModal.tsx`
 
@@ -921,15 +1123,14 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 - ✅ Order opened lazily on first item add (not table select)
 - ✅ Detach on table/order-type switch
 
-**Frontend NOT YET IMPLEMENTED:**
-- Active orders page (GET /api/orders?status=OPEN) — no way to reopen a detached tab
-- KOT component (print batch_id, sent_at for kitchen) — kitchen has no batch visibility
-- Tables management UI — can select table but no management page
-- Receipt display of batch details (batch_id, sent_at per item) — receipt shows paid order only, not kitchen workflow
-- Open order indicator with refreshed count (30s polling implemented for topbar)
+**Frontend NOT YET IMPLEMENTED (Stage 4 Extensions):**
+- ❌ KOT component (print batch_id, sent_at for kitchen) — kitchen has no batch visibility
+- ❌ Receipt display of batch details (batch_id, sent_at per item) — receipt shows paid order only, not kitchen workflow
+- ✅ Active orders page (GET /api/orders?status=OPEN) — **NOW IMPLEMENTED** (can reopen detached tabs via ActiveOrders page)
+- ✅ Tables management UI — **NOW IMPLEMENTED** (Settings page with add/rename/remove/restore)
 
-**Known Production Limitations (Stage 4):**
-- No Active Orders page means a detached tab (table/order-type switch) cannot be reopened; during testing all six tables filled and required API cancellation
+**Resolved Known Production Limitations:**
+- ✅ Active Orders page exists; detached tabs can now be reopened (no longer requires API cancellation workaround)
 - Product clicks have no busy/loading guard — repeated clicks fire one API request each (harmless but poor UX)
 - Topbar polls GET /api/orders?status=OPEN every 30s for count only (does not fetch order details)
 - Untracked scratch scripts in backend/ (check_stock.py, list_open.py, cancel_open.py) trigger uvicorn --reload restarts
@@ -952,7 +1153,7 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 **Test Fixture Pattern (Windows):** Ad-hoc attributes attached to Session objects (e.g., `session.table_a_id = ...`) pass seeded IDs to tests. It works but is not clean and has spread across 5 Stage 4 test files. **Not ideal, but functional; no priority to refactor.**
 
-**Frontend Not Started:** Order panel buttons, active orders page, KOT component, tables UI, receipt updates not yet built. Stage 4 is backend-complete but frontend stage 4 is not started. **Next priority.**
+**Frontend Stage 4 Status:** Active Orders page and Tables UI now complete. KOT component and receipt batch details remain. Stage 4 backend complete, frontend 90% complete. **Next priority:** KOT component.
 
 ---
 
@@ -1019,22 +1220,22 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 | **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working |
 | **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
-| **Tests** | ✅ 328 passing | Comprehensive coverage of all Stage 4 functions across 18 test files |
+| **Tests** | ✅ 359 passing | Comprehensive coverage of all Stage 4 functions; includes 31 table management tests |
 
-### Frontend Status (Phases 1-10, Stage 4 D2 Complete)
+### Frontend Status (Phases 1-10, Stage 4 E1 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| **Frontend Build** | ✅ Clean | 27 vitest tests passing; `npm run build` succeeds (Git 58d2eba) |
+| **Frontend Build** | ✅ Clean | 27 vitest tests passing; `npm run build` succeeds (Git 37605fe) |
 | **Frontend State** | ✅ Complete | POSContext with discriminated CartItem, server order tracking (serverId, order), detach logic |
 | **Money Formatting** | ❌ Hardcoded | 29+ inline "Rs." calls; should centralize to `formatMoney()` |
 | **Print Support** | ✅ Implemented | 80mm thermal receipt working; 58mm not implemented |
 | **Order Panel (Phases 1-10)** | ✅ Complete | Handles OPEN orders, running tabs (Send/Cancel), no PENDING-item checkout |
 | **Order Panel (Stage 4)** | ✅ Complete | Send to Kitchen button, Cancel Order button, Proceed to Payment only when no PENDING |
 | **PaymentModal (Stage 4)** | ✅ Complete | Discount input for all types, exact tax calculation, CASH validation against adjusted total |
-| **Active Orders Page** | ❌ Missing | No UI for GET /api/orders?status=OPEN; detached tabs cannot be reopened |
+| **Active Orders Page** | ✅ Complete | 30s-polling list of OPEN orders; resume loads tab and navigates to POS; stale-order recovery |
 | **KOT Component** | ❌ Missing | No print view for kitchen batches (batch_id, sent_at visibility) |
-| **Tables UI** | ✅ Partial | Table selection working; no management/admin page |
+| **Tables UI** | ✅ Complete | Settings page: add/rename/remove/restore with soft delete; POS dropdown active-only; Show Removed toggle |
 
 ### Rule Compliance
 
@@ -1054,9 +1255,9 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 ---
 
 **Report Date:** 2026-08-19  
-**Git HEAD:** 58d2eba (4.D2)  
-**Backend Test Status:** 328 passing, 0 failing  
+**Git HEAD:** 37605fe (4.E1)  
+**Backend Test Status:** 359 passing, 0 failing  
 **Frontend Test Status:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean  
 **Alembic Status:** Clean (no pending migrations; head b3d5e7f9a1c3)  
-**Next Work:** Active Orders page, KOT component, tables management UI, settle discount cleanup debt
+**Next Work:** KOT component (kitchen slip print), money formatter centralization, settle discount cleanup debt
