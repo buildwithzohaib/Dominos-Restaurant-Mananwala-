@@ -27,16 +27,19 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
     today_end = today_start + timedelta(days=1)
 
     # === SALES CALCULATION ===
-    # Sum of totals from PAID orders created today (in paisa)
+    # Sum of totals from PAID orders paid today (in paisa).
+    # Uses paid_at, not created_at, because revenue exists only when payment is received.
     sales_result = db.query(func.sum(Order.total)).filter(
         Order.status == "PAID",
-        Order.created_at >= today_start,
-        Order.created_at < today_end,
+        Order.paid_at >= today_start,
+        Order.paid_at < today_end,
     ).scalar()
     sales = sales_result or 0
 
     # === ORDERS COUNT ===
-    # Count of PAID orders created today
+    # Count of PAID orders created today.
+    # OPEN QUESTION: should this be created_at or paid_at? "orders placed today" vs "orders paid today".
+    # For now, uses created_at (order placement time) — a defensible, simple reading.
     orders_count = db.query(func.count(Order.id)).filter(
         Order.status == "PAID",
         Order.created_at >= today_start,
@@ -61,16 +64,17 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
     ).scalar() or 0
 
     # === HOURLY SALES BREAKDOWN ===
-    # Group today's PAID orders by hour and sum their totals
+    # Group today's PAID orders by hour (of payment) and sum their totals.
+    # Uses paid_at to bucket revenue by the hour it was received, not when the order was created.
     hourly_sales_data = db.query(
-        func.strftime("%H", Order.created_at).label("hour"),
+        func.strftime("%H", Order.paid_at).label("hour"),
         func.sum(Order.total).label("revenue"),
     ).filter(
         Order.status == "PAID",
-        Order.created_at >= today_start,
-        Order.created_at < today_end,
+        Order.paid_at >= today_start,
+        Order.paid_at < today_end,
     ).group_by(
-        func.strftime("%H", Order.created_at)
+        func.strftime("%H", Order.paid_at)
     ).all()
 
     # Create hourly breakdown for all 24 hours (even those with no sales = 0), in paisa
@@ -82,15 +86,16 @@ def get_dashboard_overview(db: Session) -> DashboardOverviewOut:
     ]
 
     # === TOP SELLING PRODUCTS ===
-    # Sum quantities of each product sold in PAID orders today
+    # Sum quantities of each product sold in PAID orders today (by payment time).
+    # Uses paid_at to reflect products actually sold (paid for) today, not ordered.
     top_products_data = db.query(
         OrderItem.product_name,
         func.sum(OrderItem.quantity).label("total_quantity"),
         func.sum(OrderItem.line_total).label("total_revenue"),
     ).join(Order).filter(
         Order.status == "PAID",
-        Order.created_at >= today_start,
-        Order.created_at < today_end,
+        Order.paid_at >= today_start,
+        Order.paid_at < today_end,
     ).group_by(OrderItem.product_name).order_by(
         func.sum(OrderItem.quantity).desc()
     ).limit(5).all()

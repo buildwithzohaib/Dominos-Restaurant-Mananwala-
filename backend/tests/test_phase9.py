@@ -90,7 +90,8 @@ def test_basic_dashboard_metrics(db_session):
         payment_method="CASH",
         amount_received=50000
     ))
-    db.query(Order).filter(Order.id == order1.id).update({"created_at": today})
+    # Update both created_at and paid_at to match the test time, since dashboard now uses paid_at
+    db.query(Order).filter(Order.id == order1.id).update({"created_at": today, "paid_at": today})
     db.commit()
     print(f"Created order 1: {order1.order_number}, Total: {order1.total}")
 
@@ -107,7 +108,8 @@ def test_basic_dashboard_metrics(db_session):
         payment_method="CASH",
         amount_received=50000
     ))
-    db.query(Order).filter(Order.id == order2.id).update({"created_at": order2_time})
+    # Update both created_at and paid_at to match the test time, since dashboard now uses paid_at
+    db.query(Order).filter(Order.id == order2.id).update({"created_at": order2_time, "paid_at": order2_time})
     db.commit()
     print(f"Created order 2: {order2.order_number}, Total: {order2.total}")
 
@@ -124,7 +126,8 @@ def test_basic_dashboard_metrics(db_session):
         payment_method="CASH",
         amount_received=10000,
         change_amount=0,
-        created_at=tomorrow
+        created_at=tomorrow,
+        paid_at=tomorrow  # Set paid_at to tomorrow, matching created_at
     )
     db.add(order3)
     db.flush()
