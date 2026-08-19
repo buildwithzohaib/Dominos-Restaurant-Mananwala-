@@ -475,3 +475,73 @@ def test_table_id_still_present(test_client, setup_test_data):
     data = response.json()
     assert "table_id" in data
     assert data["table_id"] == setup_test_data['table_a_id']
+
+
+def test_patch_update_pending_item_quantity(test_client, setup_test_data):
+    """PATCH /api/orders/{id}/items/{item_id} updates quantity and recomputes totals."""
+    open_response = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_a_id']})
+    order_id = open_response.json()["id"]
+
+    items_response = test_client.post(
+        f"/api/orders/{order_id}/items",
+        json={"items": [{"product_id": setup_test_data['prod1_id'], "quantity": 2}]}
+    )
+    item_id = items_response.json()["items"][0]["id"]
+
+    # Update item to quantity 3
+    response = test_client.patch(
+        f"/api/orders/{order_id}/items/{item_id}",
+        json={"quantity": 3}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["items"][0]["quantity"] == 3
+    assert data["subtotal"] == 150000  # 50000 * 3
+
+
+def test_patch_update_pending_item_delete_with_quantity_zero(test_client, setup_test_data):
+    """PATCH with quantity=0 deletes the item from the order."""
+    open_response = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_a_id']})
+    order_id = open_response.json()["id"]
+
+    items_response = test_client.post(
+        f"/api/orders/{order_id}/items",
+        json={"items": [{"product_id": setup_test_data['prod1_id'], "quantity": 2}]}
+    )
+    item_id = items_response.json()["items"][0]["id"]
+
+    # Delete item by setting quantity to 0
+    response = test_client.patch(
+        f"/api/orders/{order_id}/items/{item_id}",
+        json={"quantity": 0}
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 0
+    assert data["subtotal"] == 0
+    assert data["total"] == 0
+
+
+def test_patch_update_item_on_different_order_returns_404(test_client, setup_test_data):
+    """PATCH returns 404 when item belongs to a different order (not 400)."""
+    open_response1 = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_a_id']})
+    order_id1 = open_response1.json()["id"]
+
+    open_response2 = test_client.post("/api/orders/open", json={"table_id": setup_test_data['table_b_id']})
+    order_id2 = open_response2.json()["id"]
+
+    items_response = test_client.post(
+        f"/api/orders/{order_id1}/items",
+        json={"items": [{"product_id": setup_test_data['prod1_id'], "quantity": 1}]}
+    )
+    item_id = items_response.json()["items"][0]["id"]
+
+    # Try to update item from order 1 on order 2
+    response = test_client.patch(
+        f"/api/orders/{order_id2}/items/{item_id}",
+        json={"quantity": 2}
+    )
+
+    assert response.status_code == 404

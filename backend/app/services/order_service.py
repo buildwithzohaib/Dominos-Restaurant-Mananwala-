@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
-from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, PayOrderIn
+from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, PayOrderIn, UpdatePendingItemIn
 
 logger = logging.getLogger(__name__)
 
@@ -495,6 +495,115 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
 
     db.commit()
     order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
+    return order_result
+
+
+def update_pending_item(db: Session, order_id: int, item_id: int, payload: UpdatePendingItemIn) -> Order:
+    """
+    Update the quantity of a PENDING item in an OPEN order.
+
+    Items can only be updated while they are PENDING (batch_id IS NULL). Once sent to
+    the kitchen (batch_id NOT NULL), items cannot be changed; they must be cancelled
+    instead. Order's money fields (subtotal, tax, total) are recomputed from ALL items
+    using the order's snapshotted tax_rate.
+
+    When quantity is set to 0, the item is deleted from the order entirely. The waiter
+    can always reduce or remove a line, even if the product is later disabled — only
+    increases are blocked by product availability.
+
+    Args:
+        db: database session
+        order_id: the order containing the item
+        item_id: the specific item to update
+        payload: UpdatePendingItemIn with new quantity (0 = delete)
+
+    Returns:
+        Updated Order with recomputed totals
+
+    Raises:
+        HTTPException for validation errors
+    """
+    # Load order and validate it exists and is OPEN
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(404, "Order not found.")
+    if order.status != "OPEN":
+        raise HTTPException(400, "Only an open order can be modified.")
+
+    # Load item and validate it exists, belongs to this order, and is PENDING
+    item = db.get(OrderItem, item_id)
+    if not item:
+        raise HTTPException(404, "Item not found.")
+    if item.order_id != order_id:
+        raise HTTPException(404, "Item not found.")
+    if item.batch_id is not None:
+        raise HTTPException(400, "Cannot modify an item that has been sent to the kitchen.")
+
+    # If quantity is 0, delete the item
+    if payload.quantity == 0:
+        db.delete(item)
+        db.flush()
+        # Recompute totals from remaining items
+        all_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+        subtotal = sum(item_obj.line_total for item_obj in all_items)
+        taxable = subtotal - order.discount
+        tax = (taxable * order.tax_rate + 5000) // 10000
+        total = taxable + tax
+
+        order.subtotal = subtotal
+        order.tax = tax
+        order.total = total
+        db.commit()
+        order_result = db.query(Order).options(joinedload(Order.items), joinedload(Order.table)).filter(Order.id == order.id).first()
+        return order_result
+
+    # For increases, get the product and validate stock availability
+    quantity_delta = payload.quantity - item.quantity
+    if quantity_delta > 0:
+        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == item.product_id).first()
+        if not product:
+            raise HTTPException(400, "Product not found.")
+        if not product.available:
+            raise HTTPException(400, f'"{product.name_display}" is disabled.')
+        if not product.category.active:
+            raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
+
+        # Sum quantities of OTHER PENDING items for this product (excluding the current item)
+        other_pending = db.query(
+            func.coalesce(func.sum(OrderItem.quantity), 0)
+        ).filter(
+            OrderItem.order_id == order_id,
+            OrderItem.product_id == item.product_id,
+            OrderItem.batch_id.is_(None),
+            OrderItem.id != item_id,
+        ).scalar()
+        total_needed = other_pending + payload.quantity
+
+        # Stock must be available for the new total
+        if product.stock < total_needed:
+            available = product.stock - other_pending
+            raise HTTPException(400, f'Only {available} of "{product.name_display}" available.')
+
+    # Update item quantity and recompute line_total using the line's original price
+    item.quantity = payload.quantity
+    item.line_total = item.price * item.quantity
+
+    # Recompute order's money fields from ALL items (existing + updated)
+    db.flush()
+    all_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+    subtotal = sum(item_obj.line_total for item_obj in all_items)
+    taxable = subtotal - order.discount
+    tax = (taxable * order.tax_rate + 5000) // 10000
+    total = taxable + tax
+
+    # Update order's money fields
+    order.subtotal = subtotal
+    order.tax = tax
+    order.total = total
+    # Leave discount, amount_received, change_amount, payment_method, delivery_charge unchanged
+
+    db.commit()
+    order_result = db.query(Order).options(joinedload(Order.items), joinedload(Order.table)).filter(Order.id == order.id).first()
     return order_result
 
 

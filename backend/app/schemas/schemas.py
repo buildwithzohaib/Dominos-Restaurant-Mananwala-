@@ -126,6 +126,11 @@ class AddItemsIn(BaseModel):
     items: list[OrderItemCreate] = Field(min_length=1)
 
 
+class UpdatePendingItemIn(BaseModel):
+    """Update quantity of a PENDING item in an OPEN order. quantity=0 deletes the item."""
+    quantity: int = Field(ge=0)
+
+
 class PayOrderIn(BaseModel):
     """Close an OPEN order by taking payment. All money in paisa."""
     payment_method: Literal["CASH", "CARD", "OTHER"] = "CASH"

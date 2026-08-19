@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.models import Order
-from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, OrderOut, PayOrderIn
-from app.services.order_service import add_items_to_order, cancel_order, create_open_order, create_order, pay_order, send_batch_to_kitchen
+from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, OrderOut, PayOrderIn, UpdatePendingItemIn
+from app.services.order_service import add_items_to_order, cancel_order, create_open_order, create_order, pay_order, send_batch_to_kitchen, update_pending_item
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -38,6 +38,10 @@ def get_order(order_id: int, db: Session = Depends(get_db)):
 @router.post("/{order_id}/items", response_model=OrderOut)
 def add_items(order_id: int, payload: AddItemsIn, db: Session = Depends(get_db)):
     return add_items_to_order(db, order_id, payload)
+
+@router.patch("/{order_id}/items/{item_id}", response_model=OrderOut)
+def update_item(order_id: int, item_id: int, payload: UpdatePendingItemIn, db: Session = Depends(get_db)):
+    return update_pending_item(db, order_id, item_id, payload)
 
 @router.post("/{order_id}/send", response_model=OrderOut)
 def send_batch(order_id: int, db: Session = Depends(get_db)):
