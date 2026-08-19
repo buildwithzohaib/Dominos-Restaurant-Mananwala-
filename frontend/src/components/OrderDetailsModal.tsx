@@ -4,6 +4,7 @@ import { useContext } from "react";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { SettingsContext } from "../context/SettingsContext";
+import { parseServerDate } from "../utils/dates";
 import type { Order } from "../types";
 
 export function OrderDetailsModal({
@@ -30,7 +31,7 @@ export function OrderDetailsModal({
 
         <div className="order-meta-row">
           <span>{order.order_type.replace("_", " ")}</span>
-          <span>{new Date(order.created_at).toLocaleString()}</span>
+          <span>{parseServerDate(order.created_at).toLocaleString()}</span>
         </div>
 
         <div className="receipt-line" />
@@ -118,7 +119,7 @@ export function OrderDetailsModal({
             <strong>Cancelled</strong>
             <span>{order.cancelled_reason}</span>
             {order.cancelled_at && (
-              <span>{new Date(order.cancelled_at).toLocaleString()}</span>
+              <span>{parseServerDate(order.cancelled_at).toLocaleString()}</span>
             )}
           </div>
         )}

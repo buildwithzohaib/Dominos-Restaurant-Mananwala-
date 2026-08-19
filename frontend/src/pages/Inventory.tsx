@@ -8,6 +8,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { StockAdjustmentModal } from "../components/StockAdjustmentModal";
 import { StockHistory } from "../components/StockHistory";
 import { useCatalog } from "../context/CatalogContext";
+import { parseServerDate } from "../utils/dates";
 
 import type { Product } from "../types";
 
@@ -108,7 +109,7 @@ export function Inventory() {
                   <span>
                     <StatusBadge status={item.stock_status} />
                   </span>
-                  <span>{new Date(item.updated_at).toLocaleString()}</span>
+                  <span>{parseServerDate(item.updated_at).toLocaleString()}</span>
                   <span>
                     <button
                       className="row-action-button"

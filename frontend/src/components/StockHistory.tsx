@@ -3,6 +3,7 @@ import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { useEffect, useState } from "react";
 
 import { api } from "../services/api";
+import { parseServerDate } from "../utils/dates";
 import type { StockMovement } from "../types";
 
 export function StockHistory() {
@@ -84,7 +85,7 @@ export function StockHistory() {
 
             {movements.map((m) => (
               <div className="history-row" key={m.id}>
-                <span>{new Date(m.created_at).toLocaleString()}</span>
+                <span>{parseServerDate(m.created_at).toLocaleString()}</span>
                 <span>{m.item_name}</span>
                 <span className={m.quantity_change > 0 ? "change-positive" : "change-negative"}>
                   {m.quantity_change > 0 ? `+${m.quantity_change}` : m.quantity_change}

@@ -7,6 +7,7 @@ import { OrderDetailsModal } from "../components/OrderDetailsModal";
 import { OrderStatusBadge } from "../components/OrderStatusBadge";
 
 import { api } from "../services/api";
+import { parseServerDate } from "../utils/dates";
 import type { Order, OrderStatus } from "../types";
 
 export function Orders() {
@@ -96,7 +97,7 @@ export function Orders() {
             {orders.map((o) => (
               <div className="orders-row" key={o.id}>
                 <strong>{o.order_number}</strong>
-                <span>{new Date(o.created_at).toLocaleString()}</span>
+                <span>{parseServerDate(o.created_at).toLocaleString()}</span>
                 <span>{o.customer?.name_display || "Walk-in"}</span>
                 <strong>{formatCurrency(o.total)}</strong>
                 <span>
