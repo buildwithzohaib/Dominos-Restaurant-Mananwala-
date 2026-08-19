@@ -77,7 +77,7 @@ export function PaymentModal({
         delivery_charge: state.orderType === "DELIVERY" ? Math.floor(parseFloat(state.deliveryChargeText) * 100 || 0) : undefined,
 
         items: state.cart.map((i) => ({
-          product_id: i.product.id,
+          product_id: i.kind==="local"?i.product.id:i.productId,
           quantity: i.quantity,
         })),
 

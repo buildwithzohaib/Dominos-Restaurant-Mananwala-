@@ -20,7 +20,7 @@ export interface StockPurchaseInput { quantity:number; purchase_price?:number; /
 export interface StockAdjustmentInput { quantity_change:number; reason:AdjustmentReason; note?:string; }
 export interface StockMovement { id:number; item_type:string; /* 'PRODUCT' | 'INGREDIENT' */ item_id:number; item_name:string; movement_type:MovementType; quantity_change:number; reason:string; supplier?:string|null; purchase_price?:number|null; /* paisa */ stock_before:number; stock_after:number; reference?:string|null; created_at:string; }
 export interface RestaurantTable { id:number; name:string; seats:number; active:boolean; }
-export interface CartItem { product:Product; quantity:number; }
+export type CartItem={kind:"local";product:Product;quantity:number}|{kind:"server";itemId:number;productId:number;productName:string;price:number;lineTotal:number;quantity:number;batchId:number|null;sentAt:string|null};
 export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ batch_id:number|null; sent_at:string|null; }
 // Customers (Phase 3.2–3.5)
 export interface Customer { id:number; name_display:string; phone_raw:string|null; phone_key:string|null; address:string|null; /* Phase 3.5: last used delivery address */ is_active:boolean; created_at:string; updated_at:string; }

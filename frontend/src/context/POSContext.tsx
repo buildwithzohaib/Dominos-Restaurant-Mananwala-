@@ -9,9 +9,9 @@ function reducer(s:State,a:Action):State{
  // Soft, UI-side stock cap — mirrors the backend's authoritative check (order_service)
  // so a customer can't queue up more than is on hand. The backend still re-validates
  // at order time, since this cart snapshot's stock can go stale between fetches.
- case"ADD":{const e=s.cart.find(i=>i.product.id===a.product.id);if(e)return e.quantity>=a.product.stock?s:{...s,cart:s.cart.map(i=>i.product.id===a.product.id?{...i,quantity:i.quantity+1}:i)};return a.product.stock<=0?s:{...s,cart:[...s.cart,{product:a.product,quantity:1}]};}
- case"SET_QTY":return{...s,cart:a.quantity<=0?s.cart.filter(i=>i.product.id!==a.productId):s.cart.map(i=>i.product.id===a.productId?{...i,quantity:Math.min(a.quantity,i.product.stock)}:i)};
- case"REMOVE":return{...s,cart:s.cart.filter(i=>i.product.id!==a.productId)};
+ case"ADD":{if(a.product.stock<=0)return s;const e=s.cart.find(i=>i.kind==="local"&&i.product.id===a.product.id);if(e&&e.kind==="local"){if(e.quantity>=a.product.stock)return s;return{...s,cart:s.cart.map(i=>i.kind==="local"&&i.product.id===a.product.id?{...i,quantity:i.quantity+1}:i)};}return{...s,cart:[...s.cart,{kind:"local",product:a.product,quantity:1}]};}
+ case"SET_QTY":if(a.quantity<=0)return{...s,cart:s.cart.filter(i=>!(i.kind==="local"&&i.product.id===a.productId))};return{...s,cart:s.cart.map(i=>i.kind==="local"&&i.product.id===a.productId?{...i,quantity:Math.min(a.quantity,i.product.stock)}:i)};
+ case"REMOVE":return{...s,cart:s.cart.filter(i=>!(i.kind==="local"&&i.product.id===a.productId))};
  case"CLEAR":return{...initialState,orderType:s.orderType,selectedTable:s.orderType==="DINE_IN"?s.selectedTable:null};
  case"ORDER_TYPE":{const newOrderType=a.value;const newState={...s,orderType:newOrderType,selectedTable:newOrderType==="DINE_IN"?s.selectedTable:null};if(newOrderType!=="DELIVERY"){newState.deliveryChargeText=""}return newState;};
  case"CUSTOMER":return{...s,selectedCustomer:a.value};
@@ -26,7 +26,7 @@ function reducer(s:State,a:Action):State{
  // cart line at the latest product and clamp its quantity to the current stock —
  // dropping the line entirely if it's now out of stock, so a product that just
  // sold out elsewhere can't still be checked out from a stale cart.
- case"SYNC_PRODUCTS":{const byId=new Map(a.products.map(p=>[p.id,p]));return{...s,cart:s.cart.map(i=>{const fresh=byId.get(i.product.id);return fresh?{product:fresh,quantity:Math.min(i.quantity,fresh.stock)}:i;}).filter(i=>i.quantity>0)};}
+ case"SYNC_PRODUCTS":{const byId=new Map(a.products.map(p=>[p.id,p]));return{...s,cart:s.cart.map(i=>{if(i.kind==="server")return i;const fresh=byId.get(i.product.id);return fresh?{...i,product:fresh,quantity:Math.min(i.quantity,fresh.stock)}:i;}).filter(i=>i.quantity>0)};}
  }
 }
 interface POSContextValue {
@@ -55,7 +55,7 @@ export function POSProvider({children}:{children:ReactNode}){
  const settingsContext=useContext(SettingsContext);
  const settings=settingsContext?.settings;
  const[state,dispatch]=useReducer(reducer,initialState);
- const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+i.product.price*i.quantity,0),[state.cart]);
+ const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+(i.kind==="local"?i.product.price:i.price)*i.quantity,0),[state.cart]);
  const discountAmount=Math.min(state.discount,subtotal);
  const taxable=subtotal-discountAmount;
  const taxRate=settings?.tax_enabled?(settings?.tax_rate??0):0;

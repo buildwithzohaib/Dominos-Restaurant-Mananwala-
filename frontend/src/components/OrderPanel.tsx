@@ -48,18 +48,23 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
           </div>
         ) : (
           state.cart.map((i) => {
-            const atStockLimit = i.quantity >= i.product.stock;
+            const productId=i.kind==="local"?i.product.id:i.productId;
+            const productName=i.kind==="local"?i.product.name_display:i.productName;
+            const productPrice=i.kind==="local"?i.product.price:i.price;
+            const rowKey=i.kind==="local"?`local-${i.product.id}`:`server-${i.itemId}`;
+            const isLocal=i.kind==="local";
+            const atStockLimit=isLocal&&i.quantity>=i.product.stock;
 
             return (
-              <div className="cart-row" key={i.product.id}>
+              <div className="cart-row" key={rowKey}>
                 <div className="cart-main">
-                  <strong>{i.product.name_display}</strong>
+                  <strong>{productName}</strong>
 
                   <span>
-                    {formatCurrency(i.product.price)} each
+                    {formatCurrency(productPrice)} each
                   </span>
 
-                  {atStockLimit && (
+                  {isLocal&&atStockLimit && (
                     <span className="cart-stock-hint">
                       Only {i.product.stock} in stock
                     </span>
@@ -69,7 +74,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                 <div className="cart-actions">
                   <button
                     onClick={() =>
-                      setQty(i.product.id, i.quantity - 1)
+                      setQty(productId, i.quantity - 1)
                     }
                   >
                     <Minus size={14} />
@@ -80,21 +85,21 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                   <button
                     disabled={atStockLimit}
                     onClick={() =>
-                      setQty(i.product.id, i.quantity + 1)
+                      setQty(productId, i.quantity + 1)
                     }
                   >
                     <Plus size={14} />
                   </button>
 
                   <button
-                    onClick={() => removeProduct(i.product.id)}
+                    onClick={() => removeProduct(productId)}
                   >
                     <Trash2 size={15} />
                   </button>
                 </div>
 
                 <strong className="line-total">
-                  {formatCurrency(i.product.price * i.quantity)}
+                  {formatCurrency(productPrice * i.quantity)}
                 </strong>
               </div>
             );
