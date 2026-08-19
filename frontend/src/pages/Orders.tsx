@@ -65,13 +65,13 @@ export function Orders() {
           </div>
 
           <div className="order-type-switcher">
-            {(["", "PAID", "CANCELLED"] as const).map((value) => (
+            {(["", "OPEN", "PAID", "CANCELLED"] as const).map((value) => (
               <button
                 key={value}
                 className={statusFilter === value ? "active" : ""}
                 onClick={() => setStatusFilter(value)}
               >
-                {value === "" ? "All" : value === "PAID" ? "Paid" : "Cancelled"}
+                {value === "" ? "All" : value === "OPEN" ? "Open" : value === "PAID" ? "Paid" : "Cancelled"}
               </button>
             ))}
           </div>
