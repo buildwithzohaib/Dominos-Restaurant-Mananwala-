@@ -62,7 +62,12 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
       }
       try {
         setAddError("");
+        const isNewOrder = !state.serverId;
         await addProductToDineIn(state.selectedTable.id, product);
+        // If this was the first item (new order opened), update the count immediately
+        if (isNewOrder) {
+          refreshOpenOrders();
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to add item";
         if (isOrderNotOpenError(msg)) {

@@ -109,6 +109,12 @@ export function PaymentModal({
 
       const now = new Date();
 
+      // After payment succeeds, the server must return an order with payment_method set.
+      // If it's null, that's a server error — we sent payment_method and it was processed.
+      if (!o.payment_method) {
+        throw new Error("Payment recorded but order missing payment method — server error");
+      }
+
       const receipt: ReceiptData = {
         orderNumber: o.order_number,
         orderType: o.order_type,

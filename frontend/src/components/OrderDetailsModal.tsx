@@ -106,7 +106,7 @@ export function OrderDetailsModal({
         <div className="order-status-row">
           <div>
             <span>Payment</span>
-            <strong>{order.payment_method}</strong>
+            <strong>{order.payment_method || "—"}</strong>
           </div>
           <div>
             <span>Status</span>
