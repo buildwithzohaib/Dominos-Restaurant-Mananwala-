@@ -3,8 +3,8 @@
 **Date:** 2026-08-19  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
-**Stage 4 (Running Tabs):** ✅ COMPLETE (backend only)  
-**Git HEAD:** 266502f (4.B6)
+**Stage 4 (Running Tabs):** ✅ COMPLETE (backend + frontend)  
+**Git HEAD:** 58d2eba (4.D2)
 
 ---
 
@@ -392,9 +392,96 @@ interface State {
 
 **Error handling:** Rejects if response not ok; tries to extract `detail` from JSON error body
 
+**Stage 4 New Methods (running tabs):**
+- `openOrder(table_id)` → POST /api/orders/open
+- `addItemsToOrder(order_id, payload)` → POST /api/orders/{id}/items
+- `updatePendingItem(order_id, item_id, payload)` → PATCH /api/orders/{order_id}/items/{item_id}
+- `sendBatchToKitchen(order_id)` → POST /api/orders/{id}/send
+- `payOrderDineIn(order_id, payload)` → POST /api/orders/{id}/pay
+
 ---
 
-### C. Money Formatting for Display
+### D. DINE_IN Running-Tab Frontend Architecture (Stage 4.D2)
+
+**Location:** Frontend cart/order state lives in `POSContext.tsx`; payment flow in `PaymentModal.tsx`
+
+**CartItem Discriminated Union:**
+
+Frontend cart items have two variants, selected by `kind` field:
+
+```typescript
+type CartItem = 
+  | {kind: "local"; product: Product; quantity: number}
+  | {kind: "server"; itemId: number; productId: number; productName: string; 
+     price: number; lineTotal: number; quantity: number; 
+     batchId: number | null; sentAt: string | null}
+```
+
+- **"local":** Items in a TAKEAWAY/DELIVERY cart (before order creation). Holds full `Product` object.
+- **"server":** Items on a DINE_IN running tab after `openOrder()` succeeds. Holds snapshotted `productName` and `price` (Rule 7), plus `batchId` (NULL=PENDING, number=SENT) and `sentAt` timestamp. Updates via LOAD_ORDER action after server operations.
+
+**Lazy Order Opening:**
+
+- **NOT** on table select — table selection alone does not create an order (would lock the table with an empty OPEN order).
+- **ON first item add:** `addProductToDineIn()` checks if `serverId` exists. If not, calls `openOrder(tableId)`, stores `serverId` in state, then adds the item.
+- This prevents empty tables from being locked while a cashier is browsing or selecting items.
+
+**Detach Behavior (table/order-type switch):**
+
+When user switches table or order type while a DINE_IN order is open:
+- `clear()` resets cart, discount, and `serverId` to undefined
+- The server order stays **OPEN** on the server (not cancelled)
+- Local state is detached; the order can be reopened later (but no Active Orders page exists yet, so this is not visible to the user)
+- This prevents accidental cancellations and allows a cashier to step away and resume
+
+**SYNC_PRODUCTS Behavior:**
+
+- For TAKEAWAY/DELIVERY: `SYNC_PRODUCTS` action updates local cart items' `product` references and caps quantities to new stock
+- For DINE_IN: `SYNC_PRODUCTS` never touches server items; instead, the new product list is always derived from the server response via `LOAD_ORDER` after any operation (add items, update item, send batch)
+- Server response is the source of truth; client re-mapping is not applied to server items
+
+**Tax Rate Snapshot:**
+
+- POSContext computes `taxRate` dynamically:
+  - If `serverId` exists AND `state.order` exists: use `state.order.tax_rate` (the order's snapshot from when it was opened)
+  - Otherwise: use `settings.tax_enabled` and `settings.tax_rate` (current settings)
+- This ensures the client computes tax using the same rate the server will use in `pay_order()`, even if settings change mid-tab
+- Order snapshots tax rate at open time per Rule 7
+
+**Send to Kitchen Button:**
+
+- Enabled only when both:
+  - `serverId` exists (DINE_IN order is open)
+  - At least one PENDING item exists (batch_id === null)
+- Disabled otherwise, to prevent sending when nothing new is ready
+
+**Proceed to Payment Button:**
+
+- Enabled only when both:
+  - Cart is not empty
+  - NO PENDING items remain (all items have been sent in a batch, batch_id !== null)
+- Disabled if any item is PENDING, because `pay_order()` rejects OPEN orders with PENDING items
+
+**Discount Entry (Payment Time):**
+
+- Discount is now entered in `PaymentModal` (via `setDiscount()` from context)
+- All order types (DINE_IN, TAKEAWAY, DELIVERY) use the same discount input in `PaymentModal`
+- When user changes the discount input, POSContext recomputes `total` (with discount applied) immediately
+- Both the "Total due" display and the CASH validation use this recomputed context `total` (exact, not approximate)
+
+**Payment Amount Handling:**
+
+- CASH: User enters amount received. Validated client-side (received >= total). The figure on screen is the amount the cashier must collect; if it is off by the tax on the discount, the cashier takes the wrong amount and gives wrong change — silently, every order. To prevent this, discount is routed through context so POSContext recomputes total exactly, and the on-screen and validated figures are correct.
+- CARD/OTHER: `amount_received` sent to server as 0 (not validated or used for change computation, which is always 0 for non-CASH)
+
+**TAKEAWAY/DELIVERY Unchanged:**
+
+- Still use single-shot `createOrder()` path (no running tabs)
+- Discount collected in `PaymentModal` same as DINE_IN
+
+---
+
+### E. Money Formatting for Display
 
 **Status:** ❌ **NOT CENTRALIZED** — Hardcoded inline everywhere
 
@@ -751,6 +838,40 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ## 8. KNOWN GAPS
 
+### Stage 4 Backend: COMPLETE ✅ | Frontend: COMPLETE ✅
+
+#### Stage 4.D2 Frontend Implementation (2026-08-19)
+
+**Implemented:**
+- ✅ Discriminated union CartItem type (kind "local" vs "server")
+- ✅ Lazy order opening on first item, not table select
+- ✅ Detach behavior (table/order-type switch leaves server order OPEN)
+- ✅ LOAD_ORDER action to wholesale replace cart from server
+- ✅ SYNC_PRODUCTS never touches server items
+- ✅ TaxRate snapshot from order when serverId exists
+- ✅ Send to Kitchen button (enabled only with PENDING items)
+- ✅ Proceed to Payment button (enabled only when NO PENDING items)
+- ✅ Discount entered in PaymentModal for ALL order types (behavioral change)
+- ✅ amount_received: 0 for CARD/OTHER, validated for CASH
+- ✅ Context total recomputed on discount change (exact, not approximate)
+- ✅ Frontend builds clean, 27 vitest tests passing
+
+**Build Status:** ✅ `npm run build` clean (Git HEAD 58d2eba)
+
+#### Behavioral Change: Discount Entry
+
+**What changed:** Discount is now collected at payment time only (in PaymentModal), not in OrderPanel.
+
+**Affected:** TAKEAWAY and DELIVERY orders (DINE_IN always used payment-time discount).
+
+**Old behavior:** Discount entered in OrderPanel, persisted across payment modal open/close, displayed in order summary.
+
+**New behavior:** Discount entered only in PaymentModal. OrderPanel no longer has a discount field or discount summary line. Discount does not appear in order composition view; it is a payment-time decision.
+
+**What happened:** During D2 implementation, a second discount input was added to PaymentModal for DINE_IN, while OrderPanel's discount field remained. This created a duplicated-input bug: a discount typed into PaymentModal was silently dropped on TAKEAWAY/DELIVERY (only OrderPanel's discount was sent to the server). The first fix scoped the new field to DINE_IN only. The user then decided discount should be collected at payment time for every order type, so we consolidated both inputs into PaymentModal and removed OrderPanel's field. This is a deliberate behavioral change and is noted as cleanup debt if future work prefers order-time discount entry.
+
+---
+
 ### Stage 4 Backend: COMPLETE ✅ | Frontend: NOT STARTED
 
 **Business Model:** The restaurant operates table service where customers sit at a table and place orders incrementally:
@@ -789,21 +910,37 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 - `UpdatePendingItemIn` — Update quantity of PENDING item (quantity; 0 = delete)
 - `PayOrderIn` — Close OPEN order (payment_method, discount, amount_received)
 
-**Frontend NOT YET IMPLEMENTED:**
-- Order panel buttons for open order workflow
-- Active orders page (GET /api/orders?status=OPEN)
-- KOT component (print batch_id, sent_at for kitchen)
-- Tables management UI
-- Receipt updates (show table name, batch_id, sent_at, paid_at)
-- Payment flow for OPEN orders
+**Frontend D2 COMPLETED:**
+- ✅ Order panel cart with discriminated CartItem (local vs server)
+- ✅ Send to Kitchen button with PENDING item check
+- ✅ Cancel Order button (opens CancelOrderModal)
+- ✅ Proceed to Payment button (enabled only when no PENDING items)
+- ✅ PaymentModal discount input (all order types, calls setDiscount)
+- ✅ CASH validation against exact discount-adjusted total
+- ✅ Receipt data passed from server order response
+- ✅ Order opened lazily on first item add (not table select)
+- ✅ Detach on table/order-type switch
 
-**Critical Frontend Requirements (when implementing):**
-- order.payment_method is NULL while OPEN — handle null checks in all receipt/display code
-- order.paid_at is NULL until payment — use for payment UI state
-- item.batch_id NULL = PENDING (not sent), number = SENT (sent in that batch)
-- Never display order.table_id to user; use order.table.name (Rule 2)
-- Pay button must be hidden while any item is PENDING
-- Tables are now essential to the business model (no longer optional)
+**Frontend NOT YET IMPLEMENTED:**
+- Active orders page (GET /api/orders?status=OPEN) — no way to reopen a detached tab
+- KOT component (print batch_id, sent_at for kitchen) — kitchen has no batch visibility
+- Tables management UI — can select table but no management page
+- Receipt display of batch details (batch_id, sent_at per item) — receipt shows paid order only, not kitchen workflow
+- Open order indicator with refreshed count (30s polling implemented for topbar)
+
+**Known Production Limitations (Stage 4):**
+- No Active Orders page means a detached tab (table/order-type switch) cannot be reopened; during testing all six tables filled and required API cancellation
+- Product clicks have no busy/loading guard — repeated clicks fire one API request each (harmless but poor UX)
+- Topbar polls GET /api/orders?status=OPEN every 30s for count only (does not fetch order details)
+- Untracked scratch scripts in backend/ (check_stock.py, list_open.py, cancel_open.py) trigger uvicorn --reload restarts
+- ~26 old .db backup/test files clutter backend/ directory
+
+**Critical Runtime Assumptions (all working):**
+- order.payment_method is NULL while OPEN — pay() branches on state.serverId, not method
+- order.paid_at is NULL until payment — receipt created from server response after pay_order()
+- item.batch_id NULL = PENDING (not sent to kitchen), number = SENT (decremented on send, not pay)
+- order.table.name used in UI (rule 2: never display table_id)
+- order.tax_rate snapshot used for tax calculation (not current settings)
 
 ---
 
@@ -884,17 +1021,20 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
 | **Tests** | ✅ 328 passing | Comprehensive coverage of all Stage 4 functions across 18 test files |
 
-### Frontend Status (Phases 1-10, Stage 4 Frontend Not Started)
+### Frontend Status (Phases 1-10, Stage 4 D2 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| **Frontend State** | ✅ Good | POSContext with proper cart sync and stock cap |
+| **Frontend Build** | ✅ Clean | 27 vitest tests passing; `npm run build` succeeds (Git 58d2eba) |
+| **Frontend State** | ✅ Complete | POSContext with discriminated CartItem, server order tracking (serverId, order), detach logic |
 | **Money Formatting** | ❌ Hardcoded | 29+ inline "Rs." calls; should centralize to `formatMoney()` |
 | **Print Support** | ✅ Implemented | 80mm thermal receipt working; 58mm not implemented |
-| **Order Panel** | ✅ Phases 1-10 | Does not yet handle OPEN orders, running tabs, KOT batches |
-| **Active Orders Page** | ❌ Missing | No UI for GET /api/orders?status=OPEN |
-| **KOT Component** | ❌ Missing | No print view for kitchen batches |
-| **Tables UI** | ❌ Missing | No table management page |
+| **Order Panel (Phases 1-10)** | ✅ Complete | Handles OPEN orders, running tabs (Send/Cancel), no PENDING-item checkout |
+| **Order Panel (Stage 4)** | ✅ Complete | Send to Kitchen button, Cancel Order button, Proceed to Payment only when no PENDING |
+| **PaymentModal (Stage 4)** | ✅ Complete | Discount input for all types, exact tax calculation, CASH validation against adjusted total |
+| **Active Orders Page** | ❌ Missing | No UI for GET /api/orders?status=OPEN; detached tabs cannot be reopened |
+| **KOT Component** | ❌ Missing | No print view for kitchen batches (batch_id, sent_at visibility) |
+| **Tables UI** | ✅ Partial | Table selection working; no management/admin page |
 
 ### Rule Compliance
 
@@ -914,7 +1054,9 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 ---
 
 **Report Date:** 2026-08-19  
-**Git HEAD:** 266502f (4.B6)  
-**Test Status:** 328 passing, 0 failing  
+**Git HEAD:** 58d2eba (4.D2)  
+**Backend Test Status:** 328 passing, 0 failing  
+**Frontend Test Status:** 27 vitest tests passing  
+**Frontend Build:** ✅ Clean  
 **Alembic Status:** Clean (no pending migrations; head b3d5e7f9a1c3)  
-**Next Work:** Stage 4 Frontend (order panel, active orders, KOT, tables UI)
+**Next Work:** Active Orders page, KOT component, tables management UI, settle discount cleanup debt

@@ -23,3 +23,8 @@ dist/
 .env
 backend/baseline_*.json
 pytest_output.txt
+backend/*.db
+backend/check_*.py
+backend/list_*.py
+backend/cancel_*.py
+backend/try_*.py
