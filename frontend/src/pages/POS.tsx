@@ -14,6 +14,8 @@ import { usePOS } from "../context/POSContext";
 import { useCatalog } from "../context/CatalogContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { getRestaurantLetter } from "../utils/restaurant";
+import { api } from "../services/api";
+import type { OrderType, Product, RestaurantTable } from "../types";
 
 export function POS() {
   const {
@@ -22,12 +24,70 @@ export function POS() {
     setOrderType,
     setTable,
     syncProducts,
+    clear,
+    addProductToDineIn,
   } = usePOS();
 
   const { catalogProducts, catalogCategories, tables, refresh } = useCatalog();
 
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
+
+  const [addError, setAddError] = useState("");
+  const [openOrderCount, setOpenOrderCount] = useState(0);
+
+  // Fetch open order count
+  useEffect(() => {
+    const fetchOpenOrders = async () => {
+      try {
+        const orders = await api.getOrders({ status: "OPEN" });
+        setOpenOrderCount(orders.length);
+      } catch (e) {
+        console.error("Failed to fetch open orders:", e);
+      }
+    };
+    fetchOpenOrders();
+    const interval = setInterval(fetchOpenOrders, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Handle adding product to DINE_IN order
+  const handleAddProduct = async (product: Product) => {
+    if (state.orderType === "DINE_IN") {
+      if (!state.selectedTable) {
+        setAddError("Select a table first");
+        return;
+      }
+      try {
+        setAddError("");
+        await addProductToDineIn(state.selectedTable.id, product);
+      } catch (e) {
+        const msg=e instanceof Error?e.message:"Failed to add item";
+        const detail=state.serverId&&state.selectedTable?` The tab is open on ${state.selectedTable.name} and can be managed from Active Orders.`:"";
+        setAddError(msg+detail);
+      }
+    } else {
+      addProduct(product);
+    }
+  };
+
+  // Handle table switch with detach
+  const handleTableChange = (newTable: RestaurantTable | null) => {
+    if (state.serverId) {
+      // Detach from the open order
+      clear();
+    }
+    setTable(newTable);
+  };
+
+  // Handle order type switch with detach
+  const handleOrderTypeChange = (type: OrderType) => {
+    if (state.serverId) {
+      // Detach from the open order
+      clear();
+    }
+    setOrderType(type);
+  };
 
   // Whenever the product list is refreshed (after an order or an inventory edit),
   // re-point any existing cart lines at the latest stock so a line added before a
@@ -118,7 +178,7 @@ export function POS() {
                     : ""
                 }
                 onClick={() =>
-                  setOrderType(type)
+                  handleOrderTypeChange(type)
                 }
               >
                 {type === "DINE_IN"
@@ -141,7 +201,7 @@ export function POS() {
                 state.selectedTable?.id ?? ""
               }
               onChange={(e) =>
-                setTable(
+                handleTableChange(
                   tables.find(
                     (table) =>
                       table.id ===
@@ -173,6 +233,12 @@ export function POS() {
         </div>
 
 
+        {openOrderCount > 0 && (
+          <div className="topbar-indicator">
+            Open orders: {openOrderCount}
+          </div>
+        )}
+
         <div className="topbar-user">
 
           <div className="avatar">
@@ -193,6 +259,11 @@ export function POS() {
 
       </header>
 
+      {addError && (
+        <div className="error-banner">
+          {addError}
+        </div>
+      )}
 
       {/* POS MAIN AREA */}
 
@@ -246,7 +317,7 @@ export function POS() {
               <ProductCard
                 key={product.id}
                 product={product}
-                onAdd={addProduct}
+                onAdd={handleAddProduct}
               />
 
             ))}

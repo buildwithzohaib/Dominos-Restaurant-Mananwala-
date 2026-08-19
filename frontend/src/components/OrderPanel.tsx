@@ -20,7 +20,11 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
     setQty,
     removeProduct,
     setDiscount,
+    setQtyOnServerItem,
+    removeServerItem,
   } = usePOS();
+
+  const [error, setError] = useState("");
 
   const [discountText, setDiscountText] = useState(
     String(paisaToRupees(state.discount))
@@ -28,6 +32,11 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
 
   return (
     <aside className="order-panel">
+      {error && (
+        <div className="error-box">
+          {error}
+        </div>
+      )}
       <div className="panel-heading">
         <div>
           <p className="eyebrow">CURRENT ORDER</p>
@@ -73,9 +82,17 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
 
                 <div className="cart-actions">
                   <button
-                    onClick={() =>
-                      setQty(productId, i.quantity - 1)
-                    }
+                    onClick={async () => {
+                      try {
+                        if (i.kind === "local") {
+                          setQty(productId, i.quantity - 1);
+                        } else {
+                          await setQtyOnServerItem(state.serverId!, i.itemId, i.quantity - 1);
+                        }
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed to update quantity");
+                      }
+                    }}
                   >
                     <Minus size={14} />
                   </button>
@@ -84,15 +101,33 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
 
                   <button
                     disabled={atStockLimit}
-                    onClick={() =>
-                      setQty(productId, i.quantity + 1)
-                    }
+                    onClick={async () => {
+                      try {
+                        if (i.kind === "local") {
+                          setQty(productId, i.quantity + 1);
+                        } else {
+                          await setQtyOnServerItem(state.serverId!, i.itemId, i.quantity + 1);
+                        }
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed to update quantity");
+                      }
+                    }}
                   >
                     <Plus size={14} />
                   </button>
 
                   <button
-                    onClick={() => removeProduct(productId)}
+                    onClick={async () => {
+                      try {
+                        if (i.kind === "local") {
+                          removeProduct(productId);
+                        } else {
+                          await removeServerItem(state.serverId!, i.itemId);
+                        }
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Failed to remove item");
+                      }
+                    }}
                   >
                     <Trash2 size={15} />
                   </button>
