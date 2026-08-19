@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import { usePOS } from "../context/POSContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
+import { isOrderNotOpenError } from "../utils/orderErrors";
 import { CustomerPanel } from "./CustomerPanel";
 import { CancelOrderModal } from "./CancelOrderModal";
 import { api } from "../services/api";
@@ -31,6 +32,16 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
 
+  // Handle race condition: if order was paid/cancelled on another terminal
+  function handleOrderNotOpenError(errorMessage: string): boolean {
+    if (isOrderNotOpenError(errorMessage)) {
+      clear();
+      setError("This tab is no longer open — it may have been paid or cancelled on another terminal.");
+      return true;
+    }
+    return false;
+  }
+
   const handleSendToKitchen = async () => {
     if (!state.serverId) return;
     setSendBusy(true);
@@ -38,7 +49,10 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
     try {
       await sendBatchAndLoad(state.serverId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to send to kitchen");
+      const msg = e instanceof Error ? e.message : "Failed to send to kitchen";
+      if (!handleOrderNotOpenError(msg)) {
+        setError(msg);
+      }
     } finally {
       setSendBusy(false);
     }
@@ -118,7 +132,10 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                           await setQtyOnServerItem(state.serverId!, i.itemId, i.quantity - 1);
                         }
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed to update quantity");
+                        const msg = e instanceof Error ? e.message : "Failed to update quantity";
+                        if (!handleOrderNotOpenError(msg)) {
+                          setError(msg);
+                        }
                       }
                     }}
                   >
@@ -137,7 +154,10 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                           await setQtyOnServerItem(state.serverId!, i.itemId, i.quantity + 1);
                         }
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed to update quantity");
+                        const msg = e instanceof Error ? e.message : "Failed to update quantity";
+                        if (!handleOrderNotOpenError(msg)) {
+                          setError(msg);
+                        }
                       }
                     }}
                   >
@@ -154,7 +174,10 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                           await removeServerItem(state.serverId!, i.itemId);
                         }
                       } catch (e) {
-                        setError(e instanceof Error ? e.message : "Failed to remove item");
+                        const msg = e instanceof Error ? e.message : "Failed to remove item";
+                        if (!handleOrderNotOpenError(msg)) {
+                          setError(msg);
+                        }
                       }
                     }}
                   >

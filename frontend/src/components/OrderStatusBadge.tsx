@@ -1,11 +1,13 @@
 import type { OrderStatus } from "../types";
 
 const LABELS: Record<OrderStatus, string> = {
+  OPEN: "Open",
   PAID: "Paid",
   CANCELLED: "Cancelled",
 };
 
 const CLASSES: Record<OrderStatus, string> = {
+  OPEN: "low-stock",
   PAID: "in-stock",
   CANCELLED: "out-of-stock",
 };

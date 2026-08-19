@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { parseServerDate } from "../utils/dates";
+import { usePOS } from "../context/POSContext";
 import { api } from "../services/api";
-import type { Order } from "../types";
+import type { Order, OrderStatus } from "../types";
 
-export function ActiveOrders({ onResume }: { onResume: (order: Order) => void }) {
+export function ActiveOrders({ onResume }: { onResume: () => void }) {
   const formatCurrency = useCurrencyFormat();
+  const { setOrderType, setTable, loadOrder, openOrder } = usePOS();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [staleError, setStaleError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -61,6 +64,27 @@ export function ActiveOrders({ onResume }: { onResume: (order: Order) => void })
     return <span className="status-badge low-stock">{pending} pending</span>;
   }
 
+  async function handleResume(order: Order) {
+    setStaleError("");
+
+    // Guard: Check if order is still OPEN in the list data
+    if (order.status !== "OPEN") {
+      setStaleError(`Order #${order.order_number} is no longer open — it may have been paid or cancelled on another terminal.`);
+      // Refresh the list to reflect current state
+      load();
+      return;
+    }
+
+    // Load into POSContext
+    setOrderType("DINE_IN");
+    setTable(order.table);
+    loadOrder(order);
+    openOrder(order.id);
+
+    // Navigate to POS
+    onResume();
+  }
+
   return (
     <div className="orders-page">
       <div className="page-header">
@@ -71,6 +95,7 @@ export function ActiveOrders({ onResume }: { onResume: (order: Order) => void })
       </div>
 
       {error && <div className="error-box">{error}</div>}
+      {staleError && <div className="error-box">{staleError}</div>}
 
       <div className="orders-card">
         {loading ? (
@@ -100,7 +125,7 @@ export function ActiveOrders({ onResume }: { onResume: (order: Order) => void })
                 <span>{getStatusBadge(o)}</span>
                 <button
                   className="row-action-button"
-                  onClick={() => onResume(o)}
+                  onClick={() => handleResume(o)}
                 >
                   Resume
                 </button>

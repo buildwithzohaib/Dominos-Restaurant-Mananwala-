@@ -55,6 +55,8 @@ interface POSContextValue {
   removeServerItem: (orderId: number, itemId: number) => Promise<void>;
   addProductToDineIn: (tableId: number, product: Product) => Promise<void>;
   sendBatchAndLoad: (orderId: number) => Promise<void>;
+  loadOrder: (order: Order) => void;
+  openOrder: (serverId: number) => void;
 }
 
 const C = createContext<POSContextValue | null>(null);
@@ -88,7 +90,9 @@ export function POSProvider({children}:{children:ReactNode}){
  setQtyOnServerItem:useCallback(async(orderId:number,itemId:number,quantity:number)=>{const updated=await api.updatePendingItem(orderId,itemId,{quantity});dispatch({type:"LOAD_ORDER",order:updated});},[]),
  removeServerItem:useCallback(async(orderId:number,itemId:number)=>{const updated=await api.updatePendingItem(orderId,itemId,{quantity:0});dispatch({type:"LOAD_ORDER",order:updated});},[]),
  addProductToDineIn:useCallback(async(tableId:number,product:Product)=>{if(!state.serverId){const order=await api.openOrder({table_id:tableId});dispatch({type:"OPEN_ORDER",serverId:order.id});const updated=await api.addItemsToOrder(order.id,{items:[{product_id:product.id,quantity:1}]});dispatch({type:"LOAD_ORDER",order:updated});}else{const updated=await api.addItemsToOrder(state.serverId,{items:[{product_id:product.id,quantity:1}]});dispatch({type:"LOAD_ORDER",order:updated});}},[state.serverId]),
- sendBatchAndLoad:useCallback(async(orderId:number)=>{const updated=await api.sendBatchToKitchen(orderId);dispatch({type:"LOAD_ORDER",order:updated});},[])};
+ sendBatchAndLoad:useCallback(async(orderId:number)=>{const updated=await api.sendBatchToKitchen(orderId);dispatch({type:"LOAD_ORDER",order:updated});},[]),
+ loadOrder:useCallback((order:Order)=>{dispatch({type:"LOAD_ORDER",order});},[]),
+ openOrder:useCallback((serverId:number)=>{dispatch({type:"OPEN_ORDER",serverId});},[])};
  return <C.Provider value={value}>{children}</C.Provider>;
 }
 export function usePOS() {

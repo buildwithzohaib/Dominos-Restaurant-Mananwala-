@@ -14,6 +14,7 @@ import { usePOS } from "../context/POSContext";
 import { useCatalog } from "../context/CatalogContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { getRestaurantLetter } from "../utils/restaurant";
+import { isOrderNotOpenError } from "../utils/orderErrors";
 import { api } from "../services/api";
 import type { OrderType, Product, RestaurantTable } from "../types";
 
@@ -63,9 +64,14 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
         setAddError("");
         await addProductToDineIn(state.selectedTable.id, product);
       } catch (e) {
-        const msg=e instanceof Error?e.message:"Failed to add item";
-        const detail=state.serverId&&state.selectedTable?` The tab is open on ${state.selectedTable.name} and can be managed from Active Orders.`:"";
-        setAddError(msg+detail);
+        const msg = e instanceof Error ? e.message : "Failed to add item";
+        if (isOrderNotOpenError(msg)) {
+          clear();
+          setAddError("This tab is no longer open — it may have been paid or cancelled on another terminal.");
+        } else {
+          const detail = state.serverId && state.selectedTable ? ` The tab is open on ${state.selectedTable.name} and can be managed from Active Orders.` : "";
+          setAddError(msg + detail);
+        }
       }
     } else {
       addProduct(product);
