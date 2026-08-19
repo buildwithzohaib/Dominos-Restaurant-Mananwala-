@@ -37,17 +37,18 @@ export function POS() {
   const [openOrderCount, setOpenOrderCount] = useState(0);
 
   // Fetch open order count
+  const refreshOpenOrders = async () => {
+    try {
+      const orders = await api.getOrders({ status: "OPEN" });
+      setOpenOrderCount(orders.length);
+    } catch (e) {
+      console.error("Failed to fetch open orders:", e);
+    }
+  };
+
   useEffect(() => {
-    const fetchOpenOrders = async () => {
-      try {
-        const orders = await api.getOrders({ status: "OPEN" });
-        setOpenOrderCount(orders.length);
-      } catch (e) {
-        console.error("Failed to fetch open orders:", e);
-      }
-    };
-    fetchOpenOrders();
-    const interval = setInterval(fetchOpenOrders, 30000);
+    refreshOpenOrders();
+    const interval = setInterval(refreshOpenOrders, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -331,6 +332,7 @@ export function POS() {
           onPay={() =>
             setPaymentOpen(true)
           }
+          onCancelSuccess={refreshOpenOrders}
         />
 
       </main>

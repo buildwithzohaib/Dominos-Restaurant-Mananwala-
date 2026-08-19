@@ -5,8 +5,11 @@ import { usePOS } from "../context/POSContext";
 import { SettingsContext } from "../context/SettingsContext";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import { CustomerPanel } from "./CustomerPanel";
+import { CancelOrderModal } from "./CancelOrderModal";
+import { api } from "../services/api";
+import type { Order } from "../types";
 
-export function OrderPanel({ onPay }: { onPay: () => void }) {
+export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCancelSuccess?: () => void }) {
   const formatCurrency = useCurrencyFormat();
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
@@ -22,15 +25,43 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
     setDiscount,
     setQtyOnServerItem,
     removeServerItem,
+    clear,
+    sendBatchAndLoad,
   } = usePOS();
 
   const [error, setError] = useState("");
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
 
   const [discountText, setDiscountText] = useState(
     String(paisaToRupees(state.discount))
   );
 
+  const handleSendToKitchen = async () => {
+    if (!state.serverId) return;
+    setSendBusy(true);
+    setError("");
+    try {
+      await sendBatchAndLoad(state.serverId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send to kitchen");
+    } finally {
+      setSendBusy(false);
+    }
+  };
+
+  const handleCancelSuccess = () => {
+    setCancelModalOpen(false);
+    clear();
+    onCancelSuccess?.();
+  };
+
+  const hasPendingItems = state.cart.some(i => i.kind === "server" && i.batchId === null);
+  const canSend = state.serverId && hasPendingItems;
+  const canPay = state.cart.length > 0 && !state.cart.some(i => i.kind === "server" && i.batchId === null);
+
   return (
+    <>
     <aside className="order-panel">
       {error && (
         <div className="error-box">
@@ -64,8 +95,10 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
             const isLocal=i.kind==="local";
             const atStockLimit=isLocal&&i.quantity>=i.product.stock;
 
+            const isSent = i.kind === "server" && i.batchId !== null;
+
             return (
-              <div className="cart-row" key={rowKey}>
+              <div className={`cart-row ${isSent ? "cart-row-sent" : ""}`} key={rowKey}>
                 <div className="cart-main">
                   <strong>{productName}</strong>
 
@@ -82,6 +115,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
 
                 <div className="cart-actions">
                   <button
+                    disabled={isSent}
                     onClick={async () => {
                       try {
                         if (i.kind === "local") {
@@ -100,7 +134,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                   <b>{i.quantity}</b>
 
                   <button
-                    disabled={atStockLimit}
+                    disabled={atStockLimit || isSent}
                     onClick={async () => {
                       try {
                         if (i.kind === "local") {
@@ -117,6 +151,7 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
                   </button>
 
                   <button
+                    disabled={isSent}
                     onClick={async () => {
                       try {
                         if (i.kind === "local") {
@@ -145,21 +180,23 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
       <div className="order-summary">
         <CustomerPanel />
 
-        <div className="field-grid">
-          <label>
-            Discount
+        {state.orderType !== "DINE_IN" && (
+          <div className="field-grid">
+            <label>
+              Discount
 
-            <input
-              type="number"
-              min="0"
-              value={discountText}
-              onChange={(e) => {
-                setDiscountText(e.target.value);
-                setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
-              }}
-            />
-          </label>
-        </div>
+              <input
+                type="number"
+                min="0"
+                value={discountText}
+                onChange={(e) => {
+                  setDiscountText(e.target.value);
+                  setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
+                }}
+              />
+            </label>
+          </div>
+        )}
 
         <div className="summary-row">
           <span>Subtotal</span>
@@ -190,14 +227,41 @@ export function OrderPanel({ onPay }: { onPay: () => void }) {
           <strong>{formatCurrency(total)}</strong>
         </div>
 
+        {state.serverId ? (
+          <>
+            <button
+              className="secondary-button"
+              disabled={sendBusy || !canSend}
+              onClick={handleSendToKitchen}
+            >
+              {sendBusy ? "Sending..." : "Send to Kitchen"}
+            </button>
+            <button
+              className="secondary-button"
+              onClick={() => setCancelModalOpen(true)}
+            >
+              Cancel Order
+            </button>
+          </>
+        ) : null}
+
         <button
           className="pay-button"
-          disabled={!state.cart.length}
+          disabled={!canPay}
           onClick={onPay}
         >
           Proceed to Payment
         </button>
       </div>
     </aside>
+
+    {cancelModalOpen && state.serverId && state.order && (
+      <CancelOrderModal
+        order={state.order}
+        onClose={() => setCancelModalOpen(false)}
+        onCancelled={() => handleCancelSuccess()}
+      />
+    )}
+    </>
   );
 }

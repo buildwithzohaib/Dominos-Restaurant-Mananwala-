@@ -393,6 +393,11 @@ h2 {
   border-bottom: 1px solid #eef0f3;
 }
 
+.cart-row-sent {
+  opacity: 0.6;
+  background: #f9fafb;
+}
+
 .cart-main strong {
   display: block;
   font-size: 12px;
