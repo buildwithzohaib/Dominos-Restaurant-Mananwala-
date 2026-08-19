@@ -393,3 +393,212 @@ def test_update_pending_item_stock_check_accounts_for_other_pending(db: Session)
         update_pending_item(db, order.id, item_1.id, UpdatePendingItemIn(quantity=100))
     assert exc_info.value.status_code == 400
     assert "99" in str(exc_info.value.detail)
+
+
+# --- Stage 4 B8: Remove SENT items ---
+
+def test_remove_sent_item_restores_stock(db: Session):
+    """Removing a SENT item restores its stock (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add item and send to kitchen
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=2)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+    stock_after_send = db.query(Product).filter(Product.id == product.id).first().stock
+
+    # Verify stock was decremented
+    assert stock_after_send == 98  # 100 - 2
+
+    # Remove the SENT item
+    updated_order = update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=0))
+
+    # Verify stock was restored
+    product_after = db.query(Product).filter(Product.id == product.id).first()
+    assert product_after.stock == 100
+
+    # Verify item is deleted from order
+    assert len(updated_order.items) == 0
+
+
+def test_remove_sent_item_creates_return_movement(db: Session):
+    """Removing a SENT item creates a RETURN StockMovement (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add item and send to kitchen
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=2)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+
+    # Count SALE movements
+    sale_count = db.query(StockMovement).filter(
+        StockMovement.reference == order.order_number,
+        StockMovement.movement_type == "SALE",
+    ).count()
+    assert sale_count == 1
+
+    # Remove the SENT item
+    update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=0))
+
+    # Verify one RETURN movement was created
+    return_movements = db.query(StockMovement).filter(
+        StockMovement.reference == order.order_number,
+        StockMovement.movement_type == "RETURN",
+    ).all()
+    assert len(return_movements) == 1
+    assert return_movements[0].item_id == product.id
+    assert return_movements[0].quantity_change == 2  # positive, mirrors SALE's -2
+
+
+def test_remove_sent_item_sale_movement_untouched(db: Session):
+    """Original SALE movement remains (append-only ledger, Rule 4)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add item and send to kitchen
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=2)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+
+    # Get the original SALE movement
+    sale_movement = db.query(StockMovement).filter(
+        StockMovement.reference == order.order_number,
+        StockMovement.movement_type == "SALE",
+    ).first()
+    original_qty_change = sale_movement.quantity_change
+
+    # Remove the SENT item
+    update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=0))
+
+    # Verify SALE movement was NOT updated
+    sale_after = db.query(StockMovement).filter(StockMovement.id == sale_movement.id).first()
+    assert sale_after.quantity_change == original_qty_change  # unchanged (-2)
+
+
+def test_remove_sent_item_recomputes_totals(db: Session):
+    """Removing a SENT item recomputes order totals (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product1 = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+    product2 = db.query(Product).filter(Product.name_key == "lambkarahi").first()
+
+    # Add two items and send both
+    add_items_to_order(db, order.id, AddItemsIn(items=[
+        OrderItemCreate(product_id=product1.id, quantity=1),
+        OrderItemCreate(product_id=product2.id, quantity=1),
+    ]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item1 = next(i for i in order.items if i.product_id == product1.id)
+    original_total = order.total
+
+    # Remove the first item (Chicken Biryani, 50000)
+    updated_order = update_pending_item(db, order.id, item1.id, UpdatePendingItemIn(quantity=0))
+
+    # Subtotal should be reduced by 50000
+    assert updated_order.subtotal == 60000  # 110000 - 50000
+    assert updated_order.total == 60000  # no tax, no discount
+
+
+def test_remove_last_sent_item_leaves_zero_item_order(db: Session):
+    """Removing the last SENT item leaves order OPEN with 0 items (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add one item and send it
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=1)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+
+    # Remove the only SENT item
+    updated_order = update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=0))
+
+    # Order remains OPEN, now empty
+    assert updated_order.status == "OPEN"
+    assert len(updated_order.items) == 0
+    assert updated_order.subtotal == 0
+    assert updated_order.total == 0
+
+
+def test_remove_sent_item_with_custom_reason(db: Session):
+    """Removing a SENT item with custom reason stores it in StockMovement.reason (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add item and send to kitchen
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=1)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+
+    # Remove with custom reason
+    custom_reason = "Customer changed mind"
+    update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=0, reason=custom_reason))
+
+    # Verify RETURN movement has the custom reason
+    return_movement = db.query(StockMovement).filter(
+        StockMovement.reference == order.order_number,
+        StockMovement.movement_type == "RETURN",
+    ).first()
+    assert return_movement.reason == custom_reason
+
+
+def test_remove_sent_item_without_reason_uses_default(db: Session):
+    """Removing a SENT item without reason uses default 'Item removed' (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add item and send to kitchen
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=1)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+
+    # Remove without reason (reason=None)
+    update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=0, reason=None))
+
+    # Verify RETURN movement has default reason
+    return_movement = db.query(StockMovement).filter(
+        StockMovement.reference == order.order_number,
+        StockMovement.movement_type == "RETURN",
+    ).first()
+    assert return_movement.reason == "Item removed"
+
+
+def test_cannot_modify_sent_item_with_nonzero_quantity(db: Session):
+    """Attempting to change quantity of a SENT item (to non-zero) fails (B8)."""
+    table = db.query(RestaurantTable).filter(RestaurantTable.id == 7).first()
+    order = create_open_order(db, OpenOrderCreate(table_id=table.id))
+    product = db.query(Product).filter(Product.name_key == "chickenbiryani").first()
+
+    # Add item and send to kitchen
+    add_items_to_order(db, order.id, AddItemsIn(items=[OrderItemCreate(product_id=product.id, quantity=2)]))
+    send_batch_to_kitchen(db, order.id)
+
+    order = db.query(Order).filter(Order.id == order.id).first()
+    item = order.items[0]
+
+    # Try to increase quantity to 3
+    with pytest.raises(HTTPException) as exc_info:
+        update_pending_item(db, order.id, item.id, UpdatePendingItemIn(quantity=3))
+    assert exc_info.value.status_code == 400
+    assert "sent to the kitchen" in str(exc_info.value.detail)

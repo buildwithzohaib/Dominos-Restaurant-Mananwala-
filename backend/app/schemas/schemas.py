@@ -135,8 +135,11 @@ class AddItemsIn(BaseModel):
 
 
 class UpdatePendingItemIn(BaseModel):
-    """Update quantity of a PENDING item in an OPEN order. quantity=0 deletes the item."""
+    """Update quantity of a PENDING or SENT item in an OPEN order. quantity=0 deletes the item.
+    For SENT items (batch_id NOT NULL), only quantity=0 is allowed (removal with stock reversal).
+    Optional reason applies only to SENT-item removals (goes into StockMovement.reason)."""
     quantity: int = Field(ge=0)
+    reason: str | None = None
 
 
 class PayOrderIn(BaseModel):

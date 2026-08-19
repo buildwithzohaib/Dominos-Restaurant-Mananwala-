@@ -500,22 +500,27 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
 
 def update_pending_item(db: Session, order_id: int, item_id: int, payload: UpdatePendingItemIn) -> Order:
     """
-    Update the quantity of a PENDING item in an OPEN order.
+    Update the quantity of a PENDING item in an OPEN order, or remove a SENT item.
 
-    Items can only be updated while they are PENDING (batch_id IS NULL). Once sent to
-    the kitchen (batch_id NOT NULL), items cannot be changed; they must be cancelled
-    instead. Order's money fields (subtotal, tax, total) are recomputed from ALL items
+    Phase 4 B6 (PENDING items):
+    Items can only be updated while they are PENDING (batch_id IS NULL). When quantity is
+    set to 0, the item is deleted from the order entirely. The waiter can always reduce or
+    remove a line, even if the product is later disabled — only increases are blocked by
+    product availability.
+
+    Phase 4 B8 (SENT items):
+    SENT items (batch_id NOT NULL) can ONLY be removed (quantity=0). Removal reverses the
+    SALE StockMovement by restoring stock and creating a RETURN movement. Optional reason
+    applies to SENT-item removals only. Hard-deletes the OrderItem and recomputes totals.
+
+    Order's money fields (subtotal, tax, total) are recomputed from ALL remaining items
     using the order's snapshotted tax_rate.
-
-    When quantity is set to 0, the item is deleted from the order entirely. The waiter
-    can always reduce or remove a line, even if the product is later disabled — only
-    increases are blocked by product availability.
 
     Args:
         db: database session
         order_id: the order containing the item
-        item_id: the specific item to update
-        payload: UpdatePendingItemIn with new quantity (0 = delete)
+        item_id: the specific item to update or remove
+        payload: UpdatePendingItemIn with quantity (0 = delete) and optional reason (B8 only)
 
     Returns:
         Updated Order with recomputed totals
@@ -530,16 +535,68 @@ def update_pending_item(db: Session, order_id: int, item_id: int, payload: Updat
     if order.status != "OPEN":
         raise HTTPException(400, "Only an open order can be modified.")
 
-    # Load item and validate it exists, belongs to this order, and is PENDING
+    # Load item and validate it exists and belongs to this order
     item = db.get(OrderItem, item_id)
     if not item:
         raise HTTPException(404, "Item not found.")
     if item.order_id != order_id:
         raise HTTPException(404, "Item not found.")
-    if item.batch_id is not None:
-        raise HTTPException(400, "Cannot modify an item that has been sent to the kitchen.")
 
-    # If quantity is 0, delete the item
+    # --- SENT item removal (B8): quantity must be 0, stock reversal required ---
+    if item.batch_id is not None:
+        if payload.quantity != 0:
+            raise HTTPException(400, "Cannot modify an item that has been sent to the kitchen.")
+
+        # Reverse stock: atomic update + refresh (mirror cancel_order pattern)
+        product = db.get(Product, item.product_id)
+        if not product:
+            raise HTTPException(400, "Product not found.")
+
+        result = db.execute(
+            update(Product)
+            .where(Product.id == product.id)
+            .values(stock=Product.stock + item.quantity, updated_at=datetime.utcnow())
+        )
+        db.refresh(product)
+        stock_after = product.stock
+        stock_before = stock_after - item.quantity
+
+        # Create RETURN movement for this item
+        return_reason = payload.reason or "Item removed"
+        return_movement = StockMovement(
+            item_type="PRODUCT",
+            item_id=item.product_id,
+            item_name=item.product_name,  # snapshot from OrderItem (Rule 7)
+            movement_type="RETURN",
+            quantity_change=item.quantity,  # positive, mirrors SALE's negative
+            reason=return_reason,
+            supplier=None,
+            purchase_price=None,
+            stock_before=stock_before,
+            stock_after=stock_after,
+            reference=order.order_number,
+        )
+        db.add(return_movement)
+
+        # Hard-delete the OrderItem
+        db.delete(item)
+        db.flush()
+
+        # Recompute totals from remaining items
+        all_items = db.query(OrderItem).filter(OrderItem.order_id == order_id).all()
+        subtotal = sum(item_obj.line_total for item_obj in all_items)
+        taxable = subtotal - order.discount
+        tax = (taxable * order.tax_rate + 5000) // 10000
+        total = taxable + tax
+
+        order.subtotal = subtotal
+        order.tax = tax
+        order.total = total
+        db.commit()
+        order_result = db.query(Order).options(joinedload(Order.items), joinedload(Order.table)).filter(Order.id == order.id).first()
+        return order_result
+
+    # --- PENDING item operations (B6): quantity=0 deletes, else updates ---
     if payload.quantity == 0:
         db.delete(item)
         db.flush()
