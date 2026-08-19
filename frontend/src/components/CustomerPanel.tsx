@@ -117,7 +117,162 @@ export function CustomerPanel() {
     setDeliveryAddress("");
   }, [setCustomer, setDeliveryAddress]);
 
-  // Default state: search input
+  // Delivery orders: always show delivery fields, regardless of customer selection
+  if (state.orderType === "DELIVERY") {
+    return (
+      <div className="customer-panel">
+        {/* Customer chip (if selected) */}
+        {state.selectedCustomer ? (
+          <div className="customer-chip">
+            <div className="chip-info">
+              <div className="chip-name">
+                {state.selectedCustomer.name_display}
+              </div>
+              {state.selectedCustomer.phone_raw && (
+                <div className="chip-phone">
+                  {state.selectedCustomer.phone_raw}
+                </div>
+              )}
+            </div>
+            <button
+              className="chip-close"
+              onClick={handleClearCustomer}
+              title="Remove customer"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          /* Customer search when no one selected */
+          <div className="search-box delivery">
+            <input
+              type="text"
+              placeholder="Customer phone or name (optional)"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              autoFocus
+            />
+            {isSearching && <Loader size={16} className="spinner" />}
+          </div>
+        )}
+
+        {searchError && !state.selectedCustomer && (
+          <div className="error-box" style={{ marginTop: "8px" }}>
+            {searchError}
+          </div>
+        )}
+
+        {/* Results list */}
+        {searchText.trim().length >= 2 && !state.selectedCustomer && (
+          <div className="customer-results">
+            {searchResults.length > 0 ? (
+              <ul>
+                {searchResults.map((customer) => (
+                  <li key={customer.id}>
+                    <button
+                      className="result-item"
+                      onClick={() => handleSelectCustomer(customer)}
+                    >
+                      <div className="result-name">
+                        {customer.name_display}
+                      </div>
+                      {customer.phone_raw && (
+                        <div className="result-phone">
+                          {customer.phone_raw}
+                        </div>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : !isSearching ? (
+              <button
+                className="no-match-item"
+                onClick={handleShowCreateForm}
+              >
+                No match — Add new customer
+              </button>
+            ) : null}
+          </div>
+        )}
+
+        {/* Create form */}
+        {showCreateForm && !state.selectedCustomer && (
+          <div className="create-form">
+            <div className="modal-field full">
+              <label>Name (required)</label>
+              <input
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="Customer name"
+                autoFocus={!createName}
+              />
+            </div>
+
+            <div className="modal-field full">
+              <label>Phone</label>
+              <input
+                type="text"
+                value={createPhone}
+                onChange={(e) => setCreatePhone(e.target.value)}
+                placeholder="Phone number (optional)"
+              />
+            </div>
+
+            {createError && (
+              <div className="error-box">
+                {createError}
+              </div>
+            )}
+
+            <div className="create-actions">
+              <button
+                className="secondary-button"
+                onClick={() => setShowCreateForm(false)}
+                disabled={isCreating}
+              >
+                Cancel
+              </button>
+
+              <button
+                className="pay-button"
+                onClick={handleCreateCustomer}
+                disabled={isCreating || !createName.trim()}
+              >
+                {isCreating ? "Creating..." : "Save & Select"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Delivery fields - always visible for DELIVERY orders */}
+        <div className="modal-field full delivery">
+          <label>Delivery Address</label>
+          <textarea
+            value={state.deliveryAddress}
+            onChange={(e) => setDeliveryAddress(e.target.value)}
+            placeholder="Enter delivery address"
+            rows={3}
+          />
+        </div>
+
+        <div className="modal-field full delivery">
+          <label>Delivery Charge</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={state.deliveryChargeText}
+            onChange={(e) => setDeliveryCharge(e.target.value)}
+            placeholder="0"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Default state: search input (for non-DELIVERY orders with no customer selected)
   if (!state.selectedCustomer) {
     return (
       <div className="customer-panel">
@@ -225,7 +380,7 @@ export function CustomerPanel() {
     );
   }
 
-  // Selected state: chip + optional address field
+  // Selected state: chip (for customer selected in any order type)
   return (
     <div className="customer-panel">
       <div className="customer-chip">
@@ -247,33 +402,6 @@ export function CustomerPanel() {
           <X size={16} />
         </button>
       </div>
-
-      {/* Delivery address for DELIVERY orders */}
-      {state.orderType === "DELIVERY" && (
-        <>
-          <div className="modal-field full">
-            <label>Delivery Address</label>
-            <textarea
-              value={state.deliveryAddress}
-              onChange={(e) => setDeliveryAddress(e.target.value)}
-              placeholder="Enter delivery address"
-              rows={3}
-            />
-          </div>
-
-          <div className="modal-field full">
-            <label>Delivery Charge</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={state.deliveryChargeText}
-              onChange={(e) => setDeliveryCharge(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-        </>
-      )}
     </div>
   );
 }

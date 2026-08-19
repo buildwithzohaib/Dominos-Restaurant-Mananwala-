@@ -58,20 +58,20 @@ export function SuccessModal({
           {receipt.orderType === "DELIVERY" && receipt.deliveryAddress && (
             <>
               <div className="receipt-delivery">
-                <div style={{ fontWeight: 700, textTransform: "uppercase", fontSize: "11px", marginBottom: "4px" }}>
+                <div className="receipt-delivery-header">
                   Delivery
                 </div>
                 {receipt.customerName && (
-                  <div style={{ fontSize: "12px", fontWeight: 500, marginBottom: "2px" }}>
+                  <div className="receipt-delivery-name">
                     {receipt.customerName}
                   </div>
                 )}
                 {receipt.customerPhone && (
-                  <div style={{ fontSize: "11px", color: "#667085", marginBottom: "2px" }}>
+                  <div className="receipt-delivery-phone">
                     {receipt.customerPhone}
                   </div>
                 )}
-                <div style={{ fontSize: "12px", marginBottom: "2px", wordWrap: "break-word", whiteSpace: "pre-wrap" }}>
+                <div className="receipt-delivery-address">
                   {receipt.deliveryAddress}
                 </div>
               </div>
@@ -208,21 +208,21 @@ export function SuccessModal({
         {/* Delivery section: shown only for DELIVERY orders with address */}
         {receipt.orderType === "DELIVERY" && receipt.deliveryAddress && (
           <>
-            <div style={{ marginBottom: "8px" }}>
-              <div style={{ fontWeight: 800, fontSize: "10px", textTransform: "uppercase", marginBottom: "2px" }}>
+            <div className="thermal-delivery">
+              <div className="thermal-delivery-header">
                 Delivery
               </div>
               {receipt.customerName && (
-                <div style={{ fontSize: "11px", fontWeight: 700, marginBottom: "1px" }}>
+                <div className="thermal-delivery-name">
                   {receipt.customerName}
                 </div>
               )}
               {receipt.customerPhone && (
-                <div style={{ fontSize: "10px", marginBottom: "1px" }}>
+                <div className="thermal-delivery-phone">
                   {receipt.customerPhone}
                 </div>
               )}
-              <div style={{ fontSize: "11px", whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
+              <div className="thermal-delivery-address">
                 {receipt.deliveryAddress}
               </div>
             </div>

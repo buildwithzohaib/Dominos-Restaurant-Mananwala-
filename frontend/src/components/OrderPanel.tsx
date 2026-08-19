@@ -210,7 +210,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
         )}
 
         {deliveryCharge > 0 && (
-          <div className="summary-row">
+          <div className="delivery-row">
             <span>Delivery</span>
             <b>{formatCurrency(deliveryCharge)}</b>
           </div>

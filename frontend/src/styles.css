@@ -234,6 +234,11 @@ h2 {
   background: transparent;
 }
 
+/* Delivery order search box - darker border to match delivery fields */
+.search-box.delivery {
+  border: 1px solid #d1d5db;
+}
+
 .category-bar {
   display: flex;
   gap: 8px;
@@ -774,6 +779,64 @@ h2 {
   color: #8993a4;
   font-size: 11px;
   margin-top: 3px;
+}
+
+/* Delivery section in screen receipt */
+.receipt-delivery-header {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.receipt-delivery-name {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.receipt-delivery-phone {
+  font-size: 11px;
+  color: #667085;
+  margin-bottom: 2px;
+}
+
+.receipt-delivery-address {
+  font-size: 12px;
+  margin-bottom: 2px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Delivery section in thermal receipt (print-only) */
+@media print {
+  .thermal-delivery {
+    margin-bottom: 8px;
+  }
+
+  .thermal-delivery-header {
+    font-weight: 800;
+    font-size: 10px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .thermal-delivery-name {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 1px;
+  }
+
+  .thermal-delivery-phone {
+    font-size: 10px;
+    margin-bottom: 1px;
+  }
+
+  .thermal-delivery-address {
+    font-size: 11px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
 }
 
 .orders-page,
@@ -2172,6 +2235,23 @@ h2 {
   background: #fff;
   font-family: inherit;
   resize: vertical;
+}
+
+/* Delivery fields - darker border for visibility of required inputs */
+.modal-field.delivery input,
+.modal-field.delivery textarea {
+  border: 1px solid #d1d5db;
+}
+
+/* Delivery summary row - darker text for prominence */
+.delivery-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 9px 0;
+  font-size: 12px;
+  color: #182235;
+  font-weight: 600;
 }
 
 /* Table Management section (Settings) */
