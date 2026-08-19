@@ -1,7 +1,8 @@
 import { useContext, useEffect, useState } from "react";
-import { Save, AlertCircle } from "lucide-react";
+import { Save, AlertCircle, Trash2, RotateCcw, Plus } from "lucide-react";
 import { SettingsContext } from "../context/SettingsContext";
-import { api } from "../services/api";
+import { useCatalog } from "../context/CatalogContext";
+import { api, APIError } from "../services/api";
 import type { SettingsUpdate } from "../types";
 
 export function Settings() {
@@ -9,9 +10,21 @@ export function Settings() {
   const settings = settingsContext?.settings;
   const refreshSettings = settingsContext?.refreshSettings;
 
+  const { tables, refresh: refreshCatalog } = useCatalog();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Tables state
+  const [tables_local, setTablesLocal] = useState<typeof tables>([]);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [newTableName, setNewTableName] = useState("");
+  const [editingTableId, setEditingTableId] = useState<number | null>(null);
+  const [editingTableName, setEditingTableName] = useState("");
+  const [tableLoading, setTableLoading] = useState(false);
+  const [tableError, setTableError] = useState("");
+  const [restoreTableId, setRestoreTableId] = useState<number | null>(null);
 
   // Form state
   const [restaurantName, setRestaurantName] = useState("");
@@ -38,6 +51,117 @@ export function Settings() {
       setReceiptFooterText(settings.receipt_footer_text || "");
     }
   }, [settings]);
+
+  // Load all tables (active + removed) for the Settings UI, independent of CatalogContext
+  useEffect(() => {
+    async function loadAllTables() {
+      try {
+        const allTables = await api.getTables(true);  // includeInactive=true
+        setTablesLocal(allTables);
+      } catch (e) {
+        // Silent fail; show what we have
+      }
+    }
+    loadAllTables();
+  }, []);
+
+  // Refresh both: the Settings table list (all tables) and POS catalog (active only)
+  async function refreshTablesList() {
+    try {
+      const allTables = await api.getTables(true);  // Settings UI needs all tables
+      setTablesLocal(allTables);
+    } catch (e) {
+      // Silent fail; show what we have
+    }
+    try {
+      await refreshCatalog();  // POS dropdown needs active only
+    } catch (e) {
+      // Silent fail
+    }
+  }
+
+  // Table handlers
+  async function handleAddTable() {
+    if (!newTableName.trim()) {
+      setTableError("Table name is required");
+      return;
+    }
+
+    setTableLoading(true);
+    setTableError("");
+    setRestoreTableId(null);
+
+    try {
+      await api.createTable(newTableName);
+      setNewTableName("");
+      await refreshTablesList();
+    } catch (e) {
+      if (e instanceof APIError && e.detail?.inactive_table_id) {
+        // Special case: name belongs to an inactive table
+        setRestoreTableId(e.detail.inactive_table_id);
+        setTableError(e.message);
+      } else {
+        const msg = e instanceof Error ? e.message : "Failed to add table";
+        setTableError(msg);
+      }
+    } finally {
+      setTableLoading(false);
+    }
+  }
+
+  async function handleRestoreTable(tableId: number) {
+    setTableLoading(true);
+    setTableError("");
+    setRestoreTableId(null);
+
+    try {
+      await api.activateTable(tableId);
+      setNewTableName("");
+      await refreshTablesList();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to restore table";
+      setTableError(msg);
+    } finally {
+      setTableLoading(false);
+    }
+  }
+
+  async function handleRenameTable(tableId: number) {
+    if (!editingTableName.trim()) {
+      setTableError("Table name is required");
+      return;
+    }
+
+    setTableLoading(true);
+    setTableError("");
+
+    try {
+      await api.renameTable(tableId, editingTableName);
+      setEditingTableId(null);
+      setEditingTableName("");
+      await refreshTablesList();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to rename table";
+      setTableError(msg);
+    } finally {
+      setTableLoading(false);
+    }
+  }
+
+  async function handleRemoveTable(tableId: number) {
+    setTableLoading(true);
+    setTableError("");
+
+    try {
+      await api.deactivateTable(tableId);
+      await refreshTablesList();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to remove table";
+      setTableError(msg);
+    } finally {
+      setTableLoading(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -233,6 +357,176 @@ export function Settings() {
             />
             <span className="char-count">{receiptFooterText.length} / 80</span>
           </label>
+        </fieldset>
+
+        {/* Table Management */}
+        <fieldset>
+          <legend>Table Management <span className="tables-legend-subtitle">(changes take effect immediately)</span></legend>
+
+          {tableError && (
+            <div className="error-box">
+              <div>{tableError}</div>
+              {restoreTableId !== null && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => handleRestoreTable(restoreTableId)}
+                  disabled={tableLoading}
+                >
+                  {tableLoading ? "Restoring..." : "Restore this table"}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Add Table Row */}
+          <div className="tables-add-row">
+            <label>
+              Add Table
+              <input
+                type="text"
+                value={newTableName}
+                onChange={(e) => setNewTableName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddTable();
+                  }
+                }}
+                placeholder="Table name"
+                disabled={tableLoading}
+              />
+            </label>
+            <button
+              type="button"
+              className="pay-button"
+              onClick={handleAddTable}
+              disabled={tableLoading || !newTableName.trim()}
+            >
+              <Plus size={16} />
+              Add
+            </button>
+          </div>
+
+          {/* Show Removed Toggle */}
+          <label>
+            <input
+              type="checkbox"
+              checked={showRemoved}
+              onChange={(e) => setShowRemoved(e.target.checked)}
+              disabled={tableLoading}
+            />
+            <span>Show removed tables</span>
+          </label>
+
+          {/* Tables List */}
+          {tables_local.length === 0 ? (
+            <p className="tables-empty">No tables yet. Add one above.</p>
+          ) : (
+            <div className="tables-list">
+              {tables_local.map((table) => {
+                const isRemoved = !table.active;
+                const isVisible = isRemoved ? showRemoved : true;
+
+                if (!isVisible) return null;
+
+                return (
+                  <div
+                    key={table.id}
+                    className={`table-item ${isRemoved ? "removed" : ""}`}
+                  >
+                    {editingTableId === table.id ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editingTableName}
+                          onChange={(e) => setEditingTableName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleRenameTable(table.id);
+                            } else if (e.key === "Escape") {
+                              setEditingTableId(null);
+                              setEditingTableName("");
+                            }
+                          }}
+                          autoFocus
+                          className="table-item-edit-input"
+                          disabled={tableLoading}
+                        />
+                        <button
+                          type="button"
+                          className="pay-button table-item-button-small"
+                          onClick={() => handleRenameTable(table.id)}
+                          disabled={tableLoading}
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary-button table-item-button-small"
+                          onClick={() => {
+                            setEditingTableId(null);
+                            setEditingTableName("");
+                          }}
+                          disabled={tableLoading}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="table-item-name">
+                          {table.name}
+                          {isRemoved && <span className="table-item-removed-label">(removed)</span>}
+                        </span>
+                        {!isRemoved && (
+                          <button
+                            type="button"
+                            className="row-action-button"
+                            onClick={() => {
+                              setEditingTableId(table.id);
+                              setEditingTableName(table.name);
+                            }}
+                            disabled={tableLoading}
+                            title="Rename"
+                          >
+                            Edit
+                          </button>
+                        )}
+                        {isRemoved ? (
+                          <button
+                            type="button"
+                            className="row-action-button"
+                            onClick={() => handleRestoreTable(table.id)}
+                            disabled={tableLoading}
+                            title="Restore"
+                          >
+                            <RotateCcw size={16} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="row-action-button"
+                            onClick={() => handleRemoveTable(table.id)}
+                            disabled={tableLoading}
+                            title="Remove"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Active Count */}
+          <div className="tables-count">
+            {tables_local.filter((t) => t.active).length} active table{tables_local.filter((t) => t.active).length !== 1 ? "s" : ""}
+          </div>
         </fieldset>
 
         {/* Save Button */}
