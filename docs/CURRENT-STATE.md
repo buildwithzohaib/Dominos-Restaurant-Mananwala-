@@ -6,9 +6,10 @@
 **Stage 4 Extensions:** ✅ Running Tabs (backend + frontend), Table Management (backend + frontend)  
 **B8:** ✅ Remove Single SENT Item (backend + frontend)  
 **Stage 5:** ✅ Inventory Management — Batch Reconciliation (backend + frontend)  
-**Git HEAD:** 5b020c7  
-**Backend Tests:** 377 passing, 0 failing  
-**Alembic Head:** b3d5e7f9a1c3 (unchanged — one purchase_value_paisa migration was added then reverted; no net schema change)  
+**Stage 9:** ✅ Database Backup & Restore (backend + frontend)  
+**Git HEAD:** 69b1cc3  
+**Backend Tests:** 388 passing, 0 failing  
+**Alembic Head:** b3d5e7f9a1c3 (unchanged — no migration needed for Stage 9)  
 **Frontend Tests:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean
 
@@ -1189,11 +1190,13 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 **KOT Component (Kitchen Order Ticket):** ❌ **DEFERRED INDEFINITELY** — No kitchen printer workflow or separate kitchen display exists. Current architecture uses in-app batch tracking (batch_id, sent_at on order items) but no physical or digital kitchen slip printing.
 
-**Stages 7–10 (Users/Roles, Dashboard Polish, Backup, Receipt Polish):** ❌ **NOT STARTED**
-- Stage 7 (Users/Roles): Authentication and role-based access not implemented
-- Stage 8 (Dashboard Polish): Additional metrics or reporting views not implemented
-- Stage 9 (Backup): Data backup/export functionality not implemented
-- Stage 10 (Receipt Polish): Theme ideas ("3D/colourful theme") and resale feature ("resell to other restaurants") are parked for Stage 10; not started
+**Stage 7 (Users/Roles):** ❌ **NOT STARTED** — Authentication and role-based access not implemented
+
+**Stage 8 (Dashboard Polish):** ❌ **NOT STARTED** — Additional metrics or reporting views not implemented
+
+**Stage 9 (Backup):** ✅ **COMPLETE** (2026-08-20) — Local daily backup and restore implemented. Google Drive upload deferred (requires OAuth setup).
+
+**Stage 10 (Receipt Polish):** ❌ **NOT STARTED** — Theme ideas ("3D/colourful theme") and resale feature ("resell to other restaurants") are parked; not started
 
 ---
 
@@ -1270,6 +1273,61 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
+### Stage 9: Database Backup & Restore (2026-08-20)
+
+**Commits:** 9575093 (backend), 69b1cc3 (frontend)
+
+**Key Features:**
+
+1. **Daily Backup on Startup**
+   - FastAPI `@asynccontextmanager` lifespan hook runs on app startup
+   - Creates backup only if today's backup file doesn't already exist (file system check, not app state)
+   - Backup naming: `pos_YYYY-MM-DD.db` (e.g., `pos_2026-08-20.db`)
+   - Backup location: `{backend}/backups/` (gitignored directory, auto-created)
+   - Rationale for file check: app state resets on every startup, including the restart that a restore itself triggers
+
+2. **30-Day Rotation**
+   - Daily backups older than 30 days are auto-deleted by cleanup function
+   - Safety backups (`pos_before_restore_*`) are NEVER deleted (kept indefinitely for recovery)
+   - Cleanup runs after backup on each startup
+
+3. **Restore Operation**
+   - Always restores the most recent backup (date-sorted list, no file picker)
+   - **Critical Windows safety:** Calls `engine.dispose()` before overwriting `pos.db`
+     - SQLite file replacement fails or risks corruption on Windows if a connection is still open
+     - Disposing closes all pooled connections and releases file locks
+     - Then `shutil.copy2()` safely overwrites the file
+   - **Pre-restore safety backup:** Automatically creates `pos_before_restore_YYYY-MM-DDTHH:MM:SS.db` of current database before overwriting
+     - Allows undo if user realizes they restored by mistake
+     - Stored in same `backups/` directory
+     - Not auto-deleted (manual recovery only)
+   - Response explicitly includes `restart_required: true`
+   - Endpoint: `POST /api/settings/backup/restore` (no request body)
+
+4. **Frontend Integration**
+   - New "Backup & Restore" fieldset in Settings page, following existing fieldset pattern (matches Table Management style)
+   - Explanatory text: "Backups are created automatically once per day. You can restore from the most recent backup here, but this will overwrite the current database."
+   - "Restore from Backup" button
+   - Confirmation dialog uses `window.confirm()` (existing pattern from OrderPanel, table removal)
+   - Confirmation message explicitly warns: "All data since the backup was taken will be lost. The server must be restarted afterward."
+   - On success: Shows response message (includes "Server restart required to take effect."), persists (not auto-cleared)
+   - On failure: Shows error message plainly
+   - Button state: Disabled while restore in flight
+
+5. **Testing**
+   - 18 test functions in `backend/tests/test_stage9_backup.py`
+   - Coverage: backup creation, idempotency (same-day), file system checks, cleanup with date rotation, safety preservation, restore with safety backup creation, restore with file swap verification, restart flag in response, error handling
+   - Follows existing temp-file fixture pattern (no real pos.db touched)
+   - End-to-end tested live: `backend/backups/pos_2026-08-20.db` confirmed created on real startup
+
+**Database:** No schema changes, no Alembic migration needed
+
+**Dependencies:** None added (uses stdlib: `datetime`, `shutil`, `glob`, `os`, `pathlib`)
+
+**Deferred:** Google Drive backup upload — requires OAuth setup, separate task for later
+
+---
+
 ### Foreign Key Enforcement is OFF (Decorative Only)
 
 **Status:** PRAGMA foreign_keys is OFF (SQLite default). Nothing in the application or Alembic turns it on.
@@ -1319,7 +1377,7 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ## 10. SUMMARY
 
-### Backend Status (Stage 4 Complete)
+### Backend Status (Stages 4–5, Stage 9 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
@@ -1327,13 +1385,14 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | **Database Schema** | ✅ 7 tables | categories, products, restaurant_tables, orders, order_items, stock_movements, customers, settings |
 | **Money Storage** | ✅ Compliant | All money is Integer (paisa); Rule 3 satisfied |
 | **Stock Ledger** | ⚠️ Product-only | Product movements working; ingredient polymorphism deferred to Phase 15 |
-| **Alembic Setup** | ✅ Active | 2 Stage 4 migrations; current head b3d5e7f9a1c3 |
-| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs implemented |
+| **Alembic Setup** | ✅ Active | 2 Stage 4 migrations; current head b3d5e7f9a1c3 (no Stage 9 migration needed) |
+| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs + Stage 9 backup implemented |
 | **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas |
 | **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working |
 | **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
-| **Tests** | ✅ 377 passing | Comprehensive coverage of Stages 4–5; includes 31 table management tests, 14 reconciliation tests, B8 tests |
+| **Backup & Restore** | ✅ Complete | Daily backups on startup, 30-day rotation, atomic restore with engine.dispose() for Windows safety |
+| **Tests** | ✅ 388 passing | Comprehensive coverage of Stages 4–5, Stage 9; includes 31 table management tests, 14 reconciliation tests, 18 backup tests, B8 tests |
 
 ### Frontend Status (Phases 1-10, Stage 4 E1 Complete)
 
@@ -1349,6 +1408,7 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | **Active Orders Page** | ✅ Complete | 30s-polling list of OPEN orders; resume loads tab and navigates to POS; stale-order recovery |
 | **KOT Component** | ❌ Missing | No print view for kitchen batches (batch_id, sent_at visibility) |
 | **Tables UI** | ✅ Complete | Settings page: add/rename/remove/restore with soft delete; POS dropdown active-only; Show Removed toggle |
+| **Backup & Restore UI** | ✅ Complete | Settings fieldset with Restore button, window.confirm() for destructive action, displays restart requirement |
 
 ### Rule Compliance
 
@@ -1368,10 +1428,10 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 ---
 
 **Report Date:** 2026-08-20  
-**Git HEAD:** 5b020c7 (B8 + Stage 5)  
-**Backend Test Status:** 377 passing, 0 failing  
+**Git HEAD:** 69b1cc3 (B8 + Stage 5 + Stage 9)  
+**Backend Test Status:** 388 passing, 0 failing  
 **Frontend Test Status:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean  
 **Alembic Status:** Clean (no pending migrations; head b3d5e7f9a1c3)  
-**Completed Since Last Report:** B8 (remove single SENT item with optional reason), Stage 5 (batch reconciliation + low-stock filter + lesson on pre-verification)  
-**Next Work:** KOT component (kitchen slip print), money formatter centralization, settle discount cleanup debt, consider password/user authentication for multi-terminal deployment
+**Completed Since Last Report:** B8 (remove single SENT item with RETURN movement), Stage 5 (batch reconciliation + low-stock filter), Stage 9 (daily backup on startup + restore with safety backup)  
+**Next Work:** KOT component (kitchen slip print), money formatter centralization, settle discount cleanup debt, Google Drive backup upload (OAuth), consider password/user authentication for multi-terminal deployment
