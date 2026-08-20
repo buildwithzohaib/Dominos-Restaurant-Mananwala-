@@ -1,4 +1,4 @@
-import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput} from "../types";
+import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn} from "../types";
 
 export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 
@@ -102,6 +102,7 @@ export const api={
  // return the updated Product, and both write a StockMovement row server-side.
  addStock:(id:number,payload:StockPurchaseInput)=>request<Product>(`/api/inventory/${id}/stock`,{method:"POST",body:JSON.stringify(payload)}),
  adjustStock:(id:number,payload:StockAdjustmentInput)=>request<Product>(`/api/inventory/${id}/adjust`,{method:"POST",body:JSON.stringify(payload)}),
+ reconcileStock:(payload:StockReconciliationIn)=>request<StockMovement[]>("/api/inventory/reconcile",{method:"POST",body:JSON.stringify(payload)}),
  getStockMovements:(params?:{search?:string;movement_type?:string;date?:string})=>{
   const q=new URLSearchParams();
   if(params?.search&&params.search.trim())q.set("search",params.search.trim());

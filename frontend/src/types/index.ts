@@ -19,6 +19,9 @@ export type AdjustmentReason = "DAMAGED" | "EXPIRED" | "LOST" | "MANUAL_CORRECTI
 export interface StockPurchaseInput { quantity:number; purchase_price?:number; /* paisa */ supplier:string; }
 export interface StockAdjustmentInput { quantity_change:number; reason:AdjustmentReason; note?:string; }
 export interface StockMovement { id:number; item_type:string; /* 'PRODUCT' | 'INGREDIENT' */ item_id:number; item_name:string; movement_type:MovementType; quantity_change:number; reason:string; supplier?:string|null; purchase_price?:number|null; /* paisa */ stock_before:number; stock_after:number; reference?:string|null; created_at:string; }
+// Stock Reconciliation (Stage 5)
+export interface StockReconciliationItemIn { product_id:number; counted_quantity:number; }
+export interface StockReconciliationIn { items:StockReconciliationItemIn[]; }
 export interface RestaurantTable { id:number; name:string; seats:number; active?:boolean; }
 export interface RestaurantTableNested { id:number; name:string; seats:number; }
 export type CartItem={kind:"local";product:Product;quantity:number}|{kind:"server";itemId:number;productId:number;productName:string;price:number;lineTotal:number;quantity:number;batchId:number|null;sentAt:string|null};
