@@ -114,6 +114,7 @@ export const api={
  // Settings (Task 1.1) — restaurant configuration
  getSettings:()=>request<Settings>("/api/settings"),
  updateSettings:(p:SettingsUpdate)=>request<Settings>("/api/settings",{method:"PATCH",body:JSON.stringify(p)}),
+ restoreBackup:()=>request<{success:boolean;message:string;backup_date:string|null;safety_backup:string|null;restart_required:boolean;error?:string}>("/api/settings/backup/restore",{method:"POST",body:"{}"}),
  // Dashboard (Phase 9) — today's business metrics
  getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview"),
  // Product Management (Phase 10)

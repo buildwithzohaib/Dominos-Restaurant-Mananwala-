@@ -26,6 +26,11 @@ export function Settings() {
   const [tableError, setTableError] = useState("");
   const [restoreTableId, setRestoreTableId] = useState<number | null>(null);
 
+  // Backup & Restore state
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupError, setBackupError] = useState("");
+  const [backupSuccess, setBackupSuccess] = useState("");
+
   // Form state
   const [restaurantName, setRestaurantName] = useState("");
   const [restaurantAddress, setRestaurantAddress] = useState("");
@@ -160,6 +165,36 @@ export function Settings() {
       setTableError(msg);
     } finally {
       setTableLoading(false);
+    }
+  }
+
+  async function handleRestoreBackup() {
+    // Confirm first: warn about destructive action
+    const confirmed = window.confirm(
+      "Restore from backup? This will overwrite the current database with the most recent backup. All data since the backup was taken will be lost. The server must be restarted afterward."
+    );
+
+    if (!confirmed) return;
+
+    setBackupLoading(true);
+    setBackupError("");
+    setBackupSuccess("");
+
+    try {
+      const response = await api.restoreBackup();
+
+      if (response.success) {
+        const msg = `${response.message}`;
+        setBackupSuccess(msg);
+        // Don't clear success message auto, since it contains important restart info
+      } else {
+        setBackupError(response.error || "Restore failed");
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Restore failed";
+      setBackupError(msg);
+    } finally {
+      setBackupLoading(false);
     }
   }
 
@@ -527,6 +562,36 @@ export function Settings() {
           <div className="tables-count">
             {tables_local.filter((t) => t.active).length} active table{tables_local.filter((t) => t.active).length !== 1 ? "s" : ""}
           </div>
+        </fieldset>
+
+        {/* Backup & Restore */}
+        <fieldset>
+          <legend>Backup & Restore</legend>
+
+          <p className="fieldset-description">
+            Backups are created automatically once per day. You can restore from the most recent backup here, but this will overwrite the current database.
+          </p>
+
+          {backupError && (
+            <div className="error-box">
+              {backupError}
+            </div>
+          )}
+
+          {backupSuccess && (
+            <div className="success-box">
+              {backupSuccess}
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={handleRestoreBackup}
+            disabled={backupLoading}
+          >
+            {backupLoading ? "Restoring..." : "Restore from Backup"}
+          </button>
         </fieldset>
 
         {/* Save Button */}
