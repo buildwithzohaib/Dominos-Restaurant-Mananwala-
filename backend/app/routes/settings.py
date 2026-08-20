@@ -1,8 +1,9 @@
-"""Settings routes — GET and PATCH the single settings row."""
+"""Settings routes — GET and PATCH the single settings row, plus backup restore."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.database import get_db
+from app.database import get_db, BACKEND_DIR, DB_PATH, engine
 from app.services.settings_service import get_settings, update_settings
+from app.services.backup_service import get_backup_dir, restore_database
 from app.schemas.schemas import SettingsOut, SettingsUpdate
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -36,3 +37,26 @@ def patch_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
         500: if settings row is missing
     """
     return update_settings(db, payload)
+
+
+@router.post("/backup/restore")
+def restore_from_backup():
+    """POST /api/settings/backup/restore — Restore database from most recent backup.
+
+    WARNING: This overwrites the current database. All data since the backup was taken is lost.
+    The server MUST be restarted for the restore to take effect.
+
+    Returns:
+        dict with keys:
+        - success: bool
+        - message: str (user-facing message)
+        - backup_date: str (ISO date, e.g., "2026-08-20")
+        - safety_backup: str (filename of pre-restore safety backup, e.g., "pos_before_restore_2026-08-20T143022.db")
+        - restart_required: bool (always True on success)
+        - error: str (only on failure)
+
+    Raises:
+        None (all errors returned in response dict)
+    """
+    backup_dir = get_backup_dir(BACKEND_DIR)
+    return restore_database(DB_PATH, backup_dir, engine)
