@@ -969,6 +969,22 @@ h2 {
   width: 320px;
 }
 
+.low-stock-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+  user-select: none;
+}
+
+.low-stock-filter input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
 .add-stock-button {
   border: 0;
   border-radius: 9px;

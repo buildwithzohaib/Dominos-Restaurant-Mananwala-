@@ -18,20 +18,32 @@ export function Inventory() {
   const { allProducts, refresh, isLoading } = useCatalog();
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"table" | "history" | "reconcile">("table");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
 
-  // Filter products locally: by search query (name or SKU, case-insensitive)
+  // Filter products locally: by search query (name or SKU, case-insensitive) and low-stock status
   const items = useMemo(() => {
-    if (!query.trim()) return allProducts;
+    let filtered = allProducts;
+
+    // Apply low-stock filter if enabled
+    if (showLowStockOnly) {
+      filtered = filtered.filter(
+        (p) => p.stock_status === "LOW_STOCK" || p.stock_status === "OUT_OF_STOCK"
+      );
+    }
+
+    // Apply search filter if query is not empty
+    if (!query.trim()) return filtered;
 
     const lowerQuery = query.toLowerCase();
-    return allProducts.filter((p) =>
-      p.name_display.toLowerCase().includes(lowerQuery) ||
-      p.sku.toLowerCase().includes(lowerQuery)
+    return filtered.filter(
+      (p) =>
+        p.name_display.toLowerCase().includes(lowerQuery) ||
+        p.sku.toLowerCase().includes(lowerQuery)
     );
-  }, [allProducts, query]);
+  }, [allProducts, query, showLowStockOnly]);
 
   return (
     <div className="inventory-page">
@@ -52,6 +64,15 @@ export function Inventory() {
               placeholder="Search inventory..."
             />
           </div>
+
+          <label className="low-stock-filter">
+            <input
+              type="checkbox"
+              checked={showLowStockOnly}
+              onChange={(e) => setShowLowStockOnly(e.target.checked)}
+            />
+            Show only low stock
+          </label>
 
           <div className="inventory-actions">
             <button
