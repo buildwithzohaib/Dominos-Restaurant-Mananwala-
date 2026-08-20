@@ -1,12 +1,14 @@
 # CURRENT STATE AUDIT — My Restaurant POS
 
-**Date:** 2026-08-19  
+**Date:** 2026-08-20  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
 **Stage 4 Extensions:** ✅ Running Tabs (backend + frontend), Table Management (backend + frontend)  
-**Git HEAD:** 37605fe  
-**Backend Tests:** 359 passing, 0 failing  
-**Alembic Head:** b3d5e7f9a1c3 (unchanged since Phase 10)  
+**B8:** ✅ Remove Single SENT Item (backend + frontend)  
+**Stage 5:** ✅ Inventory Management — Batch Reconciliation (backend + frontend)  
+**Git HEAD:** 5b020c7  
+**Backend Tests:** 377 passing, 0 failing  
+**Alembic Head:** b3d5e7f9a1c3 (unchanged — one purchase_value_paisa migration was added then reverted; no net schema change)  
 **Frontend Tests:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean
 
@@ -386,6 +388,7 @@ interface State {
 | `updateInventoryItem(id, payload)` | PUT /api/inventory/{id} | Update product metadata |
 | `addStock(id, payload)` | POST /api/inventory/{id}/stock | Record purchase |
 | `adjustStock(id, payload)` | POST /api/inventory/{id}/adjust | Record adjustment |
+| `reconcileStock(payload)` | POST /api/inventory/reconcile | Batch stock reconciliation from physical count (Stage 5) |
 | `getStockMovements(params?)` | GET /api/stock-movements | List movements with filters |
 | `getDashboardOverview()` | GET /api/dashboard/overview | Today's metrics (Phase 9) |
 | `getProduct(id)` | GET /api/products/{id} | Single product (Phase 10) |
@@ -996,20 +999,17 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
-### Risk #5: No Business Day Implementation
+### Risk #5: Business Day Implementation ✅ RESOLVED (Stage 5)
 
-**Status:** ❌ **MISSING**
+**Status:** ✅ **COMPLETE** (2026-08-20)
 
-**Violates Rule 10** → "Business day, not calendar day. All daily reports use settings.day_starts_at"
-
-**Currently:** Dashboard, reports, daily summaries use calendar midnight (UTC), not Asia/Karachi timezone or configurable business day start.
-
-**When Phase 15+ Requires This:**
-- Add `day_starts_at` field to settings table (default 06:00)
-- Add `timezone` field (default "Asia/Karachi")
-- Update dashboard queries to group by business day, not calendar day
-- Update timestamps to store UTC, display in timezone
-- **Estimated: 6–8 hours**
+Rule 10 business-day boundary is now implemented in `dashboard_service.py`:
+- Dashboard applies `get_business_day_boundaries()` using `settings.day_starts_at` (default 06:00)
+- Sales revenue aggregated by `paid_at` within business day boundaries
+- Order count by `created_at` (order placement time)
+- Cancelled count by `cancelled_at`
+- All metrics respect business day, not UTC calendar day
+- See section "Day-Start Boundary Applied to Dashboard" for full details
 
 ---
 
@@ -1039,6 +1039,27 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 ---
 
 ## 8. KNOWN GAPS
+
+### B8: Remove Single SENT Item (2026-08-20)
+
+**Commits:** 8855ace, fc2eee5
+
+**Backend Implementation:**
+- Extended `update_pending_item()` to handle SENT items (batch_id set)
+- When quantity=0 on a SENT item: creates a RETURN StockMovement (reverses stock), hard-deletes the OrderItem, recomputes order totals
+- RETURN movement type added (complements SALE, CANCELLATION per Rule 4 append-only ledger)
+- Original SALE movement remains untouched (audit trail preserved)
+- Optional `reason` field in payload for deletion reason
+
+**Frontend Implementation:**
+- Trash icon on SENT cart rows is now enabled (previously disabled)
+- User action: trash icon → `confirm()` dialog → if confirmed, prompt for optional reason → API call
+- Cancel on either dialog aborts the entire action
+- Cart refreshes and order totals recompute
+
+**Behavioral Change:** Previously, SENT items could not be removed. Now a cashier can reverse a sent item (e.g., customer changed mind mid-kitchen prep).
+
+---
 
 ### Stage 4 Backend: COMPLETE ✅ | Frontend: COMPLETE ✅
 
@@ -1145,15 +1166,107 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 
 ---
 
+### Day-Start Boundary Applied to Dashboard (2026-08-20)
+
+**Status:** ✅ **IMPLEMENTED**
+
+Rule 10 business-day boundary is now applied to dashboard queries:
+- `get_business_day_boundaries(db, datetime.now(timezone.utc))` computes today's start/end using `settings.day_starts_at` (default 06:00)
+- Sales aggregation: uses `paid_at` (revenue only when payment received), not `created_at`
+- Order count: uses `created_at` (order placement time) — open question noted in code comment
+- Cancelled count: uses `cancelled_at`
+- Low stock count: per-product threshold (min_stock field)
+- Hourly breakdown: filtered by paid_at within business day boundaries
+- Top products: filtered by paid_at within business day boundaries
+
+**Implication:** Dashboard now correctly reports metrics for the business day (e.g., 06:00 start), not UTC calendar day.
+
+---
+
+### Deferred & Skipped Stages
+
+**Stage 6 (Ingredients/Recipes):** ❌ **EXPLICITLY SKIPPED** — Decision: Restaurant operates at product level only. No ingredient-level tracking or recipe/BOM management required.
+
+**KOT Component (Kitchen Order Ticket):** ❌ **DEFERRED INDEFINITELY** — No kitchen printer workflow or separate kitchen display exists. Current architecture uses in-app batch tracking (batch_id, sent_at on order items) but no physical or digital kitchen slip printing.
+
+**Stages 7–10 (Users/Roles, Dashboard Polish, Backup, Receipt Polish):** ❌ **NOT STARTED**
+- Stage 7 (Users/Roles): Authentication and role-based access not implemented
+- Stage 8 (Dashboard Polish): Additional metrics or reporting views not implemented
+- Stage 9 (Backup): Data backup/export functionality not implemented
+- Stage 10 (Receipt Polish): Theme ideas ("3D/colourful theme") and resale feature ("resell to other restaurants") are parked for Stage 10; not started
+
+---
+
 ### Stage 4 Backend Gaps & Open Items
 
-**revenue_by_paid_at (Rule 10):** Dashboard still reports metrics by `created_at`, but orders can now have a gap between `created_at` (when tab opened) and `paid_at` (when payment collected). Per Rule 10 (business day), revenue should be reported by `paid_at`, not `created_at`. This gap affects dashboard/daily reports. **Not yet implemented.**
+**Orders Count Metric (Rule 10 Open Question):** Dashboard `orders_count` uses `created_at` (order placement time), not `paid_at` (payment collection time). Decision: "orders placed today" is more intuitive than "orders paid today". Code comment flags this as an open design question if future business logic differs.
 
 **Concurrent Integrity (Production-Only):** The `create_open_order()` function has an except IntegrityError branch that re-checks after rollback (for the partial unique index). This path is unreachable from unit tests (the explicit pre-check fires first) but may run under real concurrency. There is a code comment documenting this. **No changes needed, but be aware.**
 
 **Test Fixture Pattern (Windows):** Ad-hoc attributes attached to Session objects (e.g., `session.table_a_id = ...`) pass seeded IDs to tests. It works but is not clean and has spread across 5 Stage 4 test files. **Not ideal, but functional; no priority to refactor.**
 
 **Frontend Stage 4 Status:** Active Orders page and Tables UI now complete. KOT component and receipt batch details remain. Stage 4 backend complete, frontend 90% complete. **Next priority:** KOT component.
+
+---
+
+### Stage 5: Inventory Management — Batch Reconciliation (2026-08-20)
+
+**Commits:** b17d4ad (backend), de1b4a5 + 17efe27 + 5b020c7 (frontend)
+
+**Key Discovery:** Before implementing Stage 5, investigation revealed that **PURCHASE (add_purchase_stock) and single-product ADJUSTMENT (adjust_stock) operations ALREADY EXISTED**, both backend and frontend, since Phase 4. No duplication was created; Stage 5 focused on the new batch reconciliation feature.
+
+**Lesson Learned:** Verify existing code thoroughly before building — avoid re-implementing features that already exist.
+
+**Backend Implementation:**
+
+1. **Batch Reconciliation Endpoint:** `POST /api/inventory/reconcile`
+   - Accepts list of `{product_id, counted_quantity}` items
+   - Two-phase atomic operation:
+     - **Phase 1 (validation):** Load all products, verify every product_id exists, detect invalid IDs BEFORE any database writes (prevents information leakage per Rule 2)
+     - **Phase 2 (application):** For each product where counted != system stock, atomic UPDATE with WHERE guard, create ADJUSTMENT StockMovement
+     - Single `db.commit()` at end: all-or-nothing atomicity
+   - Returns list of created StockMovement objects
+   - Skip unchanged rows (no movement written)
+
+2. **StockMovement Updates:**
+   - ADJUSTMENT type used for reconciliation (distinct from SALE, CANCELLATION)
+   - `reason` field: "Stock count reconciliation"
+
+3. **Conflict Prevention:** Atomic UPDATE checks `stock + quantity_change >= 0` (prevents negative stock from race conditions)
+
+**Frontend Implementation:**
+
+1. **Reconciliation Form Component** (`StockReconciliationForm.tsx`):
+   - Displays all active products in a table: Product, SKU, Current Stock, Counted Quantity
+   - Input fields for Counted Quantity are always empty (never pre-filled with current stock)
+   - User enters quantities only for products being recounted
+   - Submit button builds payload from touched rows only (skips blanks)
+   - Validates: at least one product must have a value entered
+   - Shows success message with count of adjusted products
+   - Closes and refreshes inventory table on success
+
+2. **Inventory Toolbar View Toggle:**
+   - "Reconcile Stock" button in toolbar toggles view from table to reconciliation form
+   - Reuses existing modal/dialog pattern (like Stock History toggle)
+   - Integrates with existing Inventory component state
+
+3. **Low Stock Filter** (checkbox in toolbar):
+   - "Show only low stock" checkbox combined with search filter
+   - Filter condition: `stock_status === "LOW_STOCK" || stock_status === "OUT_OF_STOCK"`
+   - Reuses existing StatusBadge styling (orange for low stock, red for out of stock)
+   - Both filters apply together: search + low-stock filter active simultaneously
+   - No new CSS classes beyond checkbox styling
+
+**Database Schema:** No new tables or columns. Existing `stock_movements` table handles reconciliation via ADJUSTMENT movement_type.
+
+**Tests:** 14 tests in `backend/tests/test_stock_reconciliation.py` covering:
+- Single product decrease/increase
+- Multiple products with mixed changes
+- Unchanged rows skipped
+- Reconciliation to zero stock
+- Invalid product_id returns 404 with rollback (atomicity guarantee)
+- All-unchanged reconciliation returns empty movement list
+- Atomic transaction: one invalid ID causes all valid IDs to rollback
 
 ---
 
@@ -1220,7 +1333,7 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 | **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working |
 | **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
-| **Tests** | ✅ 359 passing | Comprehensive coverage of all Stage 4 functions; includes 31 table management tests |
+| **Tests** | ✅ 377 passing | Comprehensive coverage of Stages 4–5; includes 31 table management tests, 14 reconciliation tests, B8 tests |
 
 ### Frontend Status (Phases 1-10, Stage 4 E1 Complete)
 
@@ -1250,14 +1363,15 @@ CLAUDE.md Rule 34 requires "58mm must also be supported via settings", but:
 | Rule 7 (Snapshots) | ✅ | order_items snapshot price; orders snapshot tax_rate |
 | Rule 8 (Stock on KOT) | ✅ | Stock decrements in send_batch_to_kitchen() only |
 | Rule 9 (Normalization) | ✅ | Product/category/customer names normalized in Python |
-| Rule 10 (Business Day) | ⚠️ | Implemented but not used in dashboard (reports by created_at, not paid_at) |
+| Rule 10 (Business Day) | ✅ | Dashboard applies day_starts_at boundary; revenue by paid_at, orders by created_at |
 
 ---
 
-**Report Date:** 2026-08-19  
-**Git HEAD:** 37605fe (4.E1)  
-**Backend Test Status:** 359 passing, 0 failing  
+**Report Date:** 2026-08-20  
+**Git HEAD:** 5b020c7 (B8 + Stage 5)  
+**Backend Test Status:** 377 passing, 0 failing  
 **Frontend Test Status:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean  
 **Alembic Status:** Clean (no pending migrations; head b3d5e7f9a1c3)  
-**Next Work:** KOT component (kitchen slip print), money formatter centralization, settle discount cleanup debt
+**Completed Since Last Report:** B8 (remove single SENT item with optional reason), Stage 5 (batch reconciliation + low-stock filter + lesson on pre-verification)  
+**Next Work:** KOT component (kitchen slip print), money formatter centralization, settle discount cleanup debt, consider password/user authentication for multi-terminal deployment
