@@ -65,20 +65,19 @@ export function StockReconciliationForm({
   }
 
   return (
-    <div className="stock-reconciliation">
-      <div className="reconciliation-header">
+    <div className="inventory-card">
+      <div className="page-header" style={{ marginBottom: "16px", paddingLeft: "16px" }}>
         <p className="eyebrow">INVENTORY</p>
         <h2>Stock Count Reconciliation</h2>
         <p className="reconciliation-instructions">
-          Enter the quantity you counted for each product. Leave blank to skip. Submit only the
-          rows you filled in.
+          Enter the quantity you counted for each product. Leave blank to skip.
         </p>
       </div>
 
-      {error && <div className="error-box">{error}</div>}
-      {result && <div className="success-box">{result}</div>}
+      {error && <div className="error-box" style={{ margin: "0 16px 16px" }}>{error}</div>}
+      {result && <div className="success-box" style={{ margin: "0 16px 16px" }}>{result}</div>}
 
-      <div className="reconciliation-table">
+      <div style={{ overflowX: "auto" }}>
         <div className="reconciliation-head">
           <span>Product</span>
           <span>SKU</span>
