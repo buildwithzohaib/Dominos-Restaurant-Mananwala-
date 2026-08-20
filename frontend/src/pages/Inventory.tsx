@@ -7,6 +7,7 @@ import { EditInventoryModal } from "../components/EditInventoryModal";
 import { StatusBadge } from "../components/StatusBadge";
 import { StockAdjustmentModal } from "../components/StockAdjustmentModal";
 import { StockHistory } from "../components/StockHistory";
+import { StockReconciliationForm } from "../components/StockReconciliationForm";
 import { useCatalog } from "../context/CatalogContext";
 import { parseServerDate } from "../utils/dates";
 
@@ -16,7 +17,7 @@ export function Inventory() {
   const formatCurrency = useCurrencyFormat();
   const { allProducts, refresh, isLoading } = useCatalog();
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<"table" | "history">("table");
+  const [view, setView] = useState<"table" | "history" | "reconcile">("table");
   const [addOpen, setAddOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -67,6 +68,13 @@ export function Inventory() {
               <History size={15} /> {view === "history" ? "Back to Inventory" : "Stock History"}
             </button>
 
+            <button
+              className={view === "reconcile" ? "secondary-button active" : "secondary-button"}
+              onClick={() => setView((v) => (v === "reconcile" ? "table" : "reconcile"))}
+            >
+              {view === "reconcile" ? "Back to Inventory" : "Reconcile Stock"}
+            </button>
+
             <button className="add-stock-button" onClick={() => setAddOpen(true)}>
               <Plus size={16} /> Add Stock
             </button>
@@ -76,6 +84,15 @@ export function Inventory() {
 
       {view === "history" ? (
         <StockHistory />
+      ) : view === "reconcile" ? (
+        <StockReconciliationForm
+          products={allProducts}
+          onClose={() => setView("table")}
+          onSaved={() => {
+            setView("table");
+            refresh();
+          }}
+        />
       ) : (
         <div className="inventory-card">
           {isLoading ? (
