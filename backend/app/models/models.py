@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
@@ -124,6 +124,37 @@ class Customer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class User(Base):
+    """User accounts for POS staff. Bootstrap: first user becomes Owner."""
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    pin: Mapped[str] = mapped_column(String(100), nullable=False)  # bcrypt hash (~60 chars); DB declares VARCHAR(10) but SQLite ignores length
+    can_cancel: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    can_discount: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    can_manage_settings: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_owner: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('name', 'pin', name='uq_users_name_pin'),
+    )
+
+class UserSession(Base):
+    """Active login sessions. 90-day safety net expiry; no UX-facing timeout."""
+    __tablename__ = "sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)  # 90-day safety net
+
+    __table_args__ = (
+        Index('ix_sessions_token', 'token', unique=True),
+        Index('ix_sessions_user_id', 'user_id'),
+    )
+
 class RestaurantTable(Base):
     __tablename__ = "restaurant_tables"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -165,6 +196,11 @@ class Order(Base):
     delivery_address: Mapped[str | None] = mapped_column(String(300), nullable=True)  # snapshot of address at order time, NULL for non-delivery
     tax_rate: Mapped[int | None] = mapped_column(Integer, nullable=True)  # basis points at order time (e.g., 1600 for 16%), Rule 7 snapshot
     delivery_charge: Mapped[int | None] = mapped_column(Integer, nullable=True)  # paisa at order time (e.g., 20000 for Rs. 200), Rule 7 snapshot; NULL for non-delivery
+    # --- User attribution (Stage 7) — who processed payment/discount and who cancelled ---
+    # ForeignKey declared for ORM joins only; no database-level constraint (SQLite cannot
+    # add FK via ALTER, and does not enforce foreign keys by default).
+    performed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)  # User who paid/discounted
+    cancel_order_performed_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)  # User who cancelled
     table: Mapped["RestaurantTable | None"] = relationship()
     customer: Mapped["Customer | None"] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
