@@ -35,24 +35,12 @@ def upgrade() -> None:
 
     # Add performed_by_user_id for payment/discount attribution
     op.add_column('orders', sa.Column('performed_by_user_id', sa.Integer, nullable=True))
-    op.create_foreign_key(
-        'fk_orders_performed_by_user_id',
-        'orders', 'users',
-        ['performed_by_user_id'], ['id']
-    )
 
     # Add cancel_order_performed_by_user_id for cancellation attribution
     op.add_column('orders', sa.Column('cancel_order_performed_by_user_id', sa.Integer, nullable=True))
-    op.create_foreign_key(
-        'fk_orders_cancel_order_performed_by_user_id',
-        'orders', 'users',
-        ['cancel_order_performed_by_user_id'], ['id']
-    )
 
 
 def downgrade() -> None:
-    op.drop_constraint('fk_orders_cancel_order_performed_by_user_id', 'orders')
     op.drop_column('orders', 'cancel_order_performed_by_user_id')
-    op.drop_constraint('fk_orders_performed_by_user_id', 'orders')
     op.drop_column('orders', 'performed_by_user_id')
     op.drop_table('users')

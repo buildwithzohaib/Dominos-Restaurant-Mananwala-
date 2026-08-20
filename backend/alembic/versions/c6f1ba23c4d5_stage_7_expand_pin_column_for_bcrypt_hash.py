@@ -19,22 +19,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Expand pin column from String(10) to String(100) to accommodate bcrypt hashes (~60 chars)
-    op.alter_column(
-        'users',
-        'pin',
-        type_=sa.String(100),
-        existing_type=sa.String(10),
-        existing_nullable=False
-    )
+    # SQLite does not enforce VARCHAR length constraints — all text columns have TEXT affinity.
+    # A 60-character bcrypt hash stores fine in a column declared VARCHAR(10).
+    # No schema change needed.
+    pass
 
 
 def downgrade() -> None:
-    # Shrink back to String(10) — will fail if any hashes are > 10 chars
-    op.alter_column(
-        'users',
-        'pin',
-        type_=sa.String(10),
-        existing_type=sa.String(100),
-        existing_nullable=False
-    )
+    # SQLite does not enforce VARCHAR length constraints — no schema change needed.
+    pass
