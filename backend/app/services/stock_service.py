@@ -5,7 +5,7 @@ from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
 from app.models.models import Product, StockMovement
-from app.schemas.schemas import StockAdjustmentIn, StockPurchaseIn
+from app.schemas.schemas import StockAdjustmentIn, StockPurchaseIn, StockReconciliationIn
 
 REASON_LABELS = {
     "DAMAGED": "Damaged",
@@ -154,3 +154,95 @@ def list_movements(
             StockMovement.created_at < day_start + timedelta(days=1),
         )
     return query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc()).all()
+
+
+def reconcile_stock(db: Session, payload: StockReconciliationIn) -> list[StockMovement]:
+    """Batch stock reconciliation from physical count. For each row where
+    counted_quantity differs from system stock, computes the delta and writes
+    one ADJUSTMENT StockMovement. Rows where counted == system are skipped
+    (no movement written).
+
+    All adjustments happen in a single transaction: either all succeed or all
+    rollback. If any product_id is invalid, NO changes are written.
+
+    Args:
+        db: database session
+        payload: StockReconciliationIn with items list of {product_id, counted_quantity}
+
+    Returns:
+        List of created StockMovement rows (one per changed product)
+
+    Raises:
+        HTTPException if any product not found, concurrent changes detected,
+        or if counted quantity would result in negative stock
+    """
+    # PHASE 1: Validate all product_ids exist and calculate deltas.
+    # NO database writes yet. If any product_id is invalid, fail immediately
+    # without touching the database (atomic guarantee + privacy guarantee).
+    products_to_reconcile = []  # List of (item, product, stock_before, delta)
+
+    for item in payload.items:
+        product = db.get(Product, item.product_id)
+        if not product:
+            raise HTTPException(404, f"Product ID {item.product_id} not found")
+
+        stock_before = product.stock
+        delta = item.counted_quantity - stock_before
+
+        # Skip unchanged rows, but track changed ones for Phase 2
+        if delta != 0:
+            products_to_reconcile.append((item, product, stock_before, delta))
+
+    # If no changes needed, return empty list
+    if not products_to_reconcile:
+        return []
+
+    # PHASE 2: Apply all updates in a single transaction.
+    # At this point, all product_ids are known to exist.
+    movements = []
+
+    for item, product, stock_before, delta in products_to_reconcile:
+        # Atomic UPDATE with WHERE guard (identical to adjust_stock's guard)
+        result = db.execute(
+            update(Product)
+            .where(Product.id == item.product_id, Product.stock + delta >= 0)
+            .values(stock=Product.stock + delta, updated_at=datetime.utcnow())
+        )
+        if result.rowcount == 0:
+            db.rollback()
+            current = db.get(Product, item.product_id)
+            name = current.name_display if current else product.name_display
+            raise HTTPException(
+                400, f"Cannot reconcile {name} — concurrent stock changes detected, please retry the count"
+            )
+
+        db.refresh(product)
+        stock_after = product.stock
+
+        movement = StockMovement(
+            item_type="PRODUCT",
+            item_id=product.id,
+            item_name=product.name_display,
+            movement_type="ADJUSTMENT",
+            quantity_change=delta,
+            reason="Stock count reconciliation",
+            supplier=None,
+            purchase_price=None,
+            stock_before=stock_before,
+            stock_after=stock_after,
+        )
+        db.add(movement)
+        movements.append(movement)
+
+    # Commit all adjustments in one transaction
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(500, "Could not save reconciliation, please try again")
+
+    # Refresh movements to populate id and created_at
+    for m in movements:
+        db.refresh(m)
+
+    return movements

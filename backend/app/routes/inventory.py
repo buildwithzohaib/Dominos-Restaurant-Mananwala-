@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.schemas import InventoryUpdate, ProductOut, StockAdjustmentIn, StockPurchaseIn
+from app.schemas.schemas import InventoryUpdate, ProductOut, StockAdjustmentIn, StockPurchaseIn, StockReconciliationIn, StockMovementOut
 from app.services import inventory_service, stock_service
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
@@ -35,3 +35,11 @@ def adjust_stock(product_id: int, payload: StockAdjustmentIn, db: Session = Depe
 @router.put("/{product_id}", response_model=ProductOut)
 def update_inventory_item(product_id: int, payload: InventoryUpdate, db: Session = Depends(get_db)):
     return inventory_service.update_inventory_item(db, product_id, payload)
+
+
+@router.post("/reconcile", response_model=list[StockMovementOut])
+def reconcile_stock(payload: StockReconciliationIn, db: Session = Depends(get_db)):
+    """Batch stock reconciliation from physical count (Stage 5). For each row where
+    counted_quantity differs from system stock, writes one ADJUSTMENT StockMovement.
+    Rows where counted == system are skipped. All adjustments happen in one transaction."""
+    return stock_service.reconcile_stock(db, payload)

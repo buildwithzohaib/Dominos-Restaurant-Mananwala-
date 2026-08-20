@@ -245,6 +245,19 @@ class StockMovementOut(BaseModel):
     reference: str | None
     created_at: datetime
 
+# --- Stock Reconciliation (Stage 5) ---
+
+class StockReconciliationItemIn(BaseModel):
+    """One line of a stock count submission."""
+    product_id: int
+    counted_quantity: int = Field(ge=0)
+
+class StockReconciliationIn(BaseModel):
+    """Batch stock reconciliation from physical count. User counts all products,
+    submits only the rows they filled in. Each row where counted_quantity differs
+    from system stock generates one ADJUSTMENT StockMovement."""
+    items: list[StockReconciliationItemIn] = Field(min_length=1)
+
 # --- Dashboard (Phase 9) ---
 
 class TopProductItem(BaseModel):
