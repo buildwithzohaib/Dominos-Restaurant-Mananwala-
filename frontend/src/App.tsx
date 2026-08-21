@@ -103,13 +103,15 @@ function AppContent() {
               <span>Staff</span>
             </button>
           )}
-          <button
-            className={page === "settings" ? "nav-item active" : "nav-item"}
-            onClick={() => setPage("settings")}
-          >
-            <SettingsIcon size={21} />
-            <span>Settings</span>
-          </button>
+          {authContext?.user && (authContext.user.is_owner || authContext.user.can_manage_settings) && (
+            <button
+              className={page === "settings" ? "nav-item active" : "nav-item"}
+              onClick={() => setPage("settings")}
+            >
+              <SettingsIcon size={21} />
+              <span>Settings</span>
+            </button>
+          )}
         </nav>
         <div className="sidebar-footer">
           {authContext?.user && (
@@ -149,7 +151,7 @@ function AppContent() {
         {page === "products" && <Products />}
         {page === "customers" && <Customers />}
         {page === "staff" && <Staff />}
-        {page === "settings" && <Settings />}
+        {page === "settings" && authContext?.user && (authContext.user.is_owner || authContext.user.can_manage_settings) && <Settings />}
       </div>
     </div>
   );

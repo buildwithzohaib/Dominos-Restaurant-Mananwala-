@@ -1,6 +1,7 @@
 import { useState, useContext } from "react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { SettingsContext } from "../context/SettingsContext";
+import { AuthContext } from "../context/AuthContext";
 import {
   CreditCard,
   Banknote,
@@ -48,6 +49,8 @@ export function PaymentModal({
   const formatCurrency = useCurrencyFormat();
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
+  const authContext = useContext(AuthContext);
+  const canDiscount = authContext?.user && (authContext.user.is_owner || authContext.user.can_discount);
   const {
     state,
     subtotal,
@@ -74,12 +77,14 @@ export function PaymentModal({
 
     try {
       let o;
+      // Use discount 0 if user doesn't have permission to apply discounts
+      const discountToSubmit = canDiscount ? discount : 0;
 
       if (state.serverId) {
         // DINE_IN order — use payOrderDineIn
         o = await api.payOrderDineIn(state.serverId, {
           payment_method: state.paymentMethod,
-          discount: discount,
+          discount: discountToSubmit,
           amount_received: state.paymentMethod === "CASH" ? received : 0,
         });
       } else {
@@ -96,7 +101,7 @@ export function PaymentModal({
             quantity: i.quantity,
           })),
 
-          discount: discount,
+          discount: discountToSubmit,
 
           payment_method: state.paymentMethod,
 
@@ -218,20 +223,22 @@ export function PaymentModal({
           ))}
         </div>
 
-        <label className="large-input">
-          Discount
+        {canDiscount && (
+          <label className="large-input">
+            Discount
 
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={discountText}
-            onChange={(e) => {
-              setDiscountText(e.target.value);
-              setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
-            }}
-          />
-        </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={discountText}
+              onChange={(e) => {
+                setDiscountText(e.target.value);
+                setDiscount(rupeesToPaisa(parseFloat(e.target.value) || 0));
+              }}
+            />
+          </label>
+        )}
 
         {state.paymentMethod === "CASH" && (
           <label className="large-input">

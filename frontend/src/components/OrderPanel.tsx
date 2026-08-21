@@ -3,6 +3,7 @@ import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { usePOS } from "../context/POSContext";
 import { SettingsContext } from "../context/SettingsContext";
+import { AuthContext } from "../context/AuthContext";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import { isOrderNotOpenError } from "../utils/orderErrors";
 import { CustomerPanel } from "./CustomerPanel";
@@ -14,6 +15,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
   const formatCurrency = useCurrencyFormat();
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
+  const authContext = useContext(AuthContext);
   const {
     state,
     subtotal,
@@ -246,12 +248,14 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
             >
               {sendBusy ? "Sending..." : "Send to Kitchen"}
             </button>
-            <button
-              className="secondary-button"
-              onClick={() => setCancelModalOpen(true)}
-            >
-              Cancel Order
-            </button>
+            {authContext?.user && (authContext.user.is_owner || authContext.user.can_cancel) && (
+              <button
+                className="secondary-button"
+                onClick={() => setCancelModalOpen(true)}
+              >
+                Cancel Order
+              </button>
+            )}
           </>
         ) : null}
 
