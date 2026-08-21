@@ -336,3 +336,57 @@ class CustomerOut(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+# --- Authentication (Stage 7) ---
+
+class LoginIn(BaseModel):
+    """Login request: name + 4-digit PIN."""
+    name: str
+    pin: str
+
+
+class UserOut(BaseModel):
+    """User details response. Never exposes the PIN hash."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    can_cancel: bool
+    can_discount: bool
+    can_manage_settings: bool
+    is_active: bool
+    is_owner: bool
+    created_at: datetime
+
+
+class LoginOut(BaseModel):
+    """Login response: session token + user details."""
+    token: str
+    user: UserOut
+
+
+class BootstrapStatusOut(BaseModel):
+    """Bootstrap status: whether the system needs initial setup."""
+    needs_bootstrap: bool
+
+
+class UserCreateIn(BaseModel):
+    """Create user request. Bootstrap allows this without auth; later calls require Owner."""
+    name: str
+    pin: str
+    can_cancel: bool = False
+    can_discount: bool = False
+    can_manage_settings: bool = False
+    is_owner: bool = False
+
+
+class UserPermissionsIn(BaseModel):
+    """Update user permissions (Owner-only). Owner flag cannot be changed here."""
+    can_cancel: bool | None = None
+    can_discount: bool | None = None
+    can_manage_settings: bool | None = None
+
+
+class PinResetIn(BaseModel):
+    """Reset user PIN (Owner-only)."""
+    new_pin: str

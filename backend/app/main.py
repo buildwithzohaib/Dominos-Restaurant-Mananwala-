@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from app.routes.auth import router as auth_router
 from app.routes.catalog import router as catalog_router
 from app.routes.categories import router as categories_router
 from app.routes.customers import router as customers_router
@@ -12,6 +13,7 @@ from app.routes.stock_movements import router as stock_movements_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.products import router as products_router
 from app.routes.settings import router as settings_router
+from app.routes.users import router as users_router
 from app.models import models  # noqa: F401
 from app.services import image_service  # Ensure storage dir is created
 from app.services.backup_service import create_backup, cleanup_old_backups
@@ -43,6 +45,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(catalog_router)
 app.include_router(categories_router)
 app.include_router(customers_router)
