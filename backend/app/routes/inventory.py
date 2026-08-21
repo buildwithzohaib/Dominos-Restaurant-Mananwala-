@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.models import User
 from app.schemas.schemas import InventoryUpdate, ProductOut, StockAdjustmentIn, StockPurchaseIn, StockReconciliationIn, StockMovementOut
 from app.services import inventory_service, stock_service
+from app.routes.auth import get_current_user_dep
 
-router = APIRouter(prefix="/api/inventory", tags=["inventory"])
+router = APIRouter(prefix="/api/inventory", tags=["inventory"], dependencies=[Depends(get_current_user_dep)])
 
 
 @router.get("", response_model=list[ProductOut])

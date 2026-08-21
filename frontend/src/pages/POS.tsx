@@ -13,6 +13,7 @@ import { SuccessModal } from "../components/SuccessModal";
 import { usePOS } from "../context/POSContext";
 import { useCatalog } from "../context/CatalogContext";
 import { SettingsContext } from "../context/SettingsContext";
+import { AuthContext } from "../context/AuthContext";
 import { getRestaurantLetter } from "../utils/restaurant";
 import { isOrderNotOpenError } from "../utils/orderErrors";
 import { api } from "../services/api";
@@ -33,6 +34,9 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
 
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
+
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
 
   const [addError, setAddError] = useState("");
   const [openOrderCount, setOpenOrderCount] = useState(0);
@@ -267,16 +271,16 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
         <div className="topbar-user">
 
           <div className="avatar">
-            C
+            {user?.name.charAt(0).toUpperCase()}
           </div>
 
           <div>
             <strong>
-              Cashier
+              {user?.name}
             </strong>
 
             <span>
-              Online
+              {user?.is_owner ? "Owner" : "Staff"}
             </span>
           </div>
 

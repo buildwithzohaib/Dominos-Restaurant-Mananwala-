@@ -7,11 +7,12 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.models import Product
+from app.models.models import Product, User
 from app.schemas.schemas import ProductCreate, ProductOut, ProductUpdate
 from app.services import product_service, image_service
+from app.routes.auth import get_current_user_dep
 
-router = APIRouter(prefix="/api/products", tags=["products"])
+router = APIRouter(prefix="/api/products", tags=["products"], dependencies=[Depends(get_current_user_dep)])
 
 
 @router.get("", response_model=list[ProductOut])

@@ -5,13 +5,14 @@ Endpoints for creating, reading, updating, and managing categories.
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.models.models import Category
+from app.models.models import Category, User
 
 from app.database import get_db
 from app.schemas.schemas import CategoryCreate, CategoryUpdate, CategoryOut
 from app.services import category_service
+from app.routes.auth import get_current_user_dep
 
-router = APIRouter(prefix="/api/categories", tags=["categories"])
+router = APIRouter(prefix="/api/categories", tags=["categories"], dependencies=[Depends(get_current_user_dep)])
 
 
 @router.get("", response_model=list[CategoryOut])

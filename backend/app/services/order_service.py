@@ -20,7 +20,7 @@ CANCEL_REASON_LABELS = {
     "OTHER": "Other",
 }
 
-def create_order(db: Session, payload: OrderCreate) -> Order:
+def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | None = None) -> Order:
     # Validate table
     if payload.order_type == "DINE_IN" and payload.table_id is None:
         raise HTTPException(400, "A table is required for dine-in orders.")
@@ -116,6 +116,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
             amount_received=received,
             change_amount=change,
             paid_at=datetime.utcnow(),
+            performed_by_user_id=performed_by_user_id,  # Stage 7: user attribution
         )
         db.add(candidate)
         try:
@@ -205,7 +206,7 @@ def create_order(db: Session, payload: OrderCreate) -> Order:
     return order_result
 
 
-def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
+def cancel_order(db: Session, order_id: int, payload: OrderCancelIn, performed_by_user_id: int | None = None) -> Order:
     """Phase 7–8: mark an order CANCELLED with a required reason, then restore its inventory.
 
     Phase 7: The order row is never deleted — only its status/cancellation fields change —
@@ -239,7 +240,7 @@ def cancel_order(db: Session, order_id: int, payload: OrderCancelIn) -> Order:
     result = db.execute(
         update(Order)
         .where(Order.id == order_id, Order.status.in_(["OPEN", "PAID"]))
-        .values(status="CANCELLED", cancelled_at=datetime.utcnow(), cancelled_reason=label)
+        .values(status="CANCELLED", cancelled_at=datetime.utcnow(), cancelled_reason=label, cancel_order_performed_by_user_id=performed_by_user_id)
     )
     if result.rowcount == 0:
         db.rollback()
@@ -761,7 +762,7 @@ def send_batch_to_kitchen(db: Session, order_id: int) -> Order:
     return order_result
 
 
-def pay_order(db: Session, order_id: int, payload: PayOrderIn) -> Order:
+def pay_order(db: Session, order_id: int, payload: PayOrderIn, performed_by_user_id: int | None = None) -> Order:
     """
     Close an OPEN dine-in order by taking payment.
 
@@ -830,6 +831,7 @@ def pay_order(db: Session, order_id: int, payload: PayOrderIn) -> Order:
     order.amount_received = payload.amount_received
     order.change_amount = change
     order.paid_at = datetime.utcnow()
+    order.performed_by_user_id = performed_by_user_id  # Stage 7: user attribution
 
     db.commit()
     order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()

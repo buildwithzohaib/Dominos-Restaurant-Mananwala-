@@ -1,4 +1,4 @@
-import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn} from "../types";
+import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
 
 export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 
@@ -20,8 +20,15 @@ export class APIError extends Error {
 }
 
 async function request<T>(path:string,options?:RequestInit):Promise<T>{
- const r=await fetch(`${API_URL}${path}`,{headers:{"Content-Type":"application/json",...(options?.headers||{})},...options});
+ const headers:Record<string,string>={"Content-Type":"application/json",...(options?.headers||{})};
+ if(authToken){
+  headers["Authorization"]=`Bearer ${authToken}`;
+ }
+ const r=await fetch(`${API_URL}${path}`,{...options,headers});
  if(!r.ok){
+  if(r.status===401&&path!=="/api/auth/login"&&unauthorizedHandler){
+   unauthorizedHandler();
+  }
   let message="Request failed.";
   let detail:any=undefined;
   try{
@@ -35,12 +42,17 @@ async function request<T>(path:string,options?:RequestInit):Promise<T>{
   }catch{}
   throw new APIError(message,detail);
  }
+ if(r.status===204){return undefined as T;}
  return r.json();
 }
 
 async function uploadFile<T>(path:string,file:File):Promise<T>{
  const fd=new FormData();fd.append("file",file);
- const r=await fetch(`${API_URL}${path}`,{method:"POST",body:fd});
+ const headers:Record<string,string>={};
+ if(authToken){
+  headers["Authorization"]=`Bearer ${authToken}`;
+ }
+ const r=await fetch(`${API_URL}${path}`,{method:"POST",body:fd,headers});
  if(!r.ok){
   let message="Upload failed.";
   let detail:any=undefined;
@@ -56,6 +68,18 @@ async function uploadFile<T>(path:string,file:File):Promise<T>{
   throw new APIError(message,detail);
  }
  return r.json();
+}
+
+// Authentication token management
+let authToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function setUnauthorizedHandler(fn: () => void) {
+  unauthorizedHandler = fn;
 }
 export const api={
  getCatalogCategories:()=>request<Category[]>("/api/catalog/categories"),
@@ -143,5 +167,18 @@ export const api={
  addItemsToOrder:(id:number,p:{items:{product_id:number;quantity:number}[]})=>request<Order>(`/api/orders/${id}/items`,{method:"POST",body:JSON.stringify(p)}),
  updatePendingItem:(id:number,item_id:number,p:{quantity:number;reason?:string})=>request<Order>(`/api/orders/${id}/items/${item_id}`,{method:"PATCH",body:JSON.stringify(p)}),
  sendBatchToKitchen:(id:number)=>request<Order>(`/api/orders/${id}/send`,{method:"POST",body:JSON.stringify({})}),
- payOrderDineIn:(id:number,p:{payment_method:PaymentMethod;discount:number;amount_received:number})=>request<Order>(`/api/orders/${id}/pay`,{method:"POST",body:JSON.stringify(p)})
+ payOrderDineIn:(id:number,p:{payment_method:PaymentMethod;discount:number;amount_received:number})=>request<Order>(`/api/orders/${id}/pay`,{method:"POST",body:JSON.stringify(p)}),
+ // Authentication (Stage 7)
+ getBootstrapStatus:()=>request<{needs_bootstrap:boolean}>("/api/auth/bootstrap-status"),
+ login:(name:string,pin:string)=>request<{token:string;user:User}>("/api/auth/login",{method:"POST",body:JSON.stringify({name,pin})}),
+ logout:()=>request<void>("/api/auth/logout",{method:"POST",body:"{}"}),
+ getMe:()=>request<User>("/api/auth/me"),
+ createFirstOwner:(name:string,pin:string)=>request<User>("/api/users",{method:"POST",body:JSON.stringify({name,pin})}),
+ // Staff management (Stage 7)
+ listUsers:()=>request<User[]>("/api/users"),
+ createUser:(p:{name:string;pin:string;can_cancel:boolean;can_discount:boolean;can_manage_settings:boolean;is_owner:boolean})=>request<User>("/api/users",{method:"POST",body:JSON.stringify(p)}),
+ updateUserPermissions:(id:number,p:{can_cancel?:boolean;can_discount?:boolean;can_manage_settings?:boolean})=>request<User>(`/api/users/${id}/permissions`,{method:"PATCH",body:JSON.stringify(p)}),
+ deactivateUser:(id:number)=>request<User>(`/api/users/${id}/deactivate`,{method:"POST",body:"{}"}),
+ reactivateUser:(id:number)=>request<User>(`/api/users/${id}/reactivate`,{method:"POST",body:"{}"}),
+ resetUserPin:(id:number,new_pin:string)=>request<User>(`/api/users/${id}/reset-pin`,{method:"POST",body:JSON.stringify({new_pin})})
 };

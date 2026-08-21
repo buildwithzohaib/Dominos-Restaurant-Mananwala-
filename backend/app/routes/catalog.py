@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models.models import Category, Product, RestaurantTable
+from app.models.models import Category, Product, RestaurantTable, User
 from app.schemas.schemas import CategoryOut, ProductOut, TableOut, TableCreate, TableRename
 from app.services import table_service
+from app.routes.auth import get_current_user_dep
 
-router = APIRouter(prefix="/api", tags=["catalog"])
+router = APIRouter(prefix="/api", tags=["catalog"], dependencies=[Depends(get_current_user_dep)])
 
 @router.get("/catalog/categories", response_model=list[CategoryOut])
 def catalog_categories(db: Session = Depends(get_db)):

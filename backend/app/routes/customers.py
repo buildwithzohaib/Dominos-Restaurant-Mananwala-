@@ -13,10 +13,12 @@ Endpoints:
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.database import get_db
+from app.models.models import User
 from app.schemas.schemas import CustomerCreate, CustomerUpdate, CustomerOut, CustomerSearchResult
 from app.services import customer_service
+from app.routes.auth import get_current_user_dep
 
-router = APIRouter(prefix="/api/customers", tags=["customers"])
+router = APIRouter(prefix="/api/customers", tags=["customers"], dependencies=[Depends(get_current_user_dep)])
 
 
 @router.post("", response_model=CustomerOut, status_code=201)

@@ -46,6 +46,27 @@ def get_current_user_dep(
         raise HTTPException(status_code=401, detail=str(e))
 
 
+def require_permission(attr_name: str):
+    """
+    Dependency factory to require a specific permission or is_owner status.
+
+    Args:
+        attr_name: The boolean attribute name to check (e.g., "can_cancel", "can_discount")
+
+    Returns a dependency that resolves the current user and verifies either:
+        - user.is_owner is True, OR
+        - getattr(user, attr_name) is True
+
+    Raises:
+        HTTPException(403): if neither condition is met
+    """
+    async def _require_permission(current_user: User = Depends(get_current_user_dep)) -> User:
+        if current_user.is_owner or getattr(current_user, attr_name, False):
+            return current_user
+        raise HTTPException(status_code=403, detail="You do not have permission to perform this action")
+    return _require_permission
+
+
 @router.get("/bootstrap-status", response_model=BootstrapStatusOut)
 def bootstrap_status(db: Session = Depends(get_db)):
     """

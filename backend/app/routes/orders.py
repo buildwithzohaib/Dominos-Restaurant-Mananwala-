@@ -1,15 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
-from app.models.models import Order
+from app.models.models import Order, User
 from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, OrderOut, PayOrderIn, UpdatePendingItemIn
 from app.services.order_service import add_items_to_order, cancel_order, create_open_order, create_order, pay_order, send_batch_to_kitchen, update_pending_item
+from app.routes.auth import get_current_user_dep, require_permission
 
-router = APIRouter(prefix="/api/orders", tags=["orders"])
+router = APIRouter(prefix="/api/orders", tags=["orders"], dependencies=[Depends(get_current_user_dep)])
 
 @router.post("", response_model=OrderOut)
-def create(payload: OrderCreate, db: Session = Depends(get_db)):
-    return create_order(db, payload)
+def create(payload: OrderCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_dep)):
+    # If a discount is applied, require can_discount permission (or Owner)
+    if payload.discount > 0:
+        if not current_user.is_owner and not current_user.can_discount:
+            raise HTTPException(status_code=403, detail="You do not have permission to apply discounts")
+    return create_order(db, payload, performed_by_user_id=current_user.id)
 
 @router.post("/open", response_model=OrderOut)
 def open_order(payload: OpenOrderCreate, db: Session = Depends(get_db)):
@@ -48,9 +53,16 @@ def send_batch(order_id: int, db: Session = Depends(get_db)):
     return send_batch_to_kitchen(db, order_id)
 
 @router.post("/{order_id}/pay", response_model=OrderOut)
-def pay(order_id: int, payload: PayOrderIn, db: Session = Depends(get_db)):
-    return pay_order(db, order_id, payload)
+def pay(order_id: int, payload: PayOrderIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_dep)):
+    # If a discount is applied, require can_discount permission (or Owner)
+    if payload.discount > 0:
+        if not current_user.is_owner and not current_user.can_discount:
+            raise HTTPException(status_code=403, detail="You do not have permission to apply discounts")
+    return pay_order(db, order_id, payload, performed_by_user_id=current_user.id)
 
 @router.post("/{order_id}/cancel", response_model=OrderOut)
-def cancel(order_id: int, payload: OrderCancelIn, db: Session = Depends(get_db)):
-    return cancel_order(db, order_id, payload)
+def cancel(order_id: int, payload: OrderCancelIn, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_dep)):
+    # Require can_cancel permission (or Owner)
+    if not current_user.is_owner and not current_user.can_cancel:
+        raise HTTPException(status_code=403, detail="You do not have permission to cancel orders")
+    return cancel_order(db, order_id, payload, performed_by_user_id=current_user.id)

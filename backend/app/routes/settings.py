@@ -2,9 +2,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db, BACKEND_DIR, DB_PATH, engine
+from app.models.models import User
 from app.services.settings_service import get_settings, update_settings
 from app.services.backup_service import get_backup_dir, restore_database
 from app.schemas.schemas import SettingsOut, SettingsUpdate
+from app.routes.auth import require_permission
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -23,8 +25,10 @@ def read_settings(db: Session = Depends(get_db)):
 
 
 @router.patch("", response_model=SettingsOut)
-def patch_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
+def patch_settings(payload: SettingsUpdate, db: Session = Depends(get_db), current_user: User = Depends(require_permission("can_manage_settings"))):
     """PATCH /api/settings — Partial update to settings.
+
+    Requires can_manage_settings permission or is_owner status.
 
     Args:
         payload: SettingsUpdate with fields to change (id ignored if present)
@@ -33,6 +37,7 @@ def patch_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
         SettingsOut: Updated settings row
 
     Raises:
+        403: if user lacks can_manage_settings permission and is not owner
         422: Validation error (e.g., tax_rate out of bounds)
         500: if settings row is missing
     """
@@ -40,8 +45,10 @@ def patch_settings(payload: SettingsUpdate, db: Session = Depends(get_db)):
 
 
 @router.post("/backup/restore")
-def restore_from_backup():
+def restore_from_backup(current_user: User = Depends(require_permission("can_manage_settings"))):
     """POST /api/settings/backup/restore — Restore database from most recent backup.
+
+    Requires can_manage_settings permission or is_owner status.
 
     WARNING: This overwrites the current database. All data since the backup was taken is lost.
     The server MUST be restarted for the restore to take effect.
@@ -56,6 +63,7 @@ def restore_from_backup():
         - error: str (only on failure)
 
     Raises:
+        403: if user lacks can_manage_settings permission and is not owner
         None (all errors returned in response dict)
     """
     backup_dir = get_backup_dir(BACKEND_DIR)
