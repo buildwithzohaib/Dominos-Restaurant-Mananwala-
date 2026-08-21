@@ -32,6 +32,7 @@ export type ReceiptData = {
   deliveryAddress: string | null;
   customerName: string | null;
   customerPhone: string | null;
+  cashierName: string | null;
 
   date: string;
   time: string;
@@ -141,6 +142,7 @@ export function PaymentModal({
         deliveryAddress: o.delivery_address ?? null,
         customerName: o.customer?.name_display ?? null,
         customerPhone: o.customer?.phone_raw ?? null,
+        cashierName: o.performed_by?.name ?? null,
 
         date: now.toLocaleDateString(),
 

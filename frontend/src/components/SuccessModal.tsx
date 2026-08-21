@@ -95,6 +95,13 @@ export function SuccessModal({
               <span>Time</span>
               <strong>{receipt.time}</strong>
             </div>
+
+            {receipt.cashierName && (
+              <div>
+                <span>Cashier</span>
+                <strong>{receipt.cashierName}</strong>
+              </div>
+            )}
           </div>
 
           <div className="receipt-line" />
@@ -244,6 +251,12 @@ export function SuccessModal({
             <span>Time</span>
             <strong>{receipt.time}</strong>
           </div>
+          {receipt.cashierName && (
+            <div>
+              <span>Cashier</span>
+              <strong>{receipt.cashierName}</strong>
+            </div>
+          )}
         </div>
 
         <div className="receipt-divider">--------------------------------</div>

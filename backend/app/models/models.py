@@ -204,6 +204,8 @@ class Order(Base):
     table: Mapped["RestaurantTable | None"] = relationship()
     customer: Mapped["Customer | None"] = relationship()
     items: Mapped[list["OrderItem"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+    performed_by: Mapped["User | None"] = relationship(foreign_keys=[performed_by_user_id])
+    cancelled_by: Mapped["User | None"] = relationship(foreign_keys=[cancel_order_performed_by_user_id])
 
     # Stage 4 A1: at most one OPEN order per table. PAID and CANCELLED rows are
     # excluded by the WHERE clause, so a table can be re-seated any number of times.

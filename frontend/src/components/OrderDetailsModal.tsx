@@ -114,10 +114,17 @@ export function OrderDetailsModal({
           </div>
         </div>
 
+        {order.performed_by && (
+          <div className="order-meta-row">
+            <span>Paid by</span>
+            <strong>{order.performed_by.name}</strong>
+          </div>
+        )}
+
         {order.status === "CANCELLED" && (
           <div className="cancelled-info-box">
             <strong>Cancelled</strong>
-            <span>{order.cancelled_reason}</span>
+            <span>{order.cancelled_reason}{order.cancelled_by && ` • ${order.cancelled_by.name}`}</span>
             {order.cancelled_at && (
               <span>{parseServerDate(order.cancelled_at).toLocaleString()}</span>
             )}

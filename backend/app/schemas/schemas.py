@@ -61,6 +61,12 @@ class TableNested(BaseModel):
     name: str
     seats: int
 
+class UserNested(BaseModel):
+    """Nested user representation for OrderOut (Stage 7 attribution)"""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+
 class CategoryCreate(BaseModel):
     name: str
 
@@ -185,6 +191,8 @@ class OrderOut(BaseModel):
     cancelled_reason: str | None
     paid_at: datetime | None = None
     items: list[OrderItemOut]
+    performed_by: UserNested | None = None
+    cancelled_by: UserNested | None = None
 
 # --- Order cancellation (Phase 7) -------------------------------------------
 
