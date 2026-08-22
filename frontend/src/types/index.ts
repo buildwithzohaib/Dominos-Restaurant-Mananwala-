@@ -42,6 +42,10 @@ export interface Order { id:number; order_number:string; order_type:OrderType; t
 export interface HourlySale { hour:number; revenue:number; /* paisa */ }
 export interface TopProduct { product_name:string; quantity_sold:number; revenue:number; /* paisa */ }
 export interface DashboardOverview { sales:number; /* paisa */ orders:number; cancelled:number; low_stock:number; hourly_sales:HourlySale[]; top_products:TopProduct[]; }
+// Dashboard (Stage 8) — range-aware metrics with profit and staff attribution
+export interface DailySale { date:string; revenue:number; /* paisa */ }
+export interface StaffMetrics { user_id:number|null; user_name:string|null; sales:number; /* paisa */ orders:number; cancelled:number; discount_total:number; /* paisa */ }
+export interface DashboardRange { range_type:string; window_start:string; window_end:string; sales:number; /* paisa */ sales_previous:number; profit:number; profit_margin_pct:number; orders_missing_cost:number; orders:number; average_order_value:number; /* paisa */ cash_orders:number; card_orders:number; other_orders:number; cash_sales:number; /* paisa */ card_sales:number; /* paisa */ discount_total:number; /* paisa */ discount_order_count:number; cancelled_count:number; cancelled_value:number; /* paisa */ dine_in_count:number; takeaway_count:number; delivery_count:number; low_stock_count:number; daily_sales:DailySale[]; hourly_sales:HourlySale[]; top_products:TopProduct[]; slow_products:TopProduct[]; per_staff:StaffMetrics[]; }
 // Product Management (Phase 10)
 export interface ProductCreateInput { category_id:number; name:string; price:number; /* paisa */ purchase_price?:number; /* paisa */ stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
 export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; /* paisa */ purchase_price?:number; /* paisa */ min_stock?:number; sku?:string; unit?:string; image?:string; }

@@ -1,4 +1,4 @@
-import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
+import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,DashboardRange,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
 
 export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
 
@@ -141,6 +141,7 @@ export const api={
  restoreBackup:()=>request<{success:boolean;message:string;backup_date:string|null;safety_backup:string|null;restart_required:boolean;error?:string}>("/api/settings/backup/restore",{method:"POST",body:"{}"}),
  // Dashboard (Phase 9) — today's business metrics
  getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview"),
+ getDashboardRange:(range:string="today",start?:string,end?:string)=>{const q=new URLSearchParams();q.set("range",range);if(start)q.set("start",start);if(end)q.set("end",end);return request<DashboardRange>(`/api/dashboard/range?${q.toString()}`);},
  // Product Management (Phase 10)
  getProduct:(id:number)=>request<Product>(`/api/products/${id}`),
  createProduct:(p:ProductCreateInput)=>request<Product>("/api/products",{method:"POST",body:JSON.stringify(p)}),
