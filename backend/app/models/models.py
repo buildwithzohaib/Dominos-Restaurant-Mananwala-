@@ -235,4 +235,7 @@ class OrderItem(Base):
     batch_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # sent_at: timestamp the batch was sent to the kitchen; NULL while PENDING.
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # --- Stage 8: Cost snapshot ---
+    # cost in paisa at the moment the item was added; NULL for items created before Stage 8
+    cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     order: Mapped["Order"] = relationship(back_populates="items")

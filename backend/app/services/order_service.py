@@ -166,6 +166,7 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
             quantity=quantity,
             price=product.price,
             line_total=product.price * quantity,
+            cost=product.purchase_price,
         ))
         db.add(StockMovement(
             item_type="PRODUCT",
@@ -476,6 +477,7 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
                 quantity=quantity,
                 price=product.price,
                 line_total=product.price * quantity,
+                cost=product.purchase_price,
                 batch_id=None,
                 sent_at=None,
             ))
