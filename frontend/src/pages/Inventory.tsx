@@ -1,6 +1,6 @@
 import { History, Plus, Search, SlidersHorizontal } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 import { AddStockModal } from "../components/AddStockModal";
 import { EditInventoryModal } from "../components/EditInventoryModal";
@@ -13,12 +13,19 @@ import { parseServerDate } from "../utils/dates";
 
 import type { Product } from "../types";
 
-export function Inventory() {
+export function Inventory({ showLowStockOnly: initialShowLowStock }: { showLowStockOnly?: boolean } = {}) {
   const formatCurrency = useCurrencyFormat();
   const { allProducts, refresh, isLoading } = useCatalog();
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"table" | "history" | "reconcile">("table");
-  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showLowStockOnly, setShowLowStockOnly] = useState(initialShowLowStock ?? false);
+
+  // Apply initial low stock filter if passed as a prop
+  useEffect(() => {
+    if (initialShowLowStock) {
+      setShowLowStockOnly(true);
+    }
+  }, [initialShowLowStock]);
   const [addOpen, setAddOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);

@@ -21,6 +21,7 @@ import type { Order } from "./types";
 function AppContent() {
   const [page, setPage] = useState<"pos" | "activeorders" | "orders" | "inventory" | "dashboard" | "products" | "customers" | "staff" | "settings">("pos");
   const [error, setError] = useState("");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
 
   const authContext = useContext(AuthContext);
   const settingsContext = useContext(SettingsContext);
@@ -32,6 +33,11 @@ function AppContent() {
     } catch (err) {
       console.error("Logout error:", err);
     }
+  };
+
+  const handleLowStockClick = () => {
+    setShowLowStockOnly(true);
+    setPage("inventory");
   };
 
   return (
@@ -68,7 +74,10 @@ function AppContent() {
           </button>
           <button
             className={page === "inventory" ? "nav-item active" : "nav-item"}
-            onClick={() => setPage("inventory")}
+            onClick={() => {
+              setShowLowStockOnly(false);
+              setPage("inventory");
+            }}
           >
             <Package size={21} />
             <span>Inventory</span>
@@ -146,9 +155,9 @@ function AppContent() {
           />
         )}
         {page === "orders" && <Orders />}
-        {page === "inventory" && <Inventory />}
+        {page === "inventory" && <Inventory showLowStockOnly={showLowStockOnly} />}
         {page === "dashboard" && (
-          <Dashboard onLowStockClick={() => setPage("inventory")} />
+          <Dashboard onLowStockClick={handleLowStockClick} />
         )}
         {page === "products" && <Products />}
         {page === "customers" && <Customers />}
