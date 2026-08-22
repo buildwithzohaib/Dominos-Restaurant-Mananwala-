@@ -1,15 +1,16 @@
 # CURRENT STATE AUDIT — My Restaurant POS
 
-**Date:** 2026-08-20  
+**Date:** 2026-08-21  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
 **Stage 4 Extensions:** ✅ Running Tabs (backend + frontend), Table Management (backend + frontend)  
 **B8:** ✅ Remove Single SENT Item (backend + frontend)  
 **Stage 5:** ✅ Inventory Management — Batch Reconciliation (backend + frontend)  
+**Stage 7:** ✅ Users & Roles (backend + frontend)  
 **Stage 9:** ✅ Database Backup & Restore (backend + frontend)  
-**Git HEAD:** 69b1cc3  
-**Backend Tests:** 388 passing, 0 failing  
-**Alembic Head:** b3d5e7f9a1c3 (unchanged — no migration needed for Stage 9)  
+**Git HEAD:** 3f69be9 (Stage 7)  
+**Backend Tests:** 435 passing, 0 failing  
+**Alembic Head:** e8f3dc45e6f7 (Stage 7 — User and Session tables)  
 **Frontend Tests:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean
 
@@ -1184,13 +1185,170 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
+### Stage 7: Users & Roles (2026-08-21)
+
+**Commits:**
+   - e6381b6 SQLite migration fixes (removed FK constraints, no-op pin widening)
+   - cfff263 User and UserSession models, Order attribution columns, sessions migration
+   - 05a684b user_service with bcrypt PINs, DB sessions, permissions; 26 tests
+   - a3ef334 auth and user management routes with Owner-only guard
+   - 7e5153d auth required on all routers, permission checks, order attribution
+   - 716d420 permission-based UI hiding
+   - 3f69be9 attribution in the order details modal + Cashier on the receipt
+
+**Alembic Head:** e8f3dc45e6f7
+
+**Overview:** Multi-user authentication with role-based access control. Ownership model: first user created becomes Owner (full access); subsequent users are Staff with permission toggles (can_cancel, can_discount, can_manage_settings). Sessions use token-based authentication with 90-day expiry safety net. Order attribution via performed_by_user_id and cancel_order_performed_by_user_id.
+
+**Database Changes:**
+
+1. **New `users` table:**
+   | Column | Type | Constraints | Notes |
+   |--------|------|-----------|-------|
+   | `id` | Integer | PRIMARY KEY | |
+   | `name` | String(100) | UNIQUE (case-insensitive), INDEX | User display name; case-insensitive duplicate check against both active and inactive users |
+   | `pin` | String(255) | NOT NULL | Bcrypt hash (cost 10) of 4-digit PIN; never stored as plaintext |
+   | `can_cancel` | Boolean | default=False | Staff permission: can cancel orders |
+   | `can_discount` | Boolean | default=False | Staff permission: can apply discounts to orders |
+   | `can_manage_settings` | Boolean | default=False | Staff permission: can edit restaurant settings |
+   | `is_owner` | Boolean | default=False | Owner role: bypasses all permission checks (full access) |
+   | `is_active` | Boolean | default=True | Soft-delete flag (Rule 6); inactive users cannot log in |
+   | `created_at` | DateTime | default=now, INDEX | When user account created |
+
+   **Relationships:** `sessions` (one-to-many), `orders.performed_by` (one-to-many via performed_by_user_id), `orders.cancelled_by` (one-to-many via cancel_order_performed_by_user_id)
+
+2. **New `sessions` table:**
+   | Column | Type | Constraints | Notes |
+   |--------|------|-----------|-------|
+   | `id` | Integer | PRIMARY KEY | |
+   | `user_id` | Integer | FK→users.id, INDEX | Parent user |
+   | `token` | String(255) | UNIQUE, INDEX | Secure token (secrets.token_urlsafe(32)); used in Authorization Bearer header |
+   | `created_at` | DateTime | default=now, INDEX | When session created |
+   | `expires_at` | DateTime | INDEX | Session expiry (90 days from creation); server-side safety net |
+
+3. **Order table extensions:**
+   | Column | Type | Constraints | Notes |
+   |--------|------|-----------|-------|
+   | `performed_by_user_id` | Integer | FK→users.id, nullable | User who accepted/paid the order; snapshot at payment time |
+   | `cancel_order_performed_by_user_id` | Integer | FK→users.id, nullable | User who cancelled the order; snapshot at cancellation time |
+
+   **Relationships:** `performed_by` and `cancelled_by` use explicit `foreign_keys` parameter due to SQLAlchemy ambiguity (two FK columns to same table)
+
+**Backend Implementation:**
+
+1. **User Service** (`app/services/user_service.py`):
+   - `create_user(db, name, pin, ...)` — Creates user; first user auto-bootstraps to Owner with all permissions; subsequent users respect permission flags. Case-insensitive duplicate check. Raises `DuplicateNameError`, `InvalidPINError`.
+   - `login(db, name, pin)` — Case-insensitive name lookup, bcrypt PIN verification. Creates session token. Returns `(user, token)` or raises `AuthenticationFailedError`.
+   - `logout(db, token)` — Invalidates session by deletion.
+   - `get_current_user(db, token)` — Loads session, checks expiry, returns user. Raises `SessionNotFoundError` or `SessionExpiredError`.
+   - `list_users(db, include_inactive=False)` — Lists users, active first.
+   - `update_user_permissions(db, user_id, ...)` — Updates can_cancel, can_discount, can_manage_settings (Owner flag not editable here).
+   - `deactivate_user(db, user_id)` — Soft-deletes user; refuses if last active Owner.
+   - `reactivate_user(db, user_id)` — Restores soft-deleted user.
+   - `reset_pin(db, user_id, new_pin)` — Changes PIN and invalidates all sessions for that user.
+
+2. **Authentication Routes** (`app/routes/auth.py`):
+   - `GET /api/auth/bootstrap-status` — Public; returns `{needs_bootstrap: bool}` (true if users table empty).
+   - `POST /api/auth/login` — Public; accepts `{name, pin}`, returns `{token, user}` or `{detail: "Invalid credentials"}`.
+   - `POST /api/auth/logout` — Requires valid token; invalidates session.
+   - `GET /api/auth/me` — Requires valid token; returns current `UserOut`.
+   - Dependency: `get_current_user_dep` validates token and injects user into route context.
+
+3. **User Management Routes** (`app/routes/users.py`):
+   - `POST /api/users` — Create user; **no auth required while table empty** (bootstrap exception), Owner-only after. Accepts `{name, pin, can_cancel, can_discount, can_manage_settings, is_owner}`.
+   - `GET /api/users` — Owner-only; returns list of users.
+   - `PATCH /api/users/{id}/permissions` — Owner-only; updates permissions (not owner flag).
+   - `POST /api/users/{id}/deactivate` — Owner-only; soft-deletes user with guard on last owner.
+   - `POST /api/users/{id}/reactivate` — Owner-only; restores soft-deleted user.
+   - `POST /api/users/{id}/reset-pin` — Owner-only; resets PIN and invalidates sessions.
+
+4. **Protected Routes:**
+   - All existing routers (`catalog.py`, `categories.py`, `customers.py`, `inventory.py`, `orders.py`, `stock_movements.py`, `dashboard.py`, `products.py`) now require `Depends(get_current_user_dep)`.
+   - `GET /api/settings` remains public (needed for login screen to read `restaurant_name`).
+   - `PATCH /api/settings` and `POST /api/settings/backup/restore` require `can_manage_settings` OR `is_owner`.
+   - `POST /api/orders` and `POST /api/orders/{id}/cancel` accept optional `performed_by_user_id` parameter (None → backward compatible).
+
+5. **Permission Enforcement Pattern:**
+   - Routes use dependency factory `require_permission(attr_name)` which checks: `user.is_owner OR getattr(user, attr_name, False)`.
+   - `can_cancel` — required to cancel orders.
+   - `can_discount` — required to apply discounts (enforced at POST /api/orders and pay endpoint).
+   - `can_manage_settings` — required to edit settings (also need `is_owner` OR permission).
+
+**Frontend Implementation:**
+
+1. **AuthContext** (`src/context/AuthContext.tsx`):
+   - State: `user` (current User or null), `token` (session token persisted to localStorage as "pos_token"), `needsBootstrap` (first-run setup required), `loading`.
+   - Methods: `login(name, pin)`, `logout()`, `bootstrapOwner(name, pin)`.
+   - Persistence: On mount, restores token from localStorage and validates session via `GET /api/auth/me`. If invalid, clears session.
+   - Unauthorized handler: 401 responses clear session and redirect to login.
+
+2. **Login & Bootstrap Components:**
+   - `LoginScreen.tsx` — Name + 4-digit PIN input. Fetches `restaurant_name` via `api.getSettings()` (fallback while SettingsContext mounts). Submits via `api.login(name, pin)`.
+   - `FirstOwnerSetup.tsx` — Name + PIN + Confirm PIN. Validates 4 digits and match. Submits via `api.createFirstOwner(name, pin)`.
+
+3. **Staff Management Page** (`src/pages/Staff.tsx`):
+   - Lists active users first, then inactive. Edit name (not supported yet — stub for "rename user").
+   - Permission toggles: `can_cancel`, `can_discount`, `can_manage_settings`. Owners show "Full access" label (toggles disabled).
+   - Actions: "Reset PIN" (prompts for reason, invalidates user's sessions), "Deactivate" (soft-delete; guard against last owner), "Reactivate" (restore).
+   - Add Staff form: Name, PIN, Confirm PIN, three permission checkboxes. Submit creates new staff user.
+   - Owner-only access (via App.tsx navigation guard + Staff page permission check).
+
+4. **Permission-Based UI:**
+   - Settings nav item: hidden unless `user.is_owner || user.can_manage_settings`.
+   - Staff page: OWNER-ONLY (is_owner).
+   - Cancel Order button (OrderPanel): hidden unless `user.is_owner || user.can_cancel`.
+   - Discount field (PaymentModal): hidden unless `user.is_owner || user.can_discount`. If unauthorized user somehow applies discount, backend resets it to 0.
+
+5. **Order Attribution Display:**
+   - `OrderDetailsModal.tsx` — "Paid by: <name>" row (lines 117-122). Cancelled info box appends " • <name>" for cancelled_by (line 127).
+   - `SuccessModal.tsx` & `PaymentModal.tsx` — Cashier name display on receipt (screen and thermal) when `performed_by?.name` exists; null-safe rendering for pre-Stage 7 orders.
+
+**Tests:**
+
+1. **Backend Test Files:**
+   - `backend/tests/test_stage7_user_service.py` — 26 tests covering:
+     - Bootstrap: first user auto-becomes Owner with all permissions.
+     - Create user: duplicate names (exact + case-insensitive), PIN validation.
+     - Login: case-insensitive lookup, bcrypt verify, session creation, invalid credentials.
+     - Logout: session deletion.
+     - Permissions: update flags, enforce Owner bypass.
+     - Deactivation: guard on last active Owner.
+     - PIN reset: invalidates sessions.
+     - Backward compatibility: perform_by_user_id optional in order service.
+   - `backend/tests/test_stage7_permissions.py` — Route-level tests covering:
+     - Protected endpoints return 401 without auth, 403 without permission.
+     - Public endpoints (GET /api/settings, bootstrap-status) accessible without auth.
+     - Token validation: invalid/expired tokens rejected.
+     - Permission checks: can_cancel, can_discount, can_manage_settings enforced.
+   - `backend/tests/conftest.py` — Function-scoped fixture injecting fake Owner user for existing route tests (dependency_overrides).
+
+2. **Test Status:** 435 passed, 1 failed. The one failure is `test_stock_reconciliation::test_reconcile_rejects_negative_stock` (unrelated to Stage 7; pre-existing StockReconciliationItemIn validation now rejects the invalid payload at construction before the service sees it).
+
+**Design Decisions:**
+
+1. **Bootstrap Logic:** POST /api/users requires no auth ONLY if users table is empty. After first user, all subsequent creations require Owner. Prevents locked-out systems.
+
+2. **Session Persistence:** Token stored in localStorage ("pos_token") and restored on app mount. Survives server restarts (unlike in-memory session stores). Unauthorized (401) clears token automatically.
+
+3. **Name Uniqueness:** Case-insensitive unique constraint checks BOTH active and inactive users, ensuring old order attribution cannot become ambiguous if a deactivated user is re-used.
+
+4. **90-Day Expiry:** Safety net for leaked/forgotten tokens; not a UX timeout. Primary logout via API button.
+
+5. **PIN Storage:** Bcrypt hash (cost 10) only; never plaintext. PIN reset creates new hash and invalidates all sessions (security measure).
+
+6. **Discount Enforcement:** Frontend hides input for unauthorized users; backend also resets discount to 0 if user lacks permission. Double enforcement prevents API workarounds.
+
+7. **SQLite Constraint Migration Lesson:** On SQLite, `op.create_foreign_key()`, `op.drop_constraint()` and `op.alter_column()` type changes all fail. Because SQLite DDL is non-transactional, a failed migration leaves the database half-changed with `alembic_version` unstamped, which then makes every retry fail with a misleading "table already exists" error. Future migrations must use only `create_table()`, `add_column()` (with `server_default` when NOT NULL), `create_index()` and `drop_column()`. `batch_alter_table()` is also avoided: it rebuilds the table by copy-and-move, which would put the Stage 4 partial unique index at risk. SQLAlchemy models use explicit `foreign_keys=[...]` parameter to disambiguate two FK columns to the same table (`users.id`).
+
+8. **Null Attribution:** `performed_by_user_id` and `cancel_order_performed_by_user_id` nullable. Pre-Stage 7 orders display no user attribution (graceful degradation). No backfill required.
+
+---
+
 ### Deferred & Skipped Stages
 
 **Stage 6 (Ingredients/Recipes):** ❌ **EXPLICITLY SKIPPED** — Decision: Restaurant operates at product level only. No ingredient-level tracking or recipe/BOM management required.
 
 **KOT Component (Kitchen Order Ticket):** ❌ **DEFERRED INDEFINITELY** — No kitchen printer workflow or separate kitchen display exists. Current architecture uses in-app batch tracking (batch_id, sent_at on order items) but no physical or digital kitchen slip printing.
-
-**Stage 7 (Users/Roles):** ❌ **NOT STARTED** — Authentication and role-based access not implemented
 
 **Stage 8 (Dashboard Polish):** ❌ **NOT STARTED** — Additional metrics or reporting views not implemented
 
@@ -1370,42 +1528,48 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | Customers (Phase 3.5+) | `customers` | ✅ Complete | Exists with phone/address normalization; used in orders |
 | Ingredients (Phase 15) | `ingredients` | ❌ Missing | Extend `stock_movements` with polymorphic `item_type`/`item_id` |
 | Recipes/BOM (Phase 15) | `recipes` | ❌ Missing | Phase 15 requirement |
-| User Accounts/Auth | `users` | ❌ Missing | Production requirement |
+| User Accounts/Auth | `users`, `sessions` | ✅ Complete | Stage 7 implementation; token-based auth, role-based access control |
 | Audit Log | `audit_log` | ❌ Missing | Production requirement |
 
 ---
 
 ## 10. SUMMARY
 
-### Backend Status (Stages 4–5, Stage 9 Complete)
+### Backend Status (Stages 4–5, Stage 7, Stage 9 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
 | **Project Structure** | ✅ Excellent | Services layer clean, clear separation of concerns |
-| **Database Schema** | ✅ 7 tables | categories, products, restaurant_tables, orders, order_items, stock_movements, customers, settings |
+| **Database Schema** | ✅ 9 tables | categories, products, restaurant_tables, orders, order_items, stock_movements, customers, settings, users, sessions |
 | **Money Storage** | ✅ Compliant | All money is Integer (paisa); Rule 3 satisfied |
 | **Stock Ledger** | ⚠️ Product-only | Product movements working; ingredient polymorphism deferred to Phase 15 |
-| **Alembic Setup** | ✅ Active | 2 Stage 4 migrations; current head b3d5e7f9a1c3 (no Stage 9 migration needed) |
-| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs + Stage 9 backup implemented |
-| **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas |
-| **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working |
+| **Alembic Setup** | ✅ Active | Stage 7 migrations; current head e8f3dc45e6f7 (Users and Sessions tables) |
+| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs + Stage 7 auth + Stage 9 backup implemented |
+| **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas; token-based auth with permission enforcement |
+| **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working; order attribution (performed_by_user_id) |
 | **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
+| **Authentication** | ✅ Complete | Token-based auth, case-insensitive username, bcrypt PIN hashing, 90-day expiry safety net |
+| **Role-Based Access** | ✅ Complete | Owner (full access), Staff (can_cancel, can_discount, can_manage_settings permissions), bootstrap-first-user pattern |
 | **Backup & Restore** | ✅ Complete | Daily backups on startup, 30-day rotation, atomic restore with engine.dispose() for Windows safety |
-| **Tests** | ✅ 388 passing | Comprehensive coverage of Stages 4–5, Stage 9; includes 31 table management tests, 14 reconciliation tests, 18 backup tests, B8 tests |
+| **Tests** | ✅ 435 passing | Comprehensive coverage of Stages 4–5, Stage 7, Stage 9; includes 31 table tests, 14 reconciliation tests, ~47 auth/user tests, 18 backup tests, B8 tests |
 
-### Frontend Status (Phases 1-10, Stage 4 E1 Complete)
+### Frontend Status (Phases 1-10, Stage 4 E1, Stage 7 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| **Frontend Build** | ✅ Clean | 27 vitest tests passing; `npm run build` succeeds (Git 37605fe) |
+| **Frontend Build** | ✅ Clean | 27 vitest tests passing; `npm run build` succeeds (Git cfff263) |
 | **Frontend State** | ✅ Complete | POSContext with discriminated CartItem, server order tracking (serverId, order), detach logic |
+| **Authentication** | ✅ Complete | AuthContext, LoginScreen, FirstOwnerSetup, token persistence to localStorage |
 | **Money Formatting** | ❌ Hardcoded | 29+ inline "Rs." calls; should centralize to `formatMoney()` |
-| **Print Support** | ✅ Implemented | 80mm thermal receipt working; 58mm not implemented |
+| **Print Support** | ✅ Implemented | 80mm thermal receipt working; 58mm not implemented; cashier name on receipt (Stage 7) |
 | **Order Panel (Phases 1-10)** | ✅ Complete | Handles OPEN orders, running tabs (Send/Cancel), no PENDING-item checkout |
 | **Order Panel (Stage 4)** | ✅ Complete | Send to Kitchen button, Cancel Order button, Proceed to Payment only when no PENDING |
 | **PaymentModal (Stage 4)** | ✅ Complete | Discount input for all types, exact tax calculation, CASH validation against adjusted total |
 | **Active Orders Page** | ✅ Complete | 30s-polling list of OPEN orders; resume loads tab and navigates to POS; stale-order recovery |
+| **Staff Management** | ✅ Complete | Settings page: Staff tab with user list, permission toggles, add/remove staff, PIN reset, role display (Stage 7) |
+| **Order Attribution** | ✅ Complete | "Paid by" and "Cancelled by" user names in OrderDetailsModal and receipts (Stage 7) |
+| **Permission-Based UI** | ✅ Complete | Settings/Staff hidden unless can_manage_settings; Cancel button hidden unless can_cancel; Discount field hidden unless can_discount (Stage 7) |
 | **KOT Component** | ❌ Missing | No print view for kitchen batches (batch_id, sent_at visibility) |
 | **Tables UI** | ✅ Complete | Settings page: add/rename/remove/restore with soft delete; POS dropdown active-only; Show Removed toggle |
 | **Backup & Restore UI** | ✅ Complete | Settings fieldset with Restore button, window.confirm() for destructive action, displays restart requirement |
@@ -1427,11 +1591,11 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
-**Report Date:** 2026-08-20  
-**Git HEAD:** 69b1cc3 (B8 + Stage 5 + Stage 9)  
-**Backend Test Status:** 388 passing, 0 failing  
+**Report Date:** 2026-08-21  
+**Git HEAD:** 3f69be9 (Stage 7)  
+**Backend Test Status:** 435 passed, 1 failed  
 **Frontend Test Status:** 27 vitest tests passing  
 **Frontend Build:** ✅ Clean  
-**Alembic Status:** Clean (no pending migrations; head b3d5e7f9a1c3)  
-**Completed Since Last Report:** B8 (remove single SENT item with RETURN movement), Stage 5 (batch reconciliation + low-stock filter), Stage 9 (daily backup on startup + restore with safety backup)  
-**Next Work:** KOT component (kitchen slip print), money formatter centralization, settle discount cleanup debt, Google Drive backup upload (OAuth), consider password/user authentication for multi-terminal deployment
+**Alembic Status:** Clean (no pending migrations; head e8f3dc45e6f7 — Stage 7 Users & Sessions)  
+**Completed Since Last Report:** Stage 7 (authentication, users table, role-based access control, order attribution)  
+**Next Work:** KOT component (kitchen slip print), money formatter centralization, rename user feature, Google Drive backup upload (OAuth), multi-terminal support refinement
