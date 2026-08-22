@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -284,6 +284,73 @@ class DashboardOverviewOut(BaseModel):
     low_stock: int  # Count of products in LOW_STOCK status
     hourly_sales: list[HourlySaleItem]  # Hourly breakdown of today's sales
     top_products: list[TopProductItem]  # Top 5 selling products by quantity
+
+
+# --- Stage 8: Range-Aware Dashboard ---
+
+class DailySalesItem(BaseModel):
+    """Daily sales breakdown for trend chart."""
+    date: date
+    revenue: int  # paisa
+
+
+class StaffMetricsItem(BaseModel):
+    """Per-staff metrics including sales attribution and cancellations."""
+    user_id: int | None  # NULL for orders with no attributed user (pre-Stage 7)
+    user_name: str | None  # Name of the user, or None if user_id is None
+    sales: int  # paisa, sum of Order.total for PAID orders
+    orders: int  # count of PAID orders
+    cancelled: int  # count of CANCELLED orders
+    discount_total: int  # paisa, sum of discounts on PAID orders
+
+
+class DashboardRangeOut(BaseModel):
+    """Range-aware dashboard metrics with profit analysis."""
+    range_type: str  # "today", "7days", "30days", "custom"
+    window_start: datetime  # Business day start
+    window_end: datetime  # Business day end
+
+    # Revenue and orders
+    sales: int  # paisa, sum of Order.total for PAID orders
+    sales_previous: int  # paisa, same metric for previous period
+    orders: int  # Count of PAID orders
+
+    # Profit metrics
+    profit: int  # paisa, (subtotal - discount) - sum(item.cost * item.quantity), per-order
+    profit_margin_pct: int  # basis points (e.g., 2500 = 25%)
+    orders_missing_cost: int  # Count of PAID orders excluded from profit (cost NULL or <=0)
+
+    # Per-order metrics
+    average_order_value: int  # paisa, sales / orders (0 when no orders)
+
+    # Payment method breakdown
+    cash_orders: int
+    card_orders: int
+    other_orders: int
+    cash_sales: int  # paisa
+    card_sales: int  # paisa
+
+    # Discounts and cancellations
+    discount_total: int  # paisa, sum of Order.discount where discount > 0
+    discount_order_count: int  # count of PAID orders with discount > 0
+    cancelled_count: int  # count of CANCELLED orders
+    cancelled_value: int  # paisa, sum of Order.total for CANCELLED orders
+
+    # Order type breakdown
+    dine_in_count: int
+    takeaway_count: int
+    delivery_count: int
+
+    # Inventory
+    low_stock_count: int  # products with stock <= min_stock
+
+    # Trends and details
+    daily_sales: list[DailySalesItem]  # one row per day in window (including zeros)
+    hourly_sales: list[HourlySaleItem]  # hourly breakdown
+    top_products: list[TopProductItem]  # top 8 by quantity
+    slow_products: list[TopProductItem]  # bottom 5 that sold at least once
+    per_staff: list[StaffMetricsItem]  # per-user metrics
+
 
 # --- Product Management (Phase 10) ---
 
