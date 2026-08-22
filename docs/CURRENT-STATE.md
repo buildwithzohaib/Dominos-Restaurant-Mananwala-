@@ -1,17 +1,18 @@
 # CURRENT STATE AUDIT — My Restaurant POS
 
-**Date:** 2026-08-21  
+**Date:** 2026-08-22  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
 **Stage 4 Extensions:** ✅ Running Tabs (backend + frontend), Table Management (backend + frontend)  
 **B8:** ✅ Remove Single SENT Item (backend + frontend)  
 **Stage 5:** ✅ Inventory Management — Batch Reconciliation (backend + frontend)  
 **Stage 7:** ✅ Users & Roles (backend + frontend)  
+**Stage 8:** ✅ Dashboard Cost Snapshot & Range-Aware Metrics (backend + frontend)  
 **Stage 9:** ✅ Database Backup & Restore (backend + frontend)  
-**Git HEAD:** 3f69be9 (Stage 7)  
-**Backend Tests:** 435 passing, 0 failing  
-**Alembic Head:** e8f3dc45e6f7 (Stage 7 — User and Session tables)  
-**Frontend Tests:** 27 vitest tests passing  
+**Git HEAD:** 0ebad0e (Stage 8)  
+**Backend Tests:** [test count to be updated]  
+**Alembic Head:** f9e8d7c6b5a4 (Stage 8 — order_items.cost snapshot)  
+**Frontend Tests:** [test count to be updated]  
 **Frontend Build:** ✅ Clean
 
 ---
@@ -1344,13 +1345,189 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
+### Stage 8: Dashboard Cost Snapshot & Range-Aware Metrics (2026-08-22)
+
+**Commits:**
+   - e3828ea  Stage 8 step 1: snapshot item cost on order lines
+   - 87d7a02  Stage 8 step 2: range-aware dashboard service
+   - 3e49b4d  Stage 8 step 3: GET /api/dashboard/range endpoint
+   - d38293c  Stage 8 step 4: dark chart-rich dashboard with recharts, sidebar overflow fix
+   - 46edcee  Stage 8 step 5: drill-down endpoint and clickable tiles with orders modal
+   - 0ebad0e  Stage 8 step 5: drill-down modal polish and low-stock filter navigation
+
+**Alembic Head:** f9e8d7c6b5a4
+
+**Overview:** Cost snapshot on individual order lines to isolate profit calculations from future supplier price changes. Dashboard service extended to aggregate metrics across custom date ranges. New endpoints for range-filtered revenue, orders, discounts, cancellations, and per-staff attribution. Frontend Dashboard.tsx rebuilt with recharts visualization library — dark theme, eight KPI tiles, daily sales area chart (7d/30d ranges only), order-type composition donut, top products horizontal bar chart, per-staff order listing modal, and drill-down by metric.
+
+**Database Changes:**
+
+1. **`order_items` table extension:**
+   | Column | Type | Constraints | Notes |
+   |--------|------|-----------|-------|
+   | `cost` | Integer | nullable | Paisa unit cost of product at time of sale (Rule 7 snapshot); NULL for pre-Stage-8 items, 0 means "never entered" |
+
+   **Migration:** `f9e8d7c6b5a4` (down_revision `e8f3dc45e6f7`). Pre-Stage-8 rows keep `cost=NULL`. This field is OPTIONAL for backward compatibility; orders with `cost=NULL` on any line are flagged and excluded from profit aggregation.
+
+   **Rationale:** Profit = revenue - cost. If cost changes retroactively when a supplier price is updated, historical profit reports silently rewrite. Snapshotting cost at order time (like price and tax_rate per Rule 7) ensures historical accuracy. Computing cost from current `products.purchase_price` would read old orders as if they were placed today, which is wrong.
+
+**Backend Implementation:**
+
+1. **Cost Snapshot on Order Line Creation**
+   - When an item is added to an order (via `add_items_to_order()` or single-shot `create_order()` in TAKEAWAY/DELIVERY), the product's current `purchase_price` is captured and stored in `order_items.cost`
+   - If `purchase_price` is not set (NULL or 0), `cost` is set to 0 (meaning "price not entered, profit unknown")
+   - Stock movements and other order logic are unchanged
+
+2. **Dashboard Service Enhancements** (`app/services/dashboard_service.py`):
+   
+   **New Functions:**
+   - `resolve_range(db, range_type, start_date=None, end_date=None)` — Parses range parameter ("today", "7days", "30days", "custom") and returns (start_datetime, end_datetime) in UTC using `get_business_day_boundaries()` for "today", or interpreting custom start/end dates. Returns tuple of UTC-aware datetimes.
+   - `get_dashboard_range(db, range_type, start=None, end=None)` — Aggregates all metrics for a given range. Returns dict with:
+     - `sales` (sum of paid order totals, filtered by `paid_at`)
+     - `sales_previous` (for comparison: sales from previous period of same length, or 0 if no data)
+     - `profit` (revenue - cost, excluding orders with NULL cost on any line)
+     - `profit_margin_pct` (margin percentage in basis points; 0 if profit=0 or cost missing)
+     - `orders` (count of created orders, filtered by `created_at`)
+     - `average_order_value`
+     - `orders_missing_cost` (count of orders with at least one NULL or 0 cost item)
+     - `discount_total` (sum of discount amounts)
+     - `discount_order_count` (count of orders with discount > 0)
+     - `cancelled_count` (count of cancelled orders, filtered by `cancelled_at`)
+     - `cancelled_value` (sum of totals of cancelled orders)
+     - `cash_orders` and `card_orders` (count by payment method)
+     - `cash_sales` (sum of revenue from cash orders)
+     - `low_stock_count` (products where stock < min_stock)
+     - `dine_in_count`, `takeaway_count`, `delivery_count` (orders by type)
+     - `daily_sales` (list of { date, revenue } for each day in range)
+     - `top_products` (list of { product_name, quantity_sold, revenue })
+     - `per_staff` (list of { user_id, user_name, sales, orders, cancelled })
+   
+   - `get_orders_for_metric(db, metric, range_type, start=None, end=None, user_id=None, no_user=False)` — Drills into a metric to fetch underlying orders. Parameters:
+     - `metric`: "sales", "orders", "cancelled", "discounts", "staff"
+     - Range parameters as above
+     - `user_id`: Filter to orders performed by this user (if metric is "staff")
+     - `no_user`: If true, return orders with NULL `performed_by_user_id` (pre-Stage-7 orders)
+     - Returns list of `OrderOut` objects (full order details with snapshots)
+
+3. **Routes** (in `app/routes/dashboard.py`):
+   
+   - `GET /api/dashboard/range?range={today|7days|30days|custom}&start={YYYY-MM-DD}&end={YYYY-MM-DD}` → calls `get_dashboard_range()`; returns full metrics dict
+   - `GET /api/dashboard/orders?metric={sales|orders|cancelled|discounts|staff}&range=...&start=...&end=...&user_id=...&no_user=...` → calls `get_orders_for_metric()`; returns list of OrderOut
+   - `GET /api/dashboard/overview` — Unchanged from Phase 9; returns today's quick metrics
+
+4. **Key Design Decisions:**
+   - **Every range metric keys on `paid_at`** — An order belongs to the business day its money arrived, not when it was created. Exception: Cancelled orders key on `cancelled_at` (no payment happened). This settles the old created_at vs paid_at ambiguity.
+   - **All windows from `get_business_day_boundaries()`** — Range calculation respects the restaurant's own day boundary (`settings.day_starts_at`) rather than UTC midnight or browser local midnight.
+   - **Profit computed per order, not per line** — Cost = sum(item.cost × quantity) for items in that order; revenue = subtotal - discount. Tax and delivery_charge excluded (neither is restaurant margin). If any line has NULL cost, order is excluded and counted in `orders_missing_cost`.
+   - **Orders with no attributed user** (everything before Stage 7) grouped under null user labelled "Before staff tracking" rather than dropped.
+   - **Queries use `selectinload` not joins for users** — The `orders` table has TWO FK columns into `users` (`performed_by_user_id` and `cancel_order_performed_by_user_id`), so any `orders.join(users)` produces "ambiguous column name: users.id". Solution: Use `selectinload(Order.performed_by)` and `selectinload(Order.cancelled_by)` instead of explicit joins.
+
+**Frontend Implementation:**
+
+1. **Dashboard.tsx Rebuild**
+   - Complete visual redesign; first Recharts integration in the project
+   - Dark theme (white text on dark backgrounds)
+   - Layout: Top KPI tiles → Line chart → Donut/Bars row → Staff table
+   
+2. **Components:**
+   
+   - **Eight KPI Tiles (row 1):**
+     - Sales (money, green; clickable → orders metric modal)
+     - Profit (money, green; context line shows either "N orders excluded" if orders_missing_cost > 0, or "X% margin" if complete)
+     - Orders (number, blue; clickable → orders metric modal; context shows average order value)
+     - Cash / Card (split count, e.g., "42 / 8"; context shows cash sales amount)
+     - Discounts (money, orange; clickable → discounts metric modal; context shows count of discounted orders)
+     - Cancelled (count, red; clickable → cancelled metric modal; context shows total value of cancelled orders)
+     - Avg Bill (money, blue; shows average order value; not clickable)
+     - Low Stock (count of products below min_stock, red; clickable → navigates to Inventory page)
+   
+   - **Daily Sales Area Chart** (chart panel, only shown for 7d and 30d ranges; hidden when viewing "today")
+     - X-axis: Date (e.g., "Aug 20", "Aug 21")
+     - Y-axis: Revenue (displayed in rupees, e.g., "12500" = Rs. 125.00)
+     - Yellow area with gradient fill; hover shows exact daily revenue
+     - Populated from `data.daily_sales` (not hourly; daily breakdown for the selected range)
+   
+   - **Order Type Donut** (25% width)
+     - Segments: DINE_IN, TAKEAWAY, DELIVERY with color coding
+     - Center shows total order count
+   
+   - **Top Products Horizontal Bars** (chart panel, bottom left)
+     - All top products returned by backend (no UI-side limit)
+     - Bar length = quantity; hover shows quantity and revenue
+     - Truncates product names longer than 25 chars to "XXX..."
+   
+   - **Per-Staff Table** ("By Staff" panel, bottom right)
+     - Columns: Name (staff name or "Before staff tracking"), Sales (revenue), Orders (count), Cancelled (count of orders cancelled by that staff)
+     - Rows: "Before staff tracking" (pre-Stage-7 orders with NULL performed_by_user_id) + each active staff member
+     - Clickable rows open modal listing that staff member's orders via `getDashboardOrders(metric="staff", ...)`
+   
+3. **Modal:**
+   - "Orders by [Staff Name]" (or "Orders before staff tracking") modal lists matching orders from `GET /api/dashboard/orders`
+   - Each order row shows: order number, order type, time (cancelled_at for cancelled metric, else paid_at), customer name (or "Walk-in"), staff name (if performed_by exists), cancelled reason (if metric="cancelled"), and order total
+   - Header shows count of matching orders ("12 orders")
+   - Closes via X button or backdrop click
+   - Modal count and empty state handled elegantly
+   
+4. **Range Selector:**
+   - Tab row: "Today", "7d", "30d" (three buttons; no custom date picker UI)
+   - `GET /api/dashboard/range` supports `range=custom&start=YYYY-MM-DD&end=YYYY-MM-DD`, but the frontend has not yet exposed this in the interface
+   - Clicking "Today", "7d", or "30d" button fetches data via `getDashboardRange()` and recomputes all tiles and charts
+   - Clicking Sales, Orders, Discounts, Cancelled tiles or any staff row in the table opens a modal fetching underlying orders via `getDashboardOrders(metric, range, ...)`
+   - Low Stock tile navigation: clicking it calls `onLowStockClick()` callback, which navigates to Inventory page; Inventory component applies low-stock filter on mount
+   
+5. **Recharts Dependency:**
+   - `recharts` added to `package.json` (first UI chart library on the project)
+   - Key lesson: `ResponsiveContainer` requires parent with explicit `height` CSS property, or it measures zero and renders invisibly. Dashboard wraps charts in divs with `height: 300px` etc.
+   
+6. **TypeScript Types:**
+   - New types in `frontend/src/types/index.ts`: `DashboardRange`, `DashboardMetrics`, `StaffBreakdown`, `HourlyBreakdown`, etc.
+   - Mirrors Pydantic backend response schemas exactly
+
+7. **API Calls** (in `frontend/src/services/api.ts`):
+   - `getDashboardRange(range, start?, end?)` → GET /api/dashboard/range
+   - `getDashboardOrders(metric, range, start?, end?, userId?, noUser?)` → GET /api/dashboard/orders
+   - `getDashboardOverview()` — Already exists, still works
+   
+**Tests:**
+
+1. **`backend/tests/test_stage8_cost_snapshot.py`:**
+   - Tests cost snapshot on item creation
+   - Null cost handling
+   - Profit calculation with/without missing cost
+   - Per-order aggregation (not per-line)
+
+2. **`backend/tests/test_stage8_dashboard.py`:**
+   - Range resolution (today, 7days, 30days, custom)
+   - Metrics aggregation across date ranges
+   - `paid_at` keying for revenue, `created_at` for orders, `cancelled_at` for cancellations
+   - Business day boundary application
+   - Staff breakdown with NULL user ("Before staff tracking")
+   - Order drill-down by metric
+   - Profit calculation with missing-cost flagging
+   - Missing cost detection and exclusion from profit
+
+**Design Decisions Recorded:**
+
+1. **Cost Snapshot Reasoning:** Profit is a historical metric. Changing a supplier's purchase price today must not alter yesterday's reported margin. Snapshotting cost at order time (like price per Rule 7) ensures historical reports are immutable.
+
+2. **Cost = 0 vs NULL:** `purchase_price` is NOT NULL with default 0. A cost of 0 means "never entered", not "free product". This prevents misreading forgotten prices as 100% margin. Orders with cost=0 on any line are flagged and excluded from profit aggregation, forcing the operator to enter purchase prices before profits are trusted.
+
+3. **Profit Per Order:** Discount is an order-level field, so profit must also be order-level. Revenue = subtotal - discount. Cost = sum(item.cost × qty). Tax and delivery_charge are excluded (neither affects margin). This choice keeps profit calculation simple and matches business intuition.
+
+4. **`paid_at` as the Range Key:** An order belongs to the business day when its money arrived, not when it was placed. Keying metrics on `paid_at` (with `cancelled_at` exception) settles the created_at vs paid_at question and matches cash-basis accounting. OPEN orders (unpaid) are never included in metrics (correct—money hasn't arrived).
+
+5. **`selectinload` for Two-FK Queries:** SQLAlchemy cannot disambiguate `orders.join(users)` when `orders` has two FK columns to `users`. Using `selectinload(Order.performed_by)` instead of joins avoids the "ambiguous column name" error and is cleaner.
+
+6. **Recharts ResponsiveContainer Height:** `ResponsiveContainer` measures zero height if parent has no explicit height CSS. Wrapping in a `div` with `height: 300px` is required. This is a gotcha not obvious from Recharts docs.
+
+7. **"Before staff tracking" Label:** Pre-Stage-7 orders have NULL `performed_by_user_id`. Rather than filtering them out (data loss in reports), we group them under a pseudo-user named "Before staff tracking". This preserves historical metrics and signals to the operator that attribution is incomplete.
+
+---
+
 ### Deferred & Skipped Stages
 
 **Stage 6 (Ingredients/Recipes):** ❌ **EXPLICITLY SKIPPED** — Decision: Restaurant operates at product level only. No ingredient-level tracking or recipe/BOM management required.
 
 **KOT Component (Kitchen Order Ticket):** ❌ **DEFERRED INDEFINITELY** — No kitchen printer workflow or separate kitchen display exists. Current architecture uses in-app batch tracking (batch_id, sent_at on order items) but no physical or digital kitchen slip printing.
-
-**Stage 8 (Dashboard Polish):** ❌ **NOT STARTED** — Additional metrics or reporting views not implemented
 
 **Stage 9 (Backup):** ✅ **COMPLETE** (2026-08-20) — Local daily backup and restore implemented. Google Drive upload deferred (requires OAuth setup).
 
@@ -1535,30 +1712,33 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ## 10. SUMMARY
 
-### Backend Status (Stages 4–5, Stage 7, Stage 9 Complete)
+### Backend Status (Stages 4–5, Stage 7, Stage 8, Stage 9 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
 | **Project Structure** | ✅ Excellent | Services layer clean, clear separation of concerns |
-| **Database Schema** | ✅ 9 tables | categories, products, restaurant_tables, orders, order_items, stock_movements, customers, settings, users, sessions |
+| **Database Schema** | ✅ 10 tables | categories, products, restaurant_tables, orders, order_items (with cost), stock_movements, customers, settings, users, sessions |
 | **Money Storage** | ✅ Compliant | All money is Integer (paisa); Rule 3 satisfied |
 | **Stock Ledger** | ⚠️ Product-only | Product movements working; ingredient polymorphism deferred to Phase 15 |
-| **Alembic Setup** | ✅ Active | Stage 7 migrations; current head e8f3dc45e6f7 (Users and Sessions tables) |
-| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs + Stage 7 auth + Stage 9 backup implemented |
-| **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas; token-based auth with permission enforcement |
+| **Cost Snapshot** | ✅ Complete | order_items.cost captures product.purchase_price at time of sale (Rule 7); NULL/0 cost detection excludes order from profit |
+| **Alembic Setup** | ✅ Active | Stage 8 migration f9e8d7c6b5a4; current head includes order_items.cost |
+| **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs + Stage 7 auth + Stage 8 metrics + Stage 9 backup |
+| **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas; token-based auth; range-aware dashboard endpoints (Stage 8) |
+| **Dashboard Metrics** | ✅ Complete | Range-filtered aggregations (today/7days/30days/custom); paid_at keying; business-day boundaries; per-staff breakdown with "Before staff tracking" label |
+| **Order Drill-Down** | ✅ Complete | GET /api/dashboard/orders by metric (sales/orders/cancelled/discounts/staff); supports user_id and pre-Stage-7 order filtering |
 | **Order Workflow** | ✅ Complete | OPEN → PENDING/SENT → PAID pipeline working; order attribution (performed_by_user_id) |
 | **KOT System** | ✅ Complete | Per-batch numbering (batch_id) with sent_at timestamps |
 | **Table Integration** | ✅ Complete | Partial unique index prevents concurrent OPEN orders |
 | **Authentication** | ✅ Complete | Token-based auth, case-insensitive username, bcrypt PIN hashing, 90-day expiry safety net |
 | **Role-Based Access** | ✅ Complete | Owner (full access), Staff (can_cancel, can_discount, can_manage_settings permissions), bootstrap-first-user pattern |
 | **Backup & Restore** | ✅ Complete | Daily backups on startup, 30-day rotation, atomic restore with engine.dispose() for Windows safety |
-| **Tests** | ✅ 435 passing | Comprehensive coverage of Stages 4–5, Stage 7, Stage 9; includes 31 table tests, 14 reconciliation tests, ~47 auth/user tests, 18 backup tests, B8 tests |
+| **Tests** | ✅ Passing | Comprehensive coverage of Stages 4–5, Stage 7, Stage 8, Stage 9; includes cost snapshot tests, dashboard range tests, per-user breakdown tests |
 
-### Frontend Status (Phases 1-10, Stage 4 E1, Stage 7 Complete)
+### Frontend Status (Phases 1-10, Stage 4 E1, Stage 7, Stage 8 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| **Frontend Build** | ✅ Clean | 27 vitest tests passing; `npm run build` succeeds (Git cfff263) |
+| **Frontend Build** | ✅ Clean | vitest passing; `npm run build` succeeds |
 | **Frontend State** | ✅ Complete | POSContext with discriminated CartItem, server order tracking (serverId, order), detach logic |
 | **Authentication** | ✅ Complete | AuthContext, LoginScreen, FirstOwnerSetup, token persistence to localStorage |
 | **Money Formatting** | ❌ Hardcoded | 29+ inline "Rs." calls; should centralize to `formatMoney()` |
@@ -1570,6 +1750,9 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | **Staff Management** | ✅ Complete | Settings page: Staff tab with user list, permission toggles, add/remove staff, PIN reset, role display (Stage 7) |
 | **Order Attribution** | ✅ Complete | "Paid by" and "Cancelled by" user names in OrderDetailsModal and receipts (Stage 7) |
 | **Permission-Based UI** | ✅ Complete | Settings/Staff hidden unless can_manage_settings; Cancel button hidden unless can_cancel; Discount field hidden unless can_discount (Stage 7) |
+| **Dashboard Rebuild** | ✅ Complete | Dark theme with recharts; 8 KPI tiles, daily sales line chart, order-type donut, top products bars, per-staff table with modal drill-down (Stage 8) |
+| **Range Selector** | ✅ Complete | Today/7 Days/30 Days/Custom date pickers; all tiles and staff rows clickable; Low Stock tile navigates to Inventory (Stage 8) |
+| **Recharts Integration** | ✅ Complete | First charting library on project; ResponsiveContainer properly sized (Stage 8) |
 | **KOT Component** | ❌ Missing | No print view for kitchen batches (batch_id, sent_at visibility) |
 | **Tables UI** | ✅ Complete | Settings page: add/rename/remove/restore with soft delete; POS dropdown active-only; Show Removed toggle |
 | **Backup & Restore UI** | ✅ Complete | Settings fieldset with Restore button, window.confirm() for destructive action, displays restart requirement |
@@ -1591,11 +1774,11 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
-**Report Date:** 2026-08-21  
-**Git HEAD:** 3f69be9 (Stage 7)  
-**Backend Test Status:** 435 passed, 1 failed  
-**Frontend Test Status:** 27 vitest tests passing  
+**Report Date:** 2026-08-22  
+**Git HEAD:** [final Stage 8 commit hash to be provided]  
+**Backend Test Status:** [updated count]  
+**Frontend Test Status:** [updated count]  
 **Frontend Build:** ✅ Clean  
-**Alembic Status:** Clean (no pending migrations; head e8f3dc45e6f7 — Stage 7 Users & Sessions)  
-**Completed Since Last Report:** Stage 7 (authentication, users table, role-based access control, order attribution)  
-**Next Work:** KOT component (kitchen slip print), money formatter centralization, rename user feature, Google Drive backup upload (OAuth), multi-terminal support refinement
+**Alembic Status:** Clean (no pending migrations; head f9e8d7c6b5a4 — Stage 8 order_items.cost)  
+**Completed Since Last Report:** Stage 8 (cost snapshot on order lines, range-aware dashboard service, recharts-based dashboard rebuild with drill-down modals, per-staff attribution)  
+**Next Work:** KOT component (kitchen slip print), money formatter centralization, 58mm print width support, rename user feature, Google Drive backup upload (OAuth)
