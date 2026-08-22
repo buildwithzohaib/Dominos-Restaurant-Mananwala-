@@ -519,3 +519,166 @@ class TestDailySales:
         for daily in dashboard.daily_sales:
             if daily.date != date(2026, 8, 22):
                 assert daily.revenue == 0
+
+
+# ============================================================================
+# GET_ORDERS_FOR_METRIC TESTS
+# ============================================================================
+
+class TestGetOrdersForMetric:
+    """Tests for retrieving orders behind a dashboard metric."""
+
+    def test_cancelled_metric_returns_only_cancelled_orders(self, db):
+        """'cancelled' metric returns only CANCELLED orders in the window."""
+        window_start = datetime(2026, 8, 22, 6, 0, 0)
+        window_end = datetime(2026, 8, 23, 6, 0, 0)
+
+        from app.services.dashboard_service import get_orders_for_metric
+
+        # Create PAID order
+        payload_paid = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_a_id, quantity=1)],
+            discount=0,
+            amount_received=10000,
+            payment_method="CASH",
+        )
+        paid_order = create_order(db, payload_paid)
+        paid_order.paid_at = datetime(2026, 8, 22, 10, 0, 0)
+
+        # Create CANCELLED order
+        payload_cancel = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_b_id, quantity=1)],
+            discount=0,
+            amount_received=20000,
+            payment_method="CASH",
+        )
+        cancel_order = create_order(db, payload_cancel)
+        cancel_order.status = "CANCELLED"
+        cancel_order.cancelled_at = datetime(2026, 8, 22, 11, 0, 0)
+        db.commit()
+
+        orders = get_orders_for_metric(db, "cancelled", "today", reference_time=window_start)
+        assert len(orders) == 1
+        assert orders[0].id == cancel_order.id
+        assert orders[0].status == "CANCELLED"
+
+    def test_discounts_metric_excludes_zero_discount(self, db):
+        """'discounts' metric excludes orders with discount=0."""
+        from app.services.dashboard_service import get_orders_for_metric
+
+        # Create order with discount
+        payload_discount = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_a_id, quantity=1)],
+            discount=500,
+            amount_received=9500,
+            payment_method="CASH",
+        )
+        discount_order = create_order(db, payload_discount)
+
+        # Create order without discount (product_b costs 20000, so amount_received must be >= 20000)
+        payload_no_discount = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_b_id, quantity=1)],
+            discount=0,
+            amount_received=20000,
+            payment_method="CASH",
+        )
+        no_discount_order = create_order(db, payload_no_discount)
+
+        orders = get_orders_for_metric(db, "discounts", "today")
+        assert len(orders) == 1
+        assert orders[0].id == discount_order.id
+
+    def test_staff_metric_with_user_id_filters_by_cashier(self, db):
+        """'staff' metric with user_id returns only that user's PAID orders."""
+        from app.services.dashboard_service import get_orders_for_metric
+
+        # Order by owner
+        payload_owner = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_a_id, quantity=1)],
+            discount=0,
+            amount_received=10000,
+            payment_method="CASH",
+        )
+        owner_order = create_order(db, payload_owner, performed_by_user_id=db.owner_id)
+
+        # Order by staff
+        payload_staff = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_b_id, quantity=1)],
+            discount=0,
+            amount_received=20000,
+            payment_method="CASH",
+        )
+        staff_order = create_order(db, payload_staff, performed_by_user_id=db.staff_id)
+
+        # Query for staff's orders
+        orders = get_orders_for_metric(db, "staff", "today", user_id=db.staff_id)
+        assert len(orders) == 1
+        assert orders[0].id == staff_order.id
+
+    def test_staff_metric_with_no_user_returns_null_user_orders(self, db):
+        """'staff' metric with no_user (user_id=None) returns only orders with performed_by_user_id IS NULL."""
+        from app.services.dashboard_service import get_orders_for_metric
+
+        # Order with no user (performed_by_user_id IS NULL)
+        payload_no_user = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_a_id, quantity=1)],
+            discount=0,
+            amount_received=10000,
+            payment_method="CASH",
+        )
+        no_user_order = create_order(db, payload_no_user, performed_by_user_id=None)
+
+        # Order with user
+        payload_with_user = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_b_id, quantity=1)],
+            discount=0,
+            amount_received=20000,
+            payment_method="CASH",
+        )
+        with_user_order = create_order(db, payload_with_user, performed_by_user_id=db.owner_id)
+
+        # Query for no-user orders (explicitly pass user_id=None)
+        orders = get_orders_for_metric(db, "staff", "today", user_id=None)
+        assert len(orders) == 1
+        assert orders[0].id == no_user_order.id
+
+    def test_window_boundary_excludes_orders_outside(self, db):
+        """Orders just outside the window are excluded."""
+        from app.services.dashboard_service import get_orders_for_metric
+
+        window_start = datetime(2026, 8, 22, 6, 0, 0)
+
+        # Order inside the window
+        payload_inside = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_a_id, quantity=1)],
+            discount=0,
+            amount_received=10000,
+            payment_method="CASH",
+        )
+        inside_order = create_order(db, payload_inside)
+        inside_order.paid_at = datetime(2026, 8, 22, 10, 0, 0)
+
+        # Order outside the window (just before start)
+        payload_outside = OrderCreate(
+            order_type="TAKEAWAY",
+            items=[OrderItemCreate(product_id=db.product_b_id, quantity=1)],
+            discount=0,
+            amount_received=20000,
+            payment_method="CASH",
+        )
+        outside_order = create_order(db, payload_outside)
+        outside_order.paid_at = datetime(2026, 8, 21, 5, 59, 59)
+        db.commit()
+
+        orders = get_orders_for_metric(db, "sales", "today", reference_time=window_start)
+        assert len(orders) == 1
+        assert orders[0].id == inside_order.id

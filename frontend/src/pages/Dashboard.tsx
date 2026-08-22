@@ -1,17 +1,33 @@
 import { useEffect, useState } from "react";
 import { LineChart, Line, AreaChart, Area, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts";
+import { X } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import { api } from "../services/api";
-import type { DashboardRange } from "../types";
+import type { DashboardRange, Order } from "../types";
+import { parseServerDate } from "../utils/dates";
 
 type RangeType = "today" | "7days" | "30days";
+type MetricType = "sales" | "orders" | "cancelled" | "discounts" | "staff";
 
-export function Dashboard() {
+interface MetricModal {
+  metric: MetricType;
+  range: RangeType;
+  userId?: number | null;
+  noUser?: boolean;
+  title: string;
+}
+
+export function Dashboard({ onLowStockClick }: { onLowStockClick?: () => void }) {
   const formatCurrency = useCurrencyFormat();
   const [range, setRange] = useState<RangeType>("today");
   const [data, setData] = useState<DashboardRange | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [metricModal, setMetricModal] = useState<MetricModal | null>(null);
+  const [metricOrders, setMetricOrders] = useState<Order[]>([]);
+  const [metricLoading, setMetricLoading] = useState(false);
+  const [metricError, setMetricError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -29,6 +45,21 @@ export function Dashboard() {
 
     load();
   }, [range]);
+
+  const openMetricModal = async (metric: MetricType, range: RangeType, title: string, userId?: number | null, noUser?: boolean) => {
+    setMetricModal({ metric, range, userId, noUser, title });
+    setMetricLoading(true);
+    setMetricError("");
+
+    try {
+      const orders = await api.getDashboardOrders(metric, range, userId, noUser);
+      setMetricOrders(orders);
+    } catch (e) {
+      setMetricError(e instanceof Error ? e.message : "Could not load orders");
+    } finally {
+      setMetricLoading(false);
+    }
+  };
 
   const calculateChangePercent = (current: number, previous: number): string => {
     if (previous === 0) return "";
@@ -125,8 +156,8 @@ export function Dashboard() {
 
       {/* KPI Grid - 8 tiles in 4x2 */}
       <div className="kpi-grid">
-        {/* Sales */}
-        <div className="kpi-tile">
+        {/* Sales - Clickable */}
+        <div className="kpi-tile clickable" onClick={() => openMetricModal("orders", range, `Orders — ${range === "today" ? "today" : range === "7days" ? "last 7 days" : "last 30 days"}`)}>
           <p className="kpi-label">Sales</p>
           <p className="kpi-value">{formatCurrency(data.sales)}</p>
           <p className="kpi-context">
@@ -151,8 +182,8 @@ export function Dashboard() {
           </p>
         </div>
 
-        {/* Orders */}
-        <div className="kpi-tile">
+        {/* Orders - Clickable */}
+        <div className="kpi-tile clickable" onClick={() => openMetricModal("orders", range, `Orders — ${range === "today" ? "today" : range === "7days" ? "last 7 days" : "last 30 days"}`)}>
           <p className="kpi-label">Orders</p>
           <p className="kpi-value">{data.orders}</p>
           <p className="kpi-context">avg {formatCurrency(data.average_order_value)}</p>
@@ -165,15 +196,15 @@ export function Dashboard() {
           <p className="kpi-context">{formatCurrency(data.cash_sales)} cash</p>
         </div>
 
-        {/* Discounts */}
-        <div className="kpi-tile bordered-amber">
+        {/* Discounts - Clickable */}
+        <div className="kpi-tile bordered-amber clickable" onClick={() => openMetricModal("discounts", range, `Discounts — ${range === "today" ? "today" : range === "7days" ? "last 7 days" : "last 30 days"}`)}>
           <p className="kpi-label">Discounts</p>
           <p className="kpi-value">{formatCurrency(data.discount_total)}</p>
           <p className="kpi-context">{data.discount_order_count} orders</p>
         </div>
 
-        {/* Cancelled */}
-        <div className="kpi-tile bordered-red">
+        {/* Cancelled - Clickable */}
+        <div className="kpi-tile bordered-red clickable" onClick={() => openMetricModal("cancelled", range, `Cancelled orders — ${range === "today" ? "today" : range === "7days" ? "last 7 days" : "last 30 days"}`)}>
           <p className="kpi-label">Cancelled</p>
           <p className="kpi-value">{data.cancelled_count}</p>
           <p className="kpi-context danger">{formatCurrency(data.cancelled_value)}</p>
@@ -186,8 +217,8 @@ export function Dashboard() {
           <p className="kpi-context">&nbsp;</p>
         </div>
 
-        {/* Low Stock */}
-        <div className="kpi-tile bordered-amber">
+        {/* Low Stock - Navigates to Inventory */}
+        <div className="kpi-tile bordered-amber clickable" onClick={onLowStockClick}>
           <p className="kpi-label">Low Stock</p>
           <p className="kpi-value">{data.low_stock_count}</p>
           <p className="kpi-context">items</p>
@@ -200,7 +231,8 @@ export function Dashboard() {
         {range !== "today" && (
           <div className="chart-panel">
             <h3 className="panel-title">Daily Sales</h3>
-            <ResponsiveContainer width="100%" height={170}>
+            <div className="chart-wrapper">
+              <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dailySalesData} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -237,6 +269,7 @@ export function Dashboard() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            </div>
           </div>
         )}
 
@@ -248,7 +281,7 @@ export function Dashboard() {
           ) : (
             <div className="donut-container">
               <div className="donut-chart-wrapper">
-                <ResponsiveContainer width="100%" height={170}>
+                <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={orderTypeData}
@@ -296,7 +329,8 @@ export function Dashboard() {
           {data.top_products.length === 0 ? (
             <div className="empty-state">No sales</div>
           ) : (
-            <ResponsiveContainer width="100%" height={170}>
+            <div className="chart-wrapper">
+              <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={topProductsData}
                 layout="vertical"
@@ -319,6 +353,7 @@ export function Dashboard() {
                 <Bar dataKey="qty" fill="#F5B301" />
               </BarChart>
             </ResponsiveContainer>
+            </div>
           )}
         </div>
 
@@ -336,7 +371,20 @@ export function Dashboard() {
                 <span className="staff-col">Cancelled</span>
               </div>
               {data.per_staff.map((staff) => (
-                <div key={staff.user_id ?? "unknown"} className="staff-row">
+                <div
+                  key={staff.user_id ?? "unknown"}
+                  className="staff-row clickable"
+                  onClick={() => {
+                    const title = staff.user_name
+                      ? `Orders by ${staff.user_name} — ${range === "today" ? "today" : range === "7days" ? "last 7 days" : "last 30 days"}`
+                      : `Orders before staff tracking — ${range === "today" ? "today" : range === "7days" ? "last 7 days" : "last 30 days"}`;
+                    if (staff.user_id === null) {
+                      openMetricModal("staff", range, title, null, true);
+                    } else {
+                      openMetricModal("staff", range, title, staff.user_id);
+                    }
+                  }}
+                >
                   <span className="staff-col name">{staff.user_name || "Before staff tracking"}</span>
                   <span className="staff-col">{formatCurrency(staff.sales)}</span>
                   <span className="staff-col">{staff.orders}</span>
@@ -347,6 +395,50 @@ export function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Metric Orders Modal */}
+      {metricModal && (
+        <div className="modal-backdrop" onClick={() => setMetricModal(null)}>
+          <div className="dashboard-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setMetricModal(null)}>
+              <X size={20} />
+            </button>
+
+            <h2 className="modal-title">{metricModal.title}</h2>
+            <p className="modal-count">{metricOrders.length} {metricOrders.length === 1 ? "order" : "orders"}</p>
+
+            {metricLoading && <div className="modal-loading">Loading orders...</div>}
+
+            {metricError && <div className="modal-error">{metricError}</div>}
+
+            {!metricLoading && metricOrders.length === 0 && (
+              <div className="modal-empty">No orders found</div>
+            )}
+
+            {!metricLoading && metricOrders.length > 0 && (
+              <div className="modal-orders-list">
+                {metricOrders.map((order) => (
+                  <div key={order.id} className="modal-order-row">
+                    <div className="modal-order-header">
+                      <strong className="modal-order-number">#{order.order_number}</strong>
+                      <span className="modal-order-type">{order.order_type.replace("_", " ")}</span>
+                      <span className="modal-order-time">{parseServerDate(metricModal.metric === "cancelled" ? order.cancelled_at || order.created_at : order.paid_at || order.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <div className="modal-order-details">
+                      <span>{order.customer ? order.customer.name_display : "Walk-in"}</span>
+                      {order.performed_by && <span className="modal-order-staff">{order.performed_by.name}</span>}
+                      {metricModal.metric === "cancelled" && order.cancelled_reason && (
+                        <span className="modal-order-reason">{order.cancelled_reason}</span>
+                      )}
+                    </div>
+                    <div className="modal-order-total">{formatCurrency(order.total)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

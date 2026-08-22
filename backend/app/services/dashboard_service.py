@@ -621,3 +621,86 @@ def _calculate_per_staff_metrics(db: Session, window_start: datetime, window_end
             ))
 
     return result
+
+
+def get_orders_for_metric(db: Session, metric: str, range_type: str = "today",
+                          custom_start=None, custom_end=None, user_id=None,
+                          reference_time=None) -> list:
+    """
+    Get orders behind a dashboard metric.
+
+    Args:
+        db: SQLAlchemy session
+        metric: "sales", "orders", "cancelled", "discounts", or "staff"
+        range_type: "today", "7days", "30days", or "custom"
+        custom_start: Start date for custom range
+        custom_end: End date for custom range
+        user_id: For "staff" metric, the user id to filter by. None means "Before staff tracking" (IS NULL)
+        reference_time: Current time for resolving ranges
+
+    Returns:
+        List of Order objects matching the metric, newest first, capped at 200
+    """
+    # Resolve the range to get current window boundaries
+    (window_start, window_end), _ = resolve_range(
+        db, range_type, custom_start, custom_end, reference_time
+    )
+
+    query = db.query(Order)
+
+    if metric in ("sales", "orders"):
+        # PAID orders in the window
+        query = query.filter(
+            Order.status == "PAID",
+            Order.paid_at >= window_start,
+            Order.paid_at < window_end,
+        )
+
+    elif metric == "cancelled":
+        # CANCELLED orders in the window
+        query = query.filter(
+            Order.status == "CANCELLED",
+            Order.cancelled_at >= window_start,
+            Order.cancelled_at < window_end,
+        )
+
+    elif metric == "discounts":
+        # PAID orders in the window with discount > 0
+        query = query.filter(
+            Order.status == "PAID",
+            Order.paid_at >= window_start,
+            Order.paid_at < window_end,
+            Order.discount > 0,
+        )
+
+    elif metric == "staff":
+        # PAID orders attributed to user_id
+        # If user_id is None, match orders where performed_by_user_id IS NULL
+        query = query.filter(
+            Order.status == "PAID",
+            Order.paid_at >= window_start,
+            Order.paid_at < window_end,
+        )
+        if user_id is None:
+            query = query.filter(Order.performed_by_user_id.is_(None))
+        else:
+            query = query.filter(Order.performed_by_user_id == user_id)
+
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+
+    # Load relationships using selectinload to avoid join ambiguity
+    # (two different foreign keys to users table, so no join aliasing is needed)
+    from sqlalchemy.orm import selectinload
+
+    orders = query.options(
+        selectinload(Order.items),
+        selectinload(Order.performed_by),
+        selectinload(Order.cancelled_by),
+        selectinload(Order.customer),
+        selectinload(Order.table)
+    ).order_by(
+        Order.paid_at.desc() if metric != "cancelled" else Order.cancelled_at.desc()
+    ).limit(200).all()
+
+    return orders

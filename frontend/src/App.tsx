@@ -147,7 +147,9 @@ function AppContent() {
         )}
         {page === "orders" && <Orders />}
         {page === "inventory" && <Inventory />}
-        {page === "dashboard" && <Dashboard />}
+        {page === "dashboard" && (
+          <Dashboard onLowStockClick={() => setPage("inventory")} />
+        )}
         {page === "products" && <Products />}
         {page === "customers" && <Customers />}
         {page === "staff" && <Staff />}

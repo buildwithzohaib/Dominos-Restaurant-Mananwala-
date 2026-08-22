@@ -142,6 +142,7 @@ export const api={
  // Dashboard (Phase 9) — today's business metrics
  getDashboardOverview:()=>request<DashboardOverview>("/api/dashboard/overview"),
  getDashboardRange:(range:string="today",start?:string,end?:string)=>{const q=new URLSearchParams();q.set("range",range);if(start)q.set("start",start);if(end)q.set("end",end);return request<DashboardRange>(`/api/dashboard/range?${q.toString()}`);},
+ getDashboardOrders:(metric:string,range:string="today",userId?:number|null,noUser?:boolean)=>{const q=new URLSearchParams();q.set("metric",metric);q.set("range",range);if(userId!==undefined&&userId!==null)q.set("user_id",userId.toString());if(noUser)q.set("no_user","true");return request<Order[]>(`/api/dashboard/orders?${q.toString()}`);},
  // Product Management (Phase 10)
  getProduct:(id:number)=>request<Product>(`/api/products/${id}`),
  createProduct:(p:ProductCreateInput)=>request<Product>("/api/products",{method:"POST",body:JSON.stringify(p)}),
