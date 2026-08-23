@@ -794,29 +794,36 @@ h2 {
   color: var(--text);
 }
 
-.receipt-items {
-  display: grid;
-  gap: 11px;
-}
-
+.receipt-items-head,
 .receipt-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  font-size: 12px;
+  display: grid;
+  grid-template-columns: 1fr 40px 60px 70px;
   gap: 12px;
-}
-
-.receipt-item > div strong {
-  display: block;
+  align-items: center;
+  font-size: 12px;
   color: var(--text);
 }
 
-.receipt-item > div span {
-  display: block;
-  color: var(--text-muted);
-  font-size: 11px;
-  margin-top: 2px;
+.receipt-items-head {
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+.receipt-items {
+  display: grid;
+  gap: 8px;
+}
+
+.receipt-col-name {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.receipt-col-qty,
+.receipt-col-price,
+.receipt-col-total {
+  text-align: right;
 }
 
 .receipt-summary,
@@ -1639,7 +1646,7 @@ h2 {
 
   /* Thermal item layout */
   .thermal-items-head,
-  .thermal-item-row {
+  .thermal-item {
     display: grid;
     grid-template-columns: 1fr 40px 60px 70px;
     gap: 6px;
@@ -1654,21 +1661,14 @@ h2 {
   }
 
   .thermal-item {
-    display: block;
     margin-bottom: 6px;
     word-wrap: break-word;
     page-break-inside: avoid;
   }
 
-  .thermal-item-name {
-    grid-column: 1 / -1;
-    font-weight: 700;
-    margin-bottom: 3px;
-    word-break: break-word;
-  }
-
   .thermal-col-name {
-    overflow: hidden;
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   .thermal-col-qty,

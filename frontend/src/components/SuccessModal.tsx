@@ -106,19 +106,20 @@ export function SuccessModal({
 
           <div className="receipt-line" />
 
+          <div className="receipt-items-head">
+            <div className="receipt-col-name">ITEM</div>
+            <div className="receipt-col-qty">QTY</div>
+            <div className="receipt-col-price">PRICE</div>
+            <div className="receipt-col-total">TOTAL</div>
+          </div>
+
           <div className="receipt-items">
             {receipt.items.map((item) => (
               <div className="receipt-item" key={item.id}>
-                <div>
-                  <strong>{item.product_name}</strong>
-                  <span>
-                    {item.quantity} × {formatBare(item.price)}
-                  </span>
-                </div>
-
-                <strong>
-                  {formatBare(item.line_total)}
-                </strong>
+                <div className="receipt-col-name">{item.product_name}</div>
+                <div className="receipt-col-qty">{item.quantity}</div>
+                <div className="receipt-col-price">{formatBare(item.price)}</div>
+                <div className="receipt-col-total">{formatBare(item.line_total)}</div>
               </div>
             ))}
           </div>
@@ -272,13 +273,10 @@ export function SuccessModal({
 
         {receipt.items.map((item) => (
           <div className="thermal-item" key={item.id}>
-            <div className="thermal-item-name">{item.product_name}</div>
-            <div className="thermal-item-row">
-              <div className="thermal-col-name" />
-              <div className="thermal-col-qty">{item.quantity}</div>
-              <div className="thermal-col-price">{formatBare(item.price)}</div>
-              <div className="thermal-col-total">{formatBare(item.line_total)}</div>
-            </div>
+            <div className="thermal-col-name">{item.product_name}</div>
+            <div className="thermal-col-qty">{item.quantity}</div>
+            <div className="thermal-col-price">{formatBare(item.price)}</div>
+            <div className="thermal-col-total">{formatBare(item.line_total)}</div>
           </div>
         ))}
 
