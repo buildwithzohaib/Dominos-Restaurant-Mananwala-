@@ -1,4 +1,5 @@
 import os
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -18,21 +19,34 @@ from app.routes.settings import router as settings_router
 from app.routes.users import router as users_router
 from app.models import models  # noqa: F401
 from app.services import image_service  # Ensure storage dir is created
-from app.services.backup_service import create_backup, cleanup_old_backups
+from app.services.backup_service import create_backup, cleanup_old_backups, get_backup_dir
+from app.services.migration_service import run_migrations, setup_file_logging
 from app.database import DATA_DIR, DB_PATH, engine
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: run daily backup and cleanup old backups."""
-    from app.services.backup_service import get_backup_dir
-
+    """Startup: set up logging, run migrations, then daily backup and cleanup old backups."""
     backup_dir = get_backup_dir(DATA_DIR)
+    alembic_dir = Path(__file__).parent.parent / "alembic"
 
-    # Create today's backup if it doesn't already exist (file system check)
+    # STEP 0: Set up file logging (before anything else, so migration events are captured)
+    setup_file_logging(DATA_DIR)
+
+    # STEP 1: Run migrations first (with pre-migration backup if needed).
+    # This must happen before anything else touches the database.
+    try:
+        run_migrations(DB_PATH, backup_dir, engine, str(alembic_dir))
+    except Exception as e:
+        logger.critical(f"Startup failed: {e}")
+        raise
+
+    # STEP 2: Create today's backup if it doesn't already exist (file system check)
     create_backup(DB_PATH, backup_dir)
 
-    # Clean up backups older than 30 days
+    # STEP 3: Clean up backups older than 30 days
     cleanup_old_backups(backup_dir, keep_days=30)
 
     yield
@@ -62,7 +76,13 @@ app.include_router(settings_router)
 # Mount static files for product images (created at import time in image_service)
 app.mount("/images", StaticFiles(directory=image_service.STORAGE_DIR), name="images")
 
+@app.get("/api/health")
+def health():
+    return {"status": "ok", "service": "my-pos-api"}
+
 # Mount built frontend assets and serve index.html for SPA routing
+# CRITICAL: This must be LAST so all API routes are matched first.
+# FastAPI matches routes in declaration order; the catch-all must come last.
 frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
 if frontend_dist.exists():
     # Mount /assets for built assets (JS, CSS, etc.)
@@ -88,7 +108,3 @@ else:
         "Frontend dist directory not found. Run `npm run build` in frontend/ directory "
         "to build the frontend for production. Serving API only."
     )
-
-@app.get("/api/health")
-def health():
-    return {"status": "ok", "service": "my-pos-api"}

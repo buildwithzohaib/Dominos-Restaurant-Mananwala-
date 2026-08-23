@@ -22,7 +22,12 @@ config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config.config_file_name is not None:
+# CRITICAL: Only call fileConfig if configure_logger is not explicitly False.
+# fileConfig() calls logging.config.fileConfig() which disables all existing loggers
+# (disable_existing_loggers=True by default). This can cause logging deadlock if we're
+# already in a logging-heavy startup path. Respect the configure_logger attribute
+# passed by the migration service to avoid this.
+if config.config_file_name is not None and config.attributes.get('configure_logger', True):
     fileConfig(config.config_file_name)
 
 # Set the main option to DATABASE_URL (can be overridden by -x db_url=...)
