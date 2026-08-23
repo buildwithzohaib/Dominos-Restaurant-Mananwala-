@@ -1,7 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -77,11 +77,11 @@ if frontend_dist.exists():
 
     @app.get("/{path:path}")
     async def serve_spa(path: str):
-        # If path doesn't start with /api, /images, /docs, or /openapi, serve index.html
-        if not any(path.startswith(p) for p in ["api", "images", "docs", "openapi"]):
+        # If path doesn't start with /api, /images, /docs, /openapi, or /redoc, serve index.html
+        if not any(path.startswith(p) for p in ["api", "images", "docs", "openapi", "redoc"]):
             return FileResponse(index_html_path)
-        # Otherwise return 404 (FastAPI will handle API routes and docs)
-        return {"detail": "Not found"}, 404
+        # Otherwise raise 404 (FastAPI will handle API routes and docs)
+        raise HTTPException(status_code=404, detail="Not found")
 else:
     import logging
     logging.warning(
