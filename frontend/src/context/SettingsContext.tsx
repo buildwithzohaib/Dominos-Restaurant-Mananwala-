@@ -38,6 +38,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     refreshSettings();
   }, []);
 
+  // Apply theme from settings when they load
+  useEffect(() => {
+    if (settings?.theme) {
+      document.documentElement.dataset.theme = settings.theme;
+    }
+  }, [settings?.theme]);
+
   return (
     <SettingsContext.Provider value={{ settings, loading, error, refreshSettings }}>
       {children}

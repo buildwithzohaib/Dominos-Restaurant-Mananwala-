@@ -72,7 +72,7 @@ export function Inventory({ showLowStockOnly: initialShowLowStock }: { showLowSt
             />
           </div>
 
-          <label className="low-stock-filter">
+          <label className="checkbox-label low-stock-filter">
             <input
               type="checkbox"
               checked={showLowStockOnly}

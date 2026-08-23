@@ -2,8 +2,8 @@ export type OrderType = "DINE_IN" | "TAKEAWAY" | "DELIVERY";
 export type PaymentMethod = "CASH" | "CARD" | "OTHER";
 export type StockStatus = "IN_STOCK" | "LOW_STOCK" | "OUT_OF_STOCK";
 // Settings (Task 1.1) — single immutable row with restaurant configuration
-export interface Settings { id:number; restaurant_name:string; restaurant_address:string; restaurant_phone:string; currency_symbol:string; tax_rate:number; /* basis points */ tax_enabled:boolean; delivery_charge:number; /* paisa */ day_starts_at:string; /* HH:MM format */ receipt_footer_text:string; created_at:string; updated_at:string; }
-export interface SettingsUpdate { restaurant_name?:string; restaurant_address?:string; restaurant_phone?:string; currency_symbol?:string; tax_rate?:number; /* basis points */ tax_enabled?:boolean; delivery_charge?:number; /* paisa */ day_starts_at?:string; receipt_footer_text?:string; }
+export interface Settings { id:number; restaurant_name:string; restaurant_address:string; restaurant_phone:string; currency_symbol:string; tax_rate:number; /* basis points */ tax_enabled:boolean; delivery_charge:number; /* paisa */ day_starts_at:string; /* HH:MM format */ receipt_footer_text:string; theme:string; /* hidden theme choice */ created_at:string; updated_at:string; }
+export interface SettingsUpdate { restaurant_name?:string; restaurant_address?:string; restaurant_phone?:string; currency_symbol?:string; tax_rate?:number; /* basis points */ tax_enabled?:boolean; delivery_charge?:number; /* paisa */ day_starts_at?:string; receipt_footer_text?:string; theme?:string; }
 export interface Category { id:number; name_display:string; active:boolean; }
 export interface CategoryInfo { id:number; name_display:string; active:boolean; }
 // Inventory fields (Phase 3) live on the same Product row the POS/cart/receipt already

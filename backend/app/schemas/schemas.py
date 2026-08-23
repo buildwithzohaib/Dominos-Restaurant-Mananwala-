@@ -17,6 +17,7 @@ class SettingsOut(BaseModel):
     delivery_charge: int  # paisa (20000 = Rs. 200); default 0
     day_starts_at: str  # HH:MM format
     receipt_footer_text: str
+    theme: str  # hidden theme choice: amber, crimson, emerald, ocean, violet, terracotta, amber-dark, etc.
     created_at: datetime
     updated_at: datetime
 
@@ -32,6 +33,21 @@ class SettingsUpdate(BaseModel):
     delivery_charge: int | None = Field(default=None, ge=0)  # paisa
     day_starts_at: str | None = None
     receipt_footer_text: str | None = None
+    theme: str | None = None  # hidden theme choice
+
+    @field_validator("theme")
+    @classmethod
+    def validate_theme(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        VALID_THEMES = {
+            "amber", "crimson", "emerald", "ocean", "violet", "terracotta",
+            "amber-dark", "crimson-dark", "emerald-dark", "ocean-dark",
+            "violet-dark", "steel-dark",
+        }
+        if v not in VALID_THEMES:
+            raise ValueError(f"Invalid theme '{v}'. Must be one of: {', '.join(sorted(VALID_THEMES))}")
+        return v
 
 
 class CategoryOut(BaseModel):

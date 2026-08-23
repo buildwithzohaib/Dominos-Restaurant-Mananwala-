@@ -1048,18 +1048,12 @@ h2 {
   width: 320px;
 }
 
+/* Inventory toolbar low-stock filter: override checkbox-label font size */
 .low-stock-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
   font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
 }
 
 .low-stock-filter input[type="checkbox"] {
-  cursor: pointer;
   width: 16px;
   height: 16px;
 }
@@ -1987,6 +1981,42 @@ h2 {
   color: var(--text-secondary);
 }
 
+/* Checkbox labels in settings form: horizontal row layout */
+.settings-form label:has(input[type="checkbox"]) {
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+  font-size: 13px;
+}
+
+/* Reusable checkbox label style for all contexts */
+.checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Permissions group: vertical spacing between checkboxes */
+.permissions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 .settings-form input[type="text"],
 .settings-form input[type="tel"],
 .settings-form input[type="time"],
@@ -2067,6 +2097,109 @@ h2 {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+/* Settings Footer & Hidden Theme Picker */
+.settings-footer {
+  margin-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 600px;
+}
+
+.version-label {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  text-decoration: none;
+  transition: color 0.2s ease;
+  align-self: flex-start;
+}
+
+.version-label:hover {
+  color: var(--text-secondary);
+}
+
+/* Appearance fieldset (hidden until 7 clicks) */
+.appearance-fieldset {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 20px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.appearance-fieldset legend {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  padding: 0 8px;
+  margin-left: -8px;
+}
+
+.theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.theme-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.theme-swatch:hover {
+  background: var(--surface-alt);
+}
+
+.theme-swatch.selected {
+  border-color: var(--text);
+}
+
+.theme-swatch-colors {
+  display: flex;
+  width: 100%;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.theme-swatch-accent {
+  flex: 1.5;
+  transition: all 0.2s ease;
+}
+
+.theme-swatch-sidebar {
+  flex: 1;
+  transition: all 0.2s ease;
+}
+
+.theme-swatch-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-align: center;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Category List Modal (Task 2.6) */

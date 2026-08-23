@@ -352,44 +352,46 @@ export function Staff() {
               />
             </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <input
-                type="checkbox"
-                checked={newStaff.can_cancel}
-                onChange={(e) =>
-                  setNewStaff({ ...newStaff, can_cancel: e.target.checked })
-                }
-                disabled={isCreating}
-              />
-              <span>Can cancel orders</span>
-            </label>
+            <div className="permissions-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={newStaff.can_cancel}
+                  onChange={(e) =>
+                    setNewStaff({ ...newStaff, can_cancel: e.target.checked })
+                  }
+                  disabled={isCreating}
+                />
+                Can cancel orders
+              </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <input
-                type="checkbox"
-                checked={newStaff.can_discount}
-                onChange={(e) =>
-                  setNewStaff({ ...newStaff, can_discount: e.target.checked })
-                }
-                disabled={isCreating}
-              />
-              <span>Can apply discounts</span>
-            </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={newStaff.can_discount}
+                  onChange={(e) =>
+                    setNewStaff({ ...newStaff, can_discount: e.target.checked })
+                  }
+                  disabled={isCreating}
+                />
+                Can apply discounts
+              </label>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <input
-                type="checkbox"
-                checked={newStaff.can_manage_settings}
-                onChange={(e) =>
-                  setNewStaff({
-                    ...newStaff,
-                    can_manage_settings: e.target.checked,
-                  })
-                }
-                disabled={isCreating}
-              />
-              <span>Can change settings</span>
-            </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={newStaff.can_manage_settings}
+                  onChange={(e) =>
+                    setNewStaff({
+                      ...newStaff,
+                      can_manage_settings: e.target.checked,
+                    })
+                  }
+                  disabled={isCreating}
+                />
+                Can change settings
+              </label>
+            </div>
 
             <div className="settings-actions">
               <button

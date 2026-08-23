@@ -5,6 +5,24 @@ import { useCatalog } from "../context/CatalogContext";
 import { api, APIError } from "../services/api";
 import type { SettingsUpdate } from "../types";
 
+// Theme palette for swatches: accent color (large) + sidebar color (small)
+const THEME_PALETTE = {
+  amber: { accent: "#f3b32b", sidebar: "#111827", name: "Amber" },
+  crimson: { accent: "#d6412f", sidebar: "#1a1113", name: "Crimson" },
+  emerald: { accent: "#1ba774", sidebar: "#0f1c17", name: "Emerald" },
+  ocean: { accent: "#2a78d6", sidebar: "#0f1b2d", name: "Ocean" },
+  violet: { accent: "#7c5ce0", sidebar: "#171226", name: "Violet" },
+  terracotta: { accent: "#d96a3a", sidebar: "#1d1512", name: "Terracotta" },
+  "amber-dark": { accent: "#f5b301", sidebar: "#16181f", name: "Amber Dark" },
+  "crimson-dark": { accent: "#e0533f", sidebar: "#1d1517", name: "Crimson Dark" },
+  "emerald-dark": { accent: "#1bc287", sidebar: "#132019", name: "Emerald Dark" },
+  "ocean-dark": { accent: "#3b8fe8", sidebar: "#141d2b", name: "Ocean Dark" },
+  "violet-dark": { accent: "#8b6bf0", sidebar: "#1d1830", name: "Violet Dark" },
+  "steel-dark": { accent: "#2bb3a3", sidebar: "#1a1e24", name: "Steel Dark" },
+} as const;
+
+type ThemeKey = keyof typeof THEME_PALETTE;
+
 export function Settings() {
   const settingsContext = useContext(SettingsContext);
   const settings = settingsContext?.settings;
@@ -31,6 +49,10 @@ export function Settings() {
   const [backupError, setBackupError] = useState("");
   const [backupSuccess, setBackupSuccess] = useState("");
 
+  // Hidden theme picker state (not persisted)
+  const [versionClickCount, setVersionClickCount] = useState(0);
+  const [selectedTheme, setSelectedTheme] = useState<ThemeKey>("amber");
+
   // Form state
   const [restaurantName, setRestaurantName] = useState("");
   const [restaurantAddress, setRestaurantAddress] = useState("");
@@ -54,6 +76,10 @@ export function Settings() {
       setDeliveryChargeText(String((settings.delivery_charge || 0) / 100)); // Convert paisa to Rupees
       setDayStartsAt(settings.day_starts_at || "06:00");
       setReceiptFooterText(settings.receipt_footer_text || "");
+      // Initialize selected theme from settings
+      if (settings.theme && settings.theme in THEME_PALETTE) {
+        setSelectedTheme(settings.theme as ThemeKey);
+      }
     }
   }, [settings]);
 
@@ -195,6 +221,23 @@ export function Settings() {
       setBackupError(msg);
     } finally {
       setBackupLoading(false);
+    }
+  }
+
+  function handleVersionLabelClick() {
+    setVersionClickCount((prev) => prev + 1);
+  }
+
+  async function handleThemeSwitchClick(theme: ThemeKey) {
+    setSelectedTheme(theme);
+    // Apply theme immediately to DOM
+    document.documentElement.dataset.theme = theme;
+    // Save to settings
+    try {
+      await api.updateSettings({ theme });
+    } catch (e) {
+      // Silent fail: theme is already applied visually
+      console.error("Failed to save theme:", e);
     }
   }
 
@@ -444,14 +487,14 @@ export function Settings() {
           </div>
 
           {/* Show Removed Toggle */}
-          <label>
+          <label className="checkbox-label">
             <input
               type="checkbox"
               checked={showRemoved}
               onChange={(e) => setShowRemoved(e.target.checked)}
               disabled={tableLoading}
             />
-            <span>Show removed tables</span>
+            Show removed tables
           </label>
 
           {/* Tables List */}
@@ -606,6 +649,53 @@ export function Settings() {
           </button>
         </div>
       </form>
+
+      {/* Version Label (footer, hidden clickable) */}
+      <div className="settings-footer">
+        <button
+          onClick={handleVersionLabelClick}
+          className="version-label"
+          title="v1.0"
+          aria-label="Version"
+        >
+          v1.0
+        </button>
+
+        {/* Hidden Appearance Section (unlocked after 7 clicks) */}
+        {versionClickCount >= 7 && (
+          <fieldset className="appearance-fieldset">
+            <legend>Appearance</legend>
+            <div className="theme-swatches">
+              {(Object.keys(THEME_PALETTE) as ThemeKey[]).map((themeKey) => {
+                const themeInfo = THEME_PALETTE[themeKey];
+                const isSelected = selectedTheme === themeKey;
+                return (
+                  <button
+                    key={themeKey}
+                    type="button"
+                    className={`theme-swatch ${isSelected ? "selected" : ""}`}
+                    onClick={() => handleThemeSwitchClick(themeKey)}
+                    title={themeInfo.name}
+                    aria-label={`Select ${themeInfo.name} theme`}
+                  >
+                    <div className="theme-swatch-colors">
+                      <div
+                        className="theme-swatch-accent"
+                        style={{ backgroundColor: themeInfo.accent }}
+                      ></div>
+                      <div
+                        className="theme-swatch-sidebar"
+                        style={{ backgroundColor: themeInfo.sidebar }}
+                      ></div>
+                    </div>
+                    <div className="theme-swatch-label">{themeInfo.name}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
+      </div>
     </div>
   );
 }

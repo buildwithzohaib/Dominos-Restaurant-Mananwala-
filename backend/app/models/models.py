@@ -17,6 +17,7 @@ class Settings(Base):
     delivery_charge: Mapped[int] = mapped_column(Integer, default=0)  # paisa, default 0 (no delivery charge)
     day_starts_at: Mapped[str] = mapped_column(String(5), default="06:00")  # HH:MM format
     receipt_footer_text: Mapped[str] = mapped_column(String(200), default="Please visit us again.")
+    theme: Mapped[str] = mapped_column(String(30), default="amber")  # hidden theme choice; one of 12 known keys
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
