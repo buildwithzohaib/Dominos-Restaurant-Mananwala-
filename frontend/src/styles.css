@@ -411,11 +411,12 @@ h2 {
 .product-info strong {
   display: block;
   font-size: 13px;
+  color: var(--text);
 }
 
 .product-info span {
   display: block;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 12px;
   margin-top: 5px;
 }
