@@ -1,8 +1,10 @@
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.routes.auth import router as auth_router
 from app.routes.catalog import router as catalog_router
 from app.routes.categories import router as categories_router
@@ -59,6 +61,33 @@ app.include_router(settings_router)
 
 # Mount static files for product images (created at import time in image_service)
 app.mount("/images", StaticFiles(directory=image_service.STORAGE_DIR), name="images")
+
+# Mount built frontend assets and serve index.html for SPA routing
+frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+if frontend_dist.exists():
+    # Mount /assets for built assets (JS, CSS, etc.)
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
+
+    # Serve index.html for SPA routing: "/" and unknown paths return index.html
+    index_html_path = frontend_dist / "index.html"
+
+    @app.get("/")
+    async def serve_root():
+        return FileResponse(index_html_path)
+
+    @app.get("/{path:path}")
+    async def serve_spa(path: str):
+        # If path doesn't start with /api, /images, /docs, or /openapi, serve index.html
+        if not any(path.startswith(p) for p in ["api", "images", "docs", "openapi"]):
+            return FileResponse(index_html_path)
+        # Otherwise return 404 (FastAPI will handle API routes and docs)
+        return {"detail": "Not found"}, 404
+else:
+    import logging
+    logging.warning(
+        "Frontend dist directory not found. Run `npm run build` in frontend/ directory "
+        "to build the frontend for production. Serving API only."
+    )
 
 @app.get("/api/health")
 def health():

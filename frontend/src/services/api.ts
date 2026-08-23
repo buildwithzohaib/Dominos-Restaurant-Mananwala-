@@ -1,6 +1,8 @@
 import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,DashboardRange,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
 
-export const API_URL=import.meta.env.VITE_API_URL||"http://127.0.0.1:8000";
+export const API_URL=import.meta.env.VITE_API_URL||"";
+
+type RequestOptions = Omit<RequestInit, "headers"> & { headers?: Record<string, string>; };
 
 /**
  * APIError extends Error to preserve structured error details from the backend.
@@ -19,7 +21,7 @@ export class APIError extends Error {
  }
 }
 
-async function request<T>(path:string,options?:RequestInit):Promise<T>{
+async function request<T>(path:string,options?:RequestOptions):Promise<T>{
  const headers:Record<string,string>={"Content-Type":"application/json",...(options?.headers||{})};
  if(authToken){
   headers["Authorization"]=`Bearer ${authToken}`;
