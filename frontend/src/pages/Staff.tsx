@@ -4,6 +4,12 @@ import { api } from "../services/api";
 import { AuthContext } from "../context/AuthContext";
 import type { User } from "../types";
 
+// Get CSS token colors at runtime
+function getCSSToken(tokenName: string): string {
+  const css = getComputedStyle(document.documentElement);
+  return css.getPropertyValue(tokenName).trim();
+}
+
 export function Staff() {
   const authContext = useContext(AuthContext);
   const currentUser = authContext?.user;
@@ -205,9 +211,9 @@ export function Staff() {
 
                 {user.is_owner ? (
                   <>
-                    <span style={{ color: "#059669", fontSize: "12px" }}>Full access</span>
-                    <span style={{ color: "#059669", fontSize: "12px" }}>Full access</span>
-                    <span style={{ color: "#059669", fontSize: "12px" }}>Full access</span>
+                    <span style={{ color: getCSSToken("--success"), fontSize: "12px" }}>Full access</span>
+                    <span style={{ color: getCSSToken("--success"), fontSize: "12px" }}>Full access</span>
+                    <span style={{ color: getCSSToken("--success"), fontSize: "12px" }}>Full access</span>
                   </>
                 ) : (
                   <>
@@ -252,8 +258,8 @@ export function Staff() {
                   <span
                     className="status-badge"
                     style={{
-                      background: user.is_active ? "#eaf5ea" : "#fff1f1",
-                      color: user.is_active ? "#3e7541" : "#a21b1b",
+                      background: user.is_active ? getCSSToken("--success-bg") : getCSSToken("--danger-bg"),
+                      color: user.is_active ? getCSSToken("--success-text") : getCSSToken("--danger-text"),
                     }}
                   >
                     {user.is_active ? "Active" : "Inactive"}
@@ -417,7 +423,7 @@ export function Staff() {
             <p
               style={{
                 fontSize: "13px",
-                color: "#667085",
+                color: getCSSToken("--text-secondary"),
                 marginBottom: "20px",
                 lineHeight: "1.5",
               }}

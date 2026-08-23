@@ -104,7 +104,7 @@ export function Customers() {
           <div className="loading">
             <Users size={48} style={{ marginBottom: "16px", opacity: 0.3 }} />
             <p>No customers yet.</p>
-            <p style={{ fontSize: "14px", color: "#667085" }}>
+            <p style={{ fontSize: "14px", color: "var(--text-secondary)" }}>
               Customers appear here when they are created via the POS.
             </p>
           </div>

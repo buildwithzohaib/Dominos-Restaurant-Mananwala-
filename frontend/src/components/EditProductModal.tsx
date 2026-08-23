@@ -140,7 +140,7 @@ export function EditProductModal({
 
           <label className="modal-field">
             SKU (immutable)
-            <div style={{ padding: "8px 0", fontFamily: "monospace", fontSize: "13px", color: "#374151" }}>
+            <div style={{ padding: "8px 0", fontFamily: "monospace", fontSize: "13px", color: "var(--text-secondary)" }}>
               {product.sku}
             </div>
           </label>
@@ -239,7 +239,7 @@ export function EditProductModal({
             alignItems: "center",
             gap: "8px",
             padding: "10px 12px",
-            border: "1px solid #e2e6ec",
+            border: "1px solid var(--border)",
             borderRadius: "6px",
             cursor: uploadingImage ? "not-allowed" : "pointer",
             opacity: uploadingImage ? 0.6 : 1,

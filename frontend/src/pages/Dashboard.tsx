@@ -6,6 +6,12 @@ import { api } from "../services/api";
 import type { DashboardRange, Order } from "../types";
 import { parseServerDate } from "../utils/dates";
 
+// Get CSS token colors at runtime for recharts
+function getCSSToken(tokenName: string): string {
+  const css = getComputedStyle(document.documentElement);
+  return css.getPropertyValue(tokenName).trim();
+}
+
 type RangeType = "today" | "7days" | "30days";
 type MetricType = "sales" | "orders" | "cancelled" | "discounts" | "staff";
 
@@ -23,6 +29,18 @@ export function Dashboard({ onLowStockClick }: { onLowStockClick?: () => void })
   const [data, setData] = useState<DashboardRange | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Read CSS tokens for chart colors
+  const colors = {
+    dashSurface: getCSSToken("--dash-surface"),
+    dashLine: getCSSToken("--dash-line"),
+    dashText: getCSSToken("--dash-text"),
+    dashTextMuted: getCSSToken("--dash-text-muted"),
+    dashAccent: getCSSToken("--dash-accent"),
+    chart1: getCSSToken("--chart-1"),
+    chart2: getCSSToken("--chart-2"),
+    chart3: getCSSToken("--chart-3"),
+  };
 
   const [metricModal, setMetricModal] = useState<MetricModal | null>(null);
   const [metricOrders, setMetricOrders] = useState<Order[]>([]);
@@ -117,9 +135,9 @@ export function Dashboard({ onLowStockClick }: { onLowStockClick?: () => void })
   }));
 
   const orderTypeData = [
-    { name: "Dine-in", value: data.dine_in_count, color: "#2a78d6" },
-    { name: "Takeaway", value: data.takeaway_count, color: "#1baf7a" },
-    { name: "Delivery", value: data.delivery_count, color: "#eb6834" }
+    { name: "Dine-in", value: data.dine_in_count, color: colors.chart1 },
+    { name: "Takeaway", value: data.takeaway_count, color: colors.chart2 },
+    { name: "Delivery", value: data.delivery_count, color: colors.chart3 }
   ];
 
   const topProductsData = data.top_products.map(item => ({
@@ -236,36 +254,36 @@ export function Dashboard({ onLowStockClick }: { onLowStockClick?: () => void })
               <AreaChart data={dailySalesData} margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#F5B301" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#F5B301" stopOpacity={0} />
+                    <stop offset="5%" stopColor={colors.dashAccent} stopOpacity={0.2} />
+                    <stop offset="95%" stopColor={colors.dashAccent} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2c2f38" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.dashLine} vertical={false} />
                 <XAxis
                   dataKey="date"
-                  stroke="#8b8fa3"
+                  stroke={colors.dashTextMuted}
                   style={{ fontSize: "11px" }}
-                  tick={{ fill: "#8b8fa3" }}
+                  tick={{ fill: colors.dashTextMuted }}
                   interval={Math.max(0, Math.floor(dailySalesData.length / 6))}
                 />
                 <YAxis
-                  stroke="#8b8fa3"
+                  stroke={colors.dashTextMuted}
                   style={{ fontSize: "11px" }}
-                  tick={{ fill: "#8b8fa3" }}
+                  tick={{ fill: colors.dashTextMuted }}
                 />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#1c1f27", border: "1px solid #2c2f38", borderRadius: "6px" }}
-                  labelStyle={{ color: "#f2f3f7" }}
+                  contentStyle={{ backgroundColor: colors.dashSurface, border: `1px solid ${colors.dashLine}`, borderRadius: "6px" }}
+                  labelStyle={{ color: colors.dashText }}
                 />
                 <Area
                   type="linear"
                   dataKey="revenue"
-                  stroke="#F5B301"
+                  stroke={colors.dashAccent}
                   strokeWidth={2}
                   fillOpacity={1}
                   fill="url(#colorRevenue)"
                   dot={false}
-                  activeDot={{ fill: "#F5B301", r: 4 }}
+                  activeDot={{ fill: colors.dashAccent, r: 4 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -297,8 +315,8 @@ export function Dashboard({ onLowStockClick }: { onLowStockClick?: () => void })
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ backgroundColor: "#1c1f27", border: "1px solid #2c2f38", borderRadius: "6px" }}
-                      labelStyle={{ color: "#f2f3f7" }}
+                      contentStyle={{ backgroundColor: colors.dashSurface, border: `1px solid ${colors.dashLine}`, borderRadius: "6px" }}
+                      labelStyle={{ color: colors.dashText }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -336,21 +354,21 @@ export function Dashboard({ onLowStockClick }: { onLowStockClick?: () => void })
                 layout="vertical"
                 margin={{ top: 0, right: 30, left: 160, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#2c2f38" horizontal={false} />
-                <XAxis type="number" stroke="#8b8fa3" style={{ fontSize: "11px" }} tick={{ fill: "#8b8fa3" }} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.dashLine} horizontal={false} />
+                <XAxis type="number" stroke={colors.dashTextMuted} style={{ fontSize: "11px" }} tick={{ fill: colors.dashTextMuted }} allowDecimals={false} />
                 <YAxis
                   dataKey="name"
                   type="category"
-                  stroke="#8b8fa3"
+                  stroke={colors.dashTextMuted}
                   style={{ fontSize: "11px" }}
-                  tick={{ fill: "#8b8fa3" }}
+                  tick={{ fill: colors.dashTextMuted }}
                   width={150}
                 />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#1c1f27", border: "1px solid #2c2f38", borderRadius: "6px" }}
-                  labelStyle={{ color: "#f2f3f7" }}
+                  contentStyle={{ backgroundColor: colors.dashSurface, border: `1px solid ${colors.dashLine}`, borderRadius: "6px" }}
+                  labelStyle={{ color: colors.dashText }}
                 />
-                <Bar dataKey="qty" fill="#F5B301" />
+                <Bar dataKey="qty" fill={colors.dashAccent} />
               </BarChart>
             </ResponsiveContainer>
             </div>
