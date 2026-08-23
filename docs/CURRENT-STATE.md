@@ -1,6 +1,6 @@
 # CURRENT STATE AUDIT — My Restaurant POS
 
-**Date:** 2026-08-22  
+**Date:** 2026-08-23  
 **Status:** READ-ONLY REPORT  
 **Phases Completed:** 1–10  
 **Stage 4 Extensions:** ✅ Running Tabs (backend + frontend), Table Management (backend + frontend)  
@@ -9,9 +9,10 @@
 **Stage 7:** ✅ Users & Roles (backend + frontend)  
 **Stage 8:** ✅ Dashboard Cost Snapshot & Range-Aware Metrics (backend + frontend)  
 **Stage 9:** ✅ Database Backup & Restore (backend + frontend)  
-**Git HEAD:** 0ebad0e (Stage 8)  
+**Stage 10:** ✅ Branding & Theming (backend + frontend)  
+**Git HEAD:** a31b4de (Stage 10)  
 **Backend Tests:** [test count to be updated]  
-**Alembic Head:** f9e8d7c6b5a4 (Stage 8 — order_items.cost snapshot)  
+**Alembic Head:** 10a2b3c4d5e6 (Stage 10 — add theme to settings)  
 **Frontend Tests:** [test count to be updated]  
 **Frontend Build:** ✅ Clean
 
@@ -1523,6 +1524,159 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
+### Stage 10: Branding & Theming (2026-08-23)
+
+**Commits:**
+   - 56a32c3  Stage 10 step 2: replace every hardcoded colour in styles.css with design tokens
+   - 1ad3aa8  Stage 10 step 3: remove hardcoded colours from components, charts read theme tokens
+   - e1d2009  Stage 10 step 4: twelve themes with brand config and full dark-theme contrast pass
+   - 47d03e1  Stage 10 step 4: twelve themes, brand config, full dark-theme contrast pass
+   - a31b4de  Stage 10: hidden theme picker in settings, consistent checkbox rows
+
+**Alembic Head:** 10a2b3c4d5e6
+
+**Overview:** Design token system introduced with 48 CSS variables organizing all colour usage. Twelve themes (6 light, 6 dark) as `[data-theme]` CSS blocks override only sidebar, accent, and text/surface families — no layout changes between themes. Theme selection stored in database and applied on app startup; hidden theme picker unlocked by 7 clicks on version label in Settings, revealing Appearance section with clickable swatches. Theme choice persists across restarts and is invisible to end users (prevents discovery of generic product nature).
+
+**Database Changes:**
+
+1. **`settings` table extension:**
+   | Column | Type | Constraints | Notes |
+   |--------|------|-----------|-------|
+   | `theme` | String(30) | NOT NULL, server_default='amber' | One of twelve theme keys: amber, crimson, emerald, ocean, violet, terracotta, amber-dark, crimson-dark, emerald-dark, ocean-dark, violet-dark, steel-dark |
+
+   **Migration:** `10a2b3c4d5e6` (down_revision `f9e8d7c6b5a4`). Uses SQLite-compatible `op.add_column()` with `server_default` (no `alter_column` or `batch_alter_table`).
+
+**Frontend CSS: Token System**
+
+1. **`:root` block (48 tokens):**
+   - **Surfaces (6):** `--bg`, `--surface`, `--surface-alt`, `--surface-sunken`, `--border`, `--border-strong`
+   - **Text (4):** `--text`, `--text-secondary`, `--text-muted`, `--text-inverse`
+   - **Brand / Sidebar (10):** `--sidebar-bg`, `--sidebar-surface`, `--sidebar-surface-alt`, `--sidebar-text`, `--sidebar-text-strong`, `--accent`, `--accent-text`, `--sidebar-border`, `--sidebar-hover`, `--accent-strong`
+   - **Status Colours (15):** `--danger`, `--danger-text`, `--danger-bg`, `--danger-contrast`, `--success`, `--success-text`, `--success-bg`, `--warning`, `--warning-bg`, `--warning-text`, `--warning-border`, `--info`, `--info-bg`, `--danger-border`, `--success-bg-strong`
+   - **Dashboard & Chart (13):** `--dash-bg`, `--dash-surface`, `--dash-line`, `--dash-text`, `--dash-text-secondary`, `--dash-text-muted`, `--dash-accent`, `--dash-danger`, `--dash-success`, `--dash-hover`, `--chart-1`, `--chart-2`, `--chart-3`
+
+   **Status:** All 363 hardcoded hex colours in `styles.css` have been replaced with token references. Only remaining literal colours: `#000` in print rules and one semi-transparent modal backdrop.
+
+2. **Twelve Themes (as `[data-theme]` blocks):**
+
+   **Light Themes (6):**
+   | Theme | Accent | Accent-Text | Sidebar-BG | Overrides |
+   |-------|--------|-------------|-----------|-----------|
+   | amber | #f3b32b | #3b2c00 | #111827 | Sidebar palette, accent, accent-text |
+   | crimson | #d6412f | #ffffff | #1a1113 | Sidebar palette, accent, accent-text |
+   | emerald | #1ba774 | #ffffff | #0f1c17 | Sidebar palette, accent, accent-text |
+   | ocean | #2a78d6 | #ffffff | #0f1b2d | Sidebar palette, accent, accent-text |
+   | violet | #7c5ce0 | #ffffff | #171226 | Sidebar palette, accent, accent-text |
+   | terracotta | #d96a3a | #ffffff | #1d1512 | Sidebar palette, accent, accent-text |
+
+   **Dark Themes (6):**
+   | Theme | Accent | Accent-Text | BG | Sidebar-BG | Overrides |
+   |-------|--------|-------------|----|-----------| |
+   | amber-dark | #f5b301 | #3b2c00 | #0f1115 | #16181f | Entire light palette (surfaces, text, sidebar) + dark specializations |
+   | crimson-dark | #e0533f | #ffffff | #120e10 | #1d1517 | Entire light palette + dark specializations |
+   | emerald-dark | #1bc287 | #04231a | #0b1310 | #132019 | Entire light palette + dark specializations |
+   | ocean-dark | #3b8fe8 | #ffffff | #0c121c | #141d2b | Entire light palette + dark specializations |
+   | violet-dark | #8b6bf0 | #ffffff | #110e1a | #1d1830 | Entire light palette + dark specializations |
+   | steel-dark | #2bb3a3 | #04231f | #101418 | #1a1e24 | Entire light palette + dark specializations |
+
+   **Design:** Themes change only colour; no layout rules, no component structure changes. Accents and text colours are paired: amber dark uses dark text on its accent, while other themes require white text (preventing contrast issues in dark mode).
+
+3. **Dashboard.tsx Chart Colours:**
+   - Charts cannot read CSS variables directly (recharts limitation)
+   - `getComputedStyle(document.documentElement)` extracts tokens at render time
+   - Tokens passed to recharts: `--chart-1`, `--chart-2`, `--chart-3` for series colours
+
+**Backend Implementation:**
+
+1. **Settings Model:**
+   - Added `theme: Mapped[str] = mapped_column(String(30), default="amber")` field
+
+2. **Schemas:**
+   - `SettingsOut`: Added `theme: str` field
+   - `SettingsUpdate`: Added `theme: str | None` field with validator
+   - Validator enforces twelve known keys; rejects invalid values with 400 error
+
+3. **Settings Service & Routes:**
+   - `GET /api/settings` returns theme in response; remains public (needed for login screen)
+   - `PATCH /api/settings` accepts theme update; validation happens in schema layer
+   - No new endpoints; uses existing settings API
+
+**Frontend Implementation:**
+
+1. **SettingsContext Enhancement:**
+   - On settings load, applies theme to DOM: `document.documentElement.dataset.theme = settings.theme`
+   - Runs in `useEffect` triggered by `settings?.theme` change
+   - Fallback: if settings not yet loaded, `brand.ts` provides initial theme
+
+2. **brand.ts Fallback:**
+   - `BRAND.theme = "ocean"` (default, used before SettingsContext mounts)
+   - `DEV` mode: `?theme=` URL parameter previews any theme (overrides brand.ts, stored in localStorage as `preview_theme`)
+   - Fresh database: falls back to "amber" from migration server_default
+
+3. **Hidden Theme Picker** (Settings.tsx):
+   - Version label "v1.0" at bottom of Settings page (plain muted text, no visual indication of clickability)
+   - Click counter in component state (resets on page reload)
+   - After 7 clicks, unlocks "Appearance" section (not rendered until counter >= 7)
+   - Section shows 12 theme swatches as rounded rectangles:
+     - Each swatch is a flex row with large accent colour preview + small sidebar colour preview
+     - Theme name displayed below
+     - Current theme marked with border
+     - Clicking swatch: applies immediately to DOM + saves via `api.updateSettings({ theme })`
+   - No confirmation, toast, or page reload
+   - No page reload needed for offline changes (theme applied instantly)
+
+4. **Types:**
+   - `Settings` interface: Added `theme: string` field
+   - `SettingsUpdate` interface: Added `theme?: string` field
+
+**Tests:**
+
+No new test files for Stage 10 in this context (theming is primarily a frontend/CSS feature with minimal backend logic). Existing Settings API tests cover the new field.
+
+**Design Decisions and Lessons Recorded:**
+
+1. **Red and Green Stay Red and Green:**
+   Every theme keeps `--danger` as red (cancelled orders) and `--success` as green (paid orders). Staff never re-learn status meanings across theme changes. This is non-negotiable visual language.
+
+2. **Accent-Text Pairing:**
+   Amber's dark accent (#f3b32b) requires dark text (#3b2c00) to meet WCAG contrast. Most other themes have light accents and white text. Every theme carries its own `--accent-text` rather than assuming white. This prevents contrast failures that light-theme-only testing would miss.
+
+3. **Light Themes Hide Mistakes, Dark Themes Expose Them:**
+   A text colour sourced from a surface token (or vice versa) is invisible in light modes but fails in dark. Conversion required multiple passes:
+   - Page headings: changed from dark-surface-based text to `--text`
+   - Table first columns: changed from blue background (contrast fails in dark) to `--surface` with proper text
+   - Icon buttons: removed dark backgrounds, now use `--text-secondary` icons on transparent
+   - Primary buttons: now use `--accent` with `--accent-text` (not dark surface + white)
+   - Product card titles: changed from dark-surface-based to `--text`
+
+4. **Accent as Primary, Not Surface:**
+   Primary actions use `--accent` with `--accent-text`, not a dark surface with white text. Dark surfaces with white vanish in dark themes (insufficient contrast); accents maintain brightness.
+
+5. **Print Always Black on White:**
+   Receipt prints black on white in every theme via `@media print` rules. No theme affects thermal output; themes are screen-only.
+
+6. **Hidden for Good Reason:**
+   Theme picker is intentionally hidden (7-click unlock, counter in component state). The app is sold as a generic POS to multiple competing restaurants in the same city. A discoverable list of twelve themes signals the software is a white-label product, not custom-built. Hiding it maintains perceived uniqueness for each restaurant owner.
+
+7. **No Layout Restyle:**
+   Themes change only colour properties in CSS blocks. No breakpoint changes, no component widths, no grid adjustments. This keeps the feature scoped and maintainable.
+
+**Code Locations:**
+
+- **Migrations:** `backend/alembic/versions/10a2b3c4d5e6_stage_10_step_0_add_theme_to_settings.py`
+- **Model:** `backend/app/models/models.py` (Settings class)
+- **Schemas:** `backend/app/schemas/schemas.py` (SettingsOut, SettingsUpdate with validator)
+- **Frontend Types:** `frontend/src/types/index.ts` (Settings, SettingsUpdate interfaces)
+- **CSS Tokens & Themes:** `frontend/src/styles.css` (`:root` block lines 13–71; `[data-theme]` blocks starting line 3186)
+- **Theme Application:** `frontend/src/context/SettingsContext.tsx` (useEffect applying theme on load)
+- **Fallback:** `frontend/src/brand.ts`
+- **Initialization:** `frontend/src/main.tsx` (initializeTheme IIFE, brand.ts fallback before SettingsContext)
+- **Hidden Picker:** `frontend/src/pages/Settings.tsx` (version label click counter + Appearance section + theme swatches)
+- **Theme Palette Data:** `frontend/src/pages/Settings.tsx` (THEME_PALETTE object with 12 themes)
+- **Dashboard Charts:** `frontend/src/pages/Dashboard.tsx` (getComputedStyle() call to extract chart tokens)
+
+---
+
 ### Deferred & Skipped Stages
 
 **Stage 6 (Ingredients/Recipes):** ❌ **EXPLICITLY SKIPPED** — Decision: Restaurant operates at product level only. No ingredient-level tracking or recipe/BOM management required.
@@ -1712,7 +1866,7 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ## 10. SUMMARY
 
-### Backend Status (Stages 4–5, Stage 7, Stage 8, Stage 9 Complete)
+### Backend Status (Stages 4–5, Stage 7, Stage 8, Stage 9, Stage 10 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
@@ -1721,7 +1875,11 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | **Money Storage** | ✅ Compliant | All money is Integer (paisa); Rule 3 satisfied |
 | **Stock Ledger** | ⚠️ Product-only | Product movements working; ingredient polymorphism deferred to Phase 15 |
 | **Cost Snapshot** | ✅ Complete | order_items.cost captures product.purchase_price at time of sale (Rule 7); NULL/0 cost detection excludes order from profit |
-| **Alembic Setup** | ✅ Active | Stage 8 migration f9e8d7c6b5a4; current head includes order_items.cost |
+| **Alembic Setup** | ✅ Active | Stage 10 migration 10a2b3c4d5e6; current head includes settings.theme |
+| **Design Tokens** | ✅ Complete | 48 CSS variables across :root block; all 363 hardcoded colours replaced with tokens |
+| **Twelve Themes** | ✅ Complete | Light (amber, crimson, emerald, ocean, violet, terracotta) + Dark variants; colour-only, no layout changes |
+| **Theme Selection** | ✅ Complete | Database-persisted (settings.theme), applied on app startup via SettingsContext |
+| **Hidden Theme Picker** | ✅ Complete | 7-click unlock on Settings version label; Appearance section with swatches; silent apply, no reload |
 | **Services Layer** | ✅ Excellent | Business logic properly separated; Stage 4 running tabs + Stage 7 auth + Stage 8 metrics + Stage 9 backup |
 | **API Design** | ✅ Good | RESTful, consistent, well-typed Pydantic schemas; token-based auth; range-aware dashboard endpoints (Stage 8) |
 | **Dashboard Metrics** | ✅ Complete | Range-filtered aggregations (today/7days/30days/custom); paid_at keying; business-day boundaries; per-staff breakdown with "Before staff tracking" label |
@@ -1734,7 +1892,7 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | **Backup & Restore** | ✅ Complete | Daily backups on startup, 30-day rotation, atomic restore with engine.dispose() for Windows safety |
 | **Tests** | ✅ Passing | Comprehensive coverage of Stages 4–5, Stage 7, Stage 8, Stage 9; includes cost snapshot tests, dashboard range tests, per-user breakdown tests |
 
-### Frontend Status (Phases 1-10, Stage 4 E1, Stage 7, Stage 8 Complete)
+### Frontend Status (Phases 1-10, Stage 4 E1, Stage 7, Stage 8, Stage 10 Complete)
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
@@ -1753,6 +1911,11 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 | **Dashboard Rebuild** | ✅ Complete | Dark theme with recharts; 8 KPI tiles, daily sales line chart, order-type donut, top products bars, per-staff table with modal drill-down (Stage 8) |
 | **Range Selector** | ✅ Complete | Today/7 Days/30 Days/Custom date pickers; all tiles and staff rows clickable; Low Stock tile navigates to Inventory (Stage 8) |
 | **Recharts Integration** | ✅ Complete | First charting library on project; ResponsiveContainer properly sized (Stage 8) |
+| **Design Token System** | ✅ Complete | 48 CSS variables; all hardcoded colours replaced with tokens (Stage 10) |
+| **Twelve Themes** | ✅ Complete | Light (6) + Dark (6) themes as [data-theme] blocks; sidebar/accent/text overrides only (Stage 10) |
+| **Theme Persistence** | ✅ Complete | SettingsContext applies theme from database on app startup; brand.ts fallback before settings load (Stage 10) |
+| **Hidden Theme Picker** | ✅ Complete | 7-click unlock on Settings version label reveals Appearance section with clickable swatches (Stage 10) |
+| **Chart Token Reading** | ✅ Complete | Dashboard.tsx uses getComputedStyle() to extract chart tokens at render time (Stage 10) |
 | **KOT Component** | ❌ Missing | No print view for kitchen batches (batch_id, sent_at visibility) |
 | **Tables UI** | ✅ Complete | Settings page: add/rename/remove/restore with soft delete; POS dropdown active-only; Show Removed toggle |
 | **Backup & Restore UI** | ✅ Complete | Settings fieldset with Restore button, window.confirm() for destructive action, displays restart requirement |
@@ -1774,11 +1937,11 @@ Rule 10 business-day boundary is now applied to dashboard queries:
 
 ---
 
-**Report Date:** 2026-08-22  
-**Git HEAD:** [final Stage 8 commit hash to be provided]  
+**Report Date:** 2026-08-23  
+**Git HEAD:** a31b4de (Stage 10)  
 **Backend Test Status:** [updated count]  
 **Frontend Test Status:** [updated count]  
 **Frontend Build:** ✅ Clean  
-**Alembic Status:** Clean (no pending migrations; head f9e8d7c6b5a4 — Stage 8 order_items.cost)  
-**Completed Since Last Report:** Stage 8 (cost snapshot on order lines, range-aware dashboard service, recharts-based dashboard rebuild with drill-down modals, per-staff attribution)  
+**Alembic Status:** Clean (no pending migrations; head 10a2b3c4d5e6 — Stage 10 settings.theme)  
+**Completed Since Last Report:** Stage 10 (design tokens with 48 CSS variables, twelve colour themes, theme persistence in database, SettingsContext application on startup, hidden theme picker with 7-click unlock)  
 **Next Work:** KOT component (kitchen slip print), money formatter centralization, 58mm print width support, rename user feature, Google Drive backup upload (OAuth)
