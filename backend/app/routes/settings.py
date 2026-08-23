@@ -1,7 +1,7 @@
 """Settings routes — GET and PATCH the single settings row, plus backup restore."""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.database import get_db, BACKEND_DIR, DB_PATH, engine
+from app.database import get_db, DATA_DIR, DB_PATH, engine
 from app.models.models import User
 from app.services.settings_service import get_settings, update_settings
 from app.services.backup_service import get_backup_dir, restore_database
@@ -66,5 +66,5 @@ def restore_from_backup(current_user: User = Depends(require_permission("can_man
         403: if user lacks can_manage_settings permission and is not owner
         None (all errors returned in response dict)
     """
-    backup_dir = get_backup_dir(BACKEND_DIR)
+    backup_dir = get_backup_dir(DATA_DIR)
     return restore_database(DB_PATH, backup_dir, engine)

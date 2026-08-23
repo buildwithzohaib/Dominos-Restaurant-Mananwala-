@@ -9,10 +9,11 @@ import hashlib
 from io import BytesIO
 from PIL import Image, ImageOps
 from fastapi import HTTPException, UploadFile
-from app.database import BACKEND_DIR
+from app.database import DATA_DIR
 
-# Reuse BACKEND_DIR from database.py — single source of truth for backend location
-STORAGE_DIR = os.path.join(BACKEND_DIR, "storage", "images")
+# Use DATA_DIR for image storage — single source of truth for data location.
+# In development, DATA_DIR is the backend/ folder; in production, it's %LOCALAPPDATA%.
+STORAGE_DIR = os.path.join(DATA_DIR, "storage", "images")
 
 # Create storage directory if it does not exist
 os.makedirs(STORAGE_DIR, exist_ok=True)

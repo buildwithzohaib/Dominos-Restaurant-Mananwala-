@@ -19,7 +19,7 @@ from app.routes.users import router as users_router
 from app.models import models  # noqa: F401
 from app.services import image_service  # Ensure storage dir is created
 from app.services.backup_service import create_backup, cleanup_old_backups
-from app.database import BACKEND_DIR, DB_PATH, engine
+from app.database import DATA_DIR, DB_PATH, engine
 
 
 @asynccontextmanager
@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     """Startup: run daily backup and cleanup old backups."""
     from app.services.backup_service import get_backup_dir
 
-    backup_dir = get_backup_dir(BACKEND_DIR)
+    backup_dir = get_backup_dir(DATA_DIR)
 
     # Create today's backup if it doesn't already exist (file system check)
     create_backup(DB_PATH, backup_dir)
