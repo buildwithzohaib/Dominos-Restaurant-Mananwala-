@@ -83,3 +83,14 @@
 2026-08-24 18:56:54 [INFO] Application shutdown complete.
 2026-08-24 18:56:54 [INFO] Finished server process [9544]
 2026-08-24 18:56:54 [INFO] Restaurant POS shut down cleanly
+2026-08-24 19:43:22 [INFO] Starting Restaurant POS server on 127.0.0.1:8000
+2026-08-24 19:43:22 [INFO] App started. Database at head revision: 10a2b3c4...
+2026-08-24 19:43:22 [INFO] Application startup complete.
+2026-08-24 19:43:22 [INFO] Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-08-24 19:43:23 [INFO] Server is healthy, opening window
+2026-08-24 19:44:59 [INFO] User exited via tray icon
+2026-08-24 19:44:59 [INFO] Shutting down
+2026-08-24 19:44:59 [INFO] Waiting for application shutdown.
+2026-08-24 19:44:59 [INFO] Application shutdown complete.
+2026-08-24 19:44:59 [INFO] Finished server process [11220]
+2026-08-24 19:45:00 [INFO] Restaurant POS shut down cleanly

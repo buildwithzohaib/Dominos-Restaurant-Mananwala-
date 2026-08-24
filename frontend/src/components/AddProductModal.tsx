@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { api } from "../services/api";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
+import { useCatalog } from "../context/CatalogContext";
 import type { Category, Product, ProductFormState, ProductCreateInput } from "../types";
 
 export function AddProductModal({
@@ -13,6 +14,8 @@ export function AddProductModal({
   onClose: () => void;
   onSaved: (product: Product) => void;
 }) {
+  const { allCategories, refresh } = useCatalog();
+
   const [formData, setFormData] = useState<ProductFormState>({
     category_id: null,
     name: "",
@@ -27,10 +30,37 @@ export function AddProductModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Category creation state (only used when no categories exist initially)
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categoryCreationError, setCategoryCreationError] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
   const [priceText, setPriceText] = useState(String(paisaToRupees(formData.price)));
   const [purchasePriceText, setPurchasePriceText] = useState(
     formData.purchase_price ? String(paisaToRupees(formData.purchase_price)) : ""
   );
+
+  async function createCategory() {
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      setCategoryCreationError("Category name cannot be empty");
+      return;
+    }
+
+    setCreatingCategory(true);
+    setCategoryCreationError("");
+    try {
+      const created = await api.createCategory(trimmed);
+      setNewCategoryName("");
+      await refresh();
+      // Auto-select the newly created category
+      setFormData({ ...formData, category_id: created.id });
+    } catch (e) {
+      setCategoryCreationError(e instanceof Error ? e.message : "Could not create category");
+    } finally {
+      setCreatingCategory(false);
+    }
+  }
 
   async function submit() {
     if (formData.category_id === null) {
@@ -73,17 +103,38 @@ export function AddProductModal({
         <p className="eyebrow">PRODUCTS</p>
         <h2>Add Product</h2>
 
-        {categories.length === 0 ? (
-          <div className="error-box" style={{ marginBottom: "16px" }}>
-            <p style={{ marginBottom: "12px" }}>Create a category first</p>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={onClose}
-              style={{ marginRight: "8px" }}
-            >
-              Manage Categories
-            </button>
+        {allCategories.length === 0 ? (
+          <div className="modal-category-create-section">
+            <div className="error-box">
+              <p>Create a category first</p>
+            </div>
+
+            <div className="category-create-input-row">
+              <input
+                type="text"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="New category name"
+                disabled={creatingCategory}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") createCategory();
+                }}
+              />
+              <button
+                type="button"
+                className="add-stock-button"
+                onClick={createCategory}
+                disabled={creatingCategory || !newCategoryName.trim()}
+              >
+                {creatingCategory ? "Creating..." : "Create"}
+              </button>
+            </div>
+
+            {categoryCreationError && (
+              <div className="error-box">
+                {categoryCreationError}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -97,7 +148,7 @@ export function AddProductModal({
                   }
                 >
                   <option value="">Select a category</option>
-                  {categories.map((cat) => (
+                  {allCategories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name_display}
                       {!cat.active ? " (inactive)" : ""}
@@ -186,7 +237,7 @@ export function AddProductModal({
 
         {error && <div className="error-box">{error}</div>}
 
-        {categories.length > 0 && (
+        {allCategories.length > 0 && (
           <div className="modal-action-row">
             <button className="secondary-button" onClick={onClose} disabled={busy}>
               Cancel

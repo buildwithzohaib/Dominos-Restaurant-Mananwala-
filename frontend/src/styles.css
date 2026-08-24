@@ -2304,6 +2304,42 @@ h2 {
   font-size: 12px;
 }
 
+/* Add Product Modal: Category Creation (Step 0) */
+.modal-category-create-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.category-create-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.category-create-input-row input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--text);
+  transition: border-color 0.2s ease;
+}
+
+.category-create-input-row input:focus {
+  outline: none;
+  border-color: var(--info);
+  box-shadow: 0 0 0 2px var(--info-bg);
+}
+
+.category-create-input-row input:disabled {
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
 /* Product Image Management (Task 2.7) */
 .modal-label {
   font-size: 10px;

@@ -2,75 +2,219 @@ param(
     [string]$AppName = "RestaurantPOS"
 )
 
-# Exit on any error
+# Exit on any error; all checks must pass
 $ErrorActionPreference = "Stop"
 
-Write-Host "Building Restaurant POS Windows Application" -ForegroundColor Green
-Write-Host "==========================================="
+# Utility function to print step headers
+function Print-Step {
+    param([string]$Title)
+    Write-Host ""
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+    Write-Host $Title -ForegroundColor Cyan
+    Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
+}
+
+function Print-Success {
+    param([string]$Message)
+    Write-Host "✓ $Message" -ForegroundColor Green
+}
+
+function Print-Error {
+    param([string]$Message)
+    Write-Host "✗ $Message" -ForegroundColor Red
+}
+
+Write-Host "Restaurant POS Build Script" -ForegroundColor Yellow
+Write-Host "Starting build at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -ForegroundColor Gray
+Write-Host ""
+Write-Host "NOTE: This script modifies files in c:\dev\my-pos only." -ForegroundColor Gray
+Write-Host "      Data in %LOCALAPPDATA%\RestaurantPOS is never touched." -ForegroundColor Gray
 Write-Host ""
 
-# Step 1: Build the frontend
-Write-Host "Step 1: Building frontend..." -ForegroundColor Cyan
+# ============================================================================
+# STEP 1: Build Frontend
+# ============================================================================
+Print-Step "STEP 1: Build Frontend (React/Vite)"
+
 Push-Location ..\frontend
-if (!(Test-Path node_modules)) {
-    Write-Host "  Installing npm dependencies..."
-    npm install
-}
+
+# Run npm build
+Write-Host "Running: npm run build"
 npm run build
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Frontend build failed!" -ForegroundColor Red
+    Print-Error "npm run build failed (exit code: $LASTEXITCODE)"
     Pop-Location
     exit 1
 }
-Pop-Location
-Write-Host "  Frontend build complete." -ForegroundColor Green
-Write-Host ""
+Print-Success "npm run build completed with exit code 0"
 
-# Step 2: Run PyInstaller
-Write-Host "Step 2: Running PyInstaller..." -ForegroundColor Cyan
-Write-Host "  App name: $AppName"
-Write-Host "  Entry point: run.py"
-Write-Host "  Mode: --onedir (fast startup, easy updates)"
-Write-Host "  Console: --noconsole (no console window)"
-Write-Host ""
+# ============================================================================
+# STEP 2: Verify Frontend Bundle Contents
+# ============================================================================
+Print-Step "STEP 2: Verify Frontend Bundle"
 
-# Build the PyInstaller command with all necessary --add-data entries
-# These entries tell PyInstaller which files to bundle into the application.
-# On Windows, the separator is SEMICOLON (;), not colon (:) — colons are for Unix/macOS.
-# Each argument is quoted to prevent PowerShell from interpreting the semicolon as a statement separator.
-$PyInstallerCmd = @(
-    "pyinstaller",
-    "--onedir",                                                    # One-folder build for fast startup and easy updates
-    "--noconsole",                                                 # No console window (required for unattended POS)
-    "--name=$AppName",                                             # Executable and folder name
-    "--add-data=..\frontend\dist;frontend/dist",                 # Built React frontend (SPA assets, JS, CSS)
-    "--add-data=.\alembic;backend/alembic",                       # Database migration scripts (from alembic/versions/)
-    "--add-data=.\alembic.ini;backend",                           # Alembic configuration for running migrations at startup
-    "run.py"                                                       # Entry point
-)
+Write-Host "Checking: dist/assets/*.js contains exactly 1 occurrence of 'Create a category first'"
 
-Write-Host "PyInstaller flags:"
-$PyInstallerCmd | ForEach-Object {
-    Write-Host "  $_"
+# Search for the marker string in dist/assets/*.js files
+$SearchResults = @()
+if (Test-Path "dist/assets") {
+    $SearchResults = Select-String -Path "dist/assets/*.js" -Pattern "Create a category first" -SimpleMatch -ErrorAction SilentlyContinue
 }
-Write-Host ""
 
-# Execute PyInstaller
-& pyinstaller @PyInstallerCmd
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "PyInstaller build failed!" -ForegroundColor Red
+$MatchCount = $SearchResults.Count
+Write-Host "  Found $MatchCount occurrence(s)"
+
+if ($MatchCount -eq 0) {
+    Print-Error "Frontend bundle is stale or empty. 'Create a category first' not found in dist/assets/*.js"
+    Print-Error "dist folder may contain outdated code. Investigate dist/assets/ manually."
+    Pop-Location
+    exit 1
+}
+elseif ($MatchCount -gt 1) {
+    Print-Error "Unexpected: found $MatchCount occurrences (expected exactly 1). Build may have included duplicates."
+    Pop-Location
     exit 1
 }
 
+Print-Success "Frontend bundle verified: contains expected marker code"
+
+Pop-Location
 Write-Host ""
-Write-Host "Build complete!" -ForegroundColor Green
-Write-Host "==========================================="
+
+# ============================================================================
+# STEP 3: Close Running RestaurantPOS Process
+# ============================================================================
+Print-Step "STEP 3: Stop Running RestaurantPOS Process"
+
+$ProcessesToKill = Get-Process -Name "RestaurantPOS" -ErrorAction SilentlyContinue
+if ($ProcessesToKill) {
+    Write-Host "Found running RestaurantPOS process(es). Stopping..."
+    $ProcessesToKill | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    # Wait for process to actually exit (up to 5 seconds)
+    $WaitStarted = Get-Date
+    while ((Get-Process -Name "RestaurantPOS" -ErrorAction SilentlyContinue) -and ((Get-Date) - $WaitStarted).TotalSeconds -lt 5) {
+        Start-Sleep -Milliseconds 100
+    }
+
+    if (Get-Process -Name "RestaurantPOS" -ErrorAction SilentlyContinue) {
+        Print-Error "RestaurantPOS process still running after 5 seconds. PyInstaller may fail."
+        exit 1
+    }
+    Print-Success "RestaurantPOS process stopped and confirmed exited"
+} else {
+    Print-Success "No running RestaurantPOS process found"
+}
 Write-Host ""
-Write-Host "Output directory: $PSScriptRoot\dist\$AppName" -ForegroundColor Yellow
+
+# ============================================================================
+# STEP 4: Run PyInstaller with New Flags
+# ============================================================================
+Print-Step "STEP 4: Run PyInstaller"
+
+# Must be in backend directory for PyInstaller to find run.py and relative paths
+if (-not (Test-Path "run.py")) {
+    Print-Error "run.py not found in current directory. This script must be run from backend folder."
+    exit 1
+}
+
+Write-Host "Command:"
+Write-Host "  pyinstaller --noconfirm --onedir --noconsole --name $AppName \" -ForegroundColor Gray
+Write-Host "    --add-data '..\frontend\dist;frontend/dist' \" -ForegroundColor Gray
+Write-Host "    --add-data '.\alembic;backend/alembic' \" -ForegroundColor Gray
+Write-Host "    --add-data '.\alembic.ini;backend' \" -ForegroundColor Gray
+Write-Host "    --collect-all=webview \" -ForegroundColor Gray
+Write-Host "    --hidden-import=pythonnet \" -ForegroundColor Gray
+Write-Host "    --collect-all=pystray \" -ForegroundColor Gray
+Write-Host "    --collect-all=PIL \" -ForegroundColor Gray
+Write-Host "    run.py" -ForegroundColor Gray
 Write-Host ""
-Write-Host "To run the application:"
-Write-Host "  $PSScriptRoot\dist\$AppName\$AppName.exe"
+
+pyinstaller --noconfirm --onedir --noconsole --name $AppName `
+    --add-data "..\frontend\dist;frontend/dist" `
+    --add-data ".\alembic;backend/alembic" `
+    --add-data ".\alembic.ini;backend" `
+    --collect-all=webview `
+    --hidden-import=pythonnet `
+    --collect-all=pystray `
+    --collect-all=PIL `
+    run.py
+
+if ($LASTEXITCODE -ne 0) {
+    Print-Error "PyInstaller failed (exit code: $LASTEXITCODE)"
+    exit 1
+}
+Print-Success "PyInstaller completed"
+
+# ============================================================================
+# STEP 5: Verify PyInstaller Output
+# ============================================================================
+Print-Step "STEP 5: Verify Build Output"
+
+$DistPath = "dist\$AppName"
+$ExePath = "$DistPath\$AppName.exe"
+$InternalPath = "$DistPath\_internal"
+
+# Check for exe
+if (-not (Test-Path $ExePath)) {
+    Print-Error "$AppName.exe not found at $ExePath"
+    exit 1
+}
+Print-Success "Executable: $ExePath exists"
+
+# Check for webview bundle
+if (-not (Test-Path "$InternalPath\webview")) {
+    Print-Error "webview module not bundled at $InternalPath\webview"
+    exit 1
+}
+Print-Success "Bundled: webview/_internal"
+
+# Check for pystray bundle
+if (-not (Test-Path "$InternalPath\pystray")) {
+    Print-Error "pystray module not bundled at $InternalPath\pystray"
+    exit 1
+}
+Print-Success "Bundled: pystray/_internal"
+
+# Check for PIL bundle
+if (-not (Test-Path "$InternalPath\PIL")) {
+    Print-Error "PIL module not bundled at $InternalPath\PIL"
+    exit 1
+}
+Print-Success "Bundled: PIL/_internal"
+
+# Verify bundled frontend contains the marker code
+$BundledAssets = Get-ChildItem -Path "$DistPath\frontend\dist\assets\*.js" -ErrorAction SilentlyContinue
+if (-not $BundledAssets) {
+    Print-Error "No JavaScript files found in bundled frontend at $DistPath\frontend\dist\assets"
+    exit 1
+}
+
+$BundledMarkers = @()
+$BundledMarkers = Select-String -Path "$DistPath\frontend\dist\assets\*.js" -Pattern "Create a category first" -SimpleMatch -ErrorAction SilentlyContinue
+$BundledCount = $BundledMarkers.Count
+
+if ($BundledCount -ne 1) {
+    Print-Error "Bundled frontend has $BundledCount occurrences of 'Create a category first' (expected 1)"
+    exit 1
+}
+Print-Success "Bundled frontend verified: contains expected marker code (1 occurrence)"
+
 Write-Host ""
-Write-Host "Data will be stored in:"
-Write-Host "  %LOCALAPPDATA%\$AppName"
+
+# ============================================================================
+# SUCCESS SUMMARY
+# ============================================================================
+Print-Step "BUILD SUCCESSFUL"
+Write-Host ""
+Write-Host "Executable:        $ExePath" -ForegroundColor Yellow
+Write-Host "Size:              $((Get-Item $ExePath).Length / 1MB)MB" -ForegroundColor Yellow
+Write-Host "Built:             $(Get-Item $ExePath | Select-Object -ExpandProperty LastWriteTime)" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Data folder (exe): %LOCALAPPDATA%\$AppName" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Cyan
+Write-Host "  1. Close any running $AppName instance"
+Write-Host "  2. Run: $ExePath"
+Write-Host "  3. If issues occur, check: %LOCALAPPDATA%\$AppName\pos.log"
 Write-Host ""
