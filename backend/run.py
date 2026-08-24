@@ -209,7 +209,8 @@ def main():
     webview.start(gui='edgechromium', debug=False)
 
     # After webview.start() returns (user closed the window), shut down the server cleanly
-    logger.info("Window closed, shutting down server")
+    if not tray_initiated_exit:
+        logger.info("Window closed, shutting down server")
 
     # Stop the tray icon if it was started
     if tray_icon is not None:
