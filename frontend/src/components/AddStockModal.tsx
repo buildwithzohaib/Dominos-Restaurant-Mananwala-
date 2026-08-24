@@ -78,77 +78,92 @@ export function AddStockModal({
         <p className="eyebrow">INVENTORY</p>
         <h2>Add Stock</h2>
 
-        <div className="modal-field-grid">
-          <label className="modal-field full">
-            Item
-            <select
-              value={productId}
-              onChange={(e) => selectProduct(Number(e.target.value))}
+        {products.length === 0 ? (
+          <div className="error-box" style={{ marginBottom: "16px" }}>
+            <p style={{ marginBottom: "12px" }}>No products yet. Create one first.</p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
             >
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name_display} ({p.sku})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="modal-field">
-            Quantity
-            <input
-              autoFocus
-              type="number"
-              min="1"
-              value={quantity}
-              onChange={(e) =>
-                setQuantity(e.target.value === "" ? "" : Number(e.target.value))
-              }
-            />
-          </label>
-
-          <label className="modal-field">
-            Purchase Price
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={purchasePriceText}
-              onChange={(e) => setPurchasePriceText(e.target.value)}
-            />
-          </label>
-
-          <label className="modal-field full">
-            Supplier
-            <input
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-              placeholder="e.g. ABC Traders"
-            />
-          </label>
-        </div>
-
-        <div className="stock-preview">
-          <div>
-            <span>Current Stock</span>
-            <strong>{selected?.stock ?? 0}</strong>
+              Go to Products
+            </button>
           </div>
-          <div className="arrow">→</div>
-          <div>
-            <span>New Stock</span>
-            <strong>{newStock}</strong>
-          </div>
-        </div>
+        ) : (
+          <>
+            <div className="modal-field-grid">
+              <label className="modal-field full">
+                Item
+                <select
+                  value={productId}
+                  onChange={(e) => selectProduct(Number(e.target.value))}
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name_display} ({p.sku})
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-        {error && <div className="error-box">{error}</div>}
+              <label className="modal-field">
+                Quantity
+                <input
+                  autoFocus
+                  type="number"
+                  min="1"
+                  value={quantity}
+                  onChange={(e) =>
+                    setQuantity(e.target.value === "" ? "" : Number(e.target.value))
+                  }
+                />
+              </label>
 
-        <div className="modal-action-row">
-          <button className="secondary-button" onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button className="pay-button" disabled={!canSave} onClick={save}>
-            {busy ? "Saving..." : "Add Stock"}
-          </button>
-        </div>
+              <label className="modal-field">
+                Purchase Price
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={purchasePriceText}
+                  onChange={(e) => setPurchasePriceText(e.target.value)}
+                />
+              </label>
+
+              <label className="modal-field full">
+                Supplier
+                <input
+                  value={supplier}
+                  onChange={(e) => setSupplier(e.target.value)}
+                  placeholder="e.g. ABC Traders"
+                />
+              </label>
+            </div>
+
+            <div className="stock-preview">
+              <div>
+                <span>Current Stock</span>
+                <strong>{selected?.stock ?? 0}</strong>
+              </div>
+              <div className="arrow">→</div>
+              <div>
+                <span>New Stock</span>
+                <strong>{newStock}</strong>
+              </div>
+            </div>
+
+            {error && <div className="error-box">{error}</div>}
+
+            <div className="modal-action-row">
+              <button className="secondary-button" onClick={onClose} disabled={busy}>
+                Cancel
+              </button>
+              <button className="pay-button" disabled={!canSave} onClick={save}>
+                {busy ? "Saving..." : "Add Stock"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

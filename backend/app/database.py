@@ -5,8 +5,27 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
-def get_data_dir() -> str:
+def get_resource_base() -> str:
     """
+    Return the base path for bundled resources (frontend/dist, alembic, alembic.ini).
+
+    When frozen by PyInstaller, resources are unpacked to sys._MEIPASS.
+    In development, resources are relative to the repository root.
+
+    Returns:
+        Absolute path to the resource base directory
+    """
+    if getattr(sys, "frozen", False):
+        # PyInstaller: resources are in sys._MEIPASS
+        return sys._MEIPASS
+    else:
+        # Development: resources are in the repo root (parent of backend)
+        backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.dirname(backend_dir)
+
+
+def get_data_dir() -> str:
+    r"""
     Determine the data directory for the application at runtime.
 
     Priority (first match wins):

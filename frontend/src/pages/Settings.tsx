@@ -317,43 +317,6 @@ export function Settings() {
       )}
 
       <form onSubmit={handleSave} className="settings-form">
-        {/* Restaurant Information */}
-        <fieldset>
-          <legend>Restaurant Information</legend>
-
-          <label>
-            Restaurant Name
-            <input
-              type="text"
-              value={restaurantName}
-              onChange={(e) => setRestaurantName(e.target.value)}
-              placeholder="Enter restaurant name"
-            />
-          </label>
-
-          <label>
-            Address
-            <textarea
-              value={restaurantAddress}
-              onChange={(e) => setRestaurantAddress(e.target.value)}
-              placeholder="Enter restaurant address"
-              rows={3}
-              maxLength={100}
-            />
-            <span className="char-count">{restaurantAddress.length} / 100</span>
-          </label>
-
-          <label>
-            Phone
-            <input
-              type="tel"
-              value={restaurantPhone}
-              onChange={(e) => setRestaurantPhone(e.target.value)}
-              placeholder="Enter phone number"
-            />
-          </label>
-        </fieldset>
-
         {/* Financial Settings */}
         <fieldset>
           <legend>Financial Settings</legend>
@@ -661,37 +624,79 @@ export function Settings() {
           v1.0
         </button>
 
-        {/* Hidden Appearance Section (unlocked after 7 clicks) */}
+        {/* Hidden Setup Section (unlocked after 7 clicks) */}
         {versionClickCount >= 7 && (
           <fieldset className="appearance-fieldset">
-            <legend>Appearance</legend>
-            <div className="theme-swatches">
-              {(Object.keys(THEME_PALETTE) as ThemeKey[]).map((themeKey) => {
-                const themeInfo = THEME_PALETTE[themeKey];
-                const isSelected = selectedTheme === themeKey;
-                return (
-                  <button
-                    key={themeKey}
-                    type="button"
-                    className={`theme-swatch ${isSelected ? "selected" : ""}`}
-                    onClick={() => handleThemeSwitchClick(themeKey)}
-                    title={themeInfo.name}
-                    aria-label={`Select ${themeInfo.name} theme`}
-                  >
-                    <div className="theme-swatch-colors">
-                      <div
-                        className="theme-swatch-accent"
-                        style={{ backgroundColor: themeInfo.accent }}
-                      ></div>
-                      <div
-                        className="theme-swatch-sidebar"
-                        style={{ backgroundColor: themeInfo.sidebar }}
-                      ></div>
-                    </div>
-                    <div className="theme-swatch-label">{themeInfo.name}</div>
-                  </button>
-                );
-              })}
+            <legend>Setup</legend>
+
+            {/* Restaurant Information */}
+            <div style={{ marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Restaurant Information</h3>
+
+              <label>
+                Restaurant Name
+                <input
+                  type="text"
+                  value={restaurantName}
+                  onChange={(e) => setRestaurantName(e.target.value)}
+                  placeholder="Enter restaurant name"
+                />
+              </label>
+
+              <label>
+                Address
+                <textarea
+                  value={restaurantAddress}
+                  onChange={(e) => setRestaurantAddress(e.target.value)}
+                  placeholder="Enter restaurant address"
+                  rows={3}
+                  maxLength={100}
+                />
+                <span className="char-count">{restaurantAddress.length} / 100</span>
+              </label>
+
+              <label>
+                Phone
+                <input
+                  type="tel"
+                  value={restaurantPhone}
+                  onChange={(e) => setRestaurantPhone(e.target.value)}
+                  placeholder="Enter phone number"
+                />
+              </label>
+            </div>
+
+            {/* Theme Picker */}
+            <div>
+              <h3 style={{ fontSize: "14px", fontWeight: "600", marginBottom: "12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Appearance</h3>
+              <div className="theme-swatches">
+                {(Object.keys(THEME_PALETTE) as ThemeKey[]).map((themeKey) => {
+                  const themeInfo = THEME_PALETTE[themeKey];
+                  const isSelected = selectedTheme === themeKey;
+                  return (
+                    <button
+                      key={themeKey}
+                      type="button"
+                      className={`theme-swatch ${isSelected ? "selected" : ""}`}
+                      onClick={() => handleThemeSwitchClick(themeKey)}
+                      title={themeInfo.name}
+                      aria-label={`Select ${themeInfo.name} theme`}
+                    >
+                      <div className="theme-swatch-colors">
+                        <div
+                          className="theme-swatch-accent"
+                          style={{ backgroundColor: themeInfo.accent }}
+                        ></div>
+                        <div
+                          className="theme-swatch-sidebar"
+                          style={{ backgroundColor: themeInfo.sidebar }}
+                        ></div>
+                      </div>
+                      <div className="theme-swatch-label">{themeInfo.name}</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </fieldset>
         )}

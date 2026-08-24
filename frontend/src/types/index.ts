@@ -49,5 +49,7 @@ export interface DashboardRange { range_type:string; window_start:string; window
 // Product Management (Phase 10)
 export interface ProductCreateInput { category_id:number; name:string; price:number; /* paisa */ purchase_price?:number; /* paisa */ stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
 export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; /* paisa */ purchase_price?:number; /* paisa */ min_stock?:number; sku?:string; unit?:string; image?:string; }
+// Form state for AddProductModal — separate from API types because category_id can be unset during form entry
+export interface ProductFormState { category_id:number|null; name:string; price:number; purchase_price?:number; stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
 // Authentication (Stage 7)
 export interface User { id:number; name:string; can_cancel:boolean; can_discount:boolean; can_manage_settings:boolean; is_active:boolean; is_owner:boolean; created_at:string; }

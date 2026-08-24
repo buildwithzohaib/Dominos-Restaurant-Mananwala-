@@ -21,7 +21,7 @@ from app.models import models  # noqa: F401
 from app.services import image_service  # Ensure storage dir is created
 from app.services.backup_service import create_backup, cleanup_old_backups, get_backup_dir
 from app.services.migration_service import run_migrations, setup_file_logging
-from app.database import DATA_DIR, DB_PATH, engine
+from app.database import DATA_DIR, DB_PATH, engine, get_resource_base
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Startup: set up logging, run migrations, then daily backup and cleanup old backups."""
     backup_dir = get_backup_dir(DATA_DIR)
-    alembic_dir = Path(__file__).parent.parent / "alembic"
+    resource_base = get_resource_base()
+    alembic_dir = Path(resource_base) / "backend" / "alembic"
 
     # STEP 0: Set up file logging (before anything else, so migration events are captured)
     setup_file_logging(DATA_DIR)
@@ -83,7 +84,8 @@ def health():
 # Mount built frontend assets and serve index.html for SPA routing
 # CRITICAL: This must be LAST so all API routes are matched first.
 # FastAPI matches routes in declaration order; the catch-all must come last.
-frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+resource_base = get_resource_base()
+frontend_dist = Path(resource_base) / "frontend" / "dist"
 if frontend_dist.exists():
     # Mount /assets for built assets (JS, CSS, etc.)
     app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")

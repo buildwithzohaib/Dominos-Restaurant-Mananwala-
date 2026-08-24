@@ -18,6 +18,7 @@ from alembic.config import Config as AlembicConfig
 from alembic.script import ScriptDirectory
 from alembic.migration import MigrationContext
 from alembic.command import upgrade as alembic_upgrade
+from app.database import get_resource_base
 
 # Use uvicorn's error logger so messages appear in console alongside uvicorn's own output
 logger = logging.getLogger("uvicorn.error")

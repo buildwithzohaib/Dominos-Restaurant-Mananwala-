@@ -17,6 +17,10 @@ from app.services.sku_service import generate_sku
 def create_product(db: Session, payload: ProductCreate) -> Product:
     """Create a new product with validation"""
 
+    # Validate that category is provided
+    if not payload.category_id:
+        raise HTTPException(400, "Category is required.")
+
     # Validate required fields
     if not payload.name or not payload.name.strip():
         raise HTTPException(400, "Product name is required.")
