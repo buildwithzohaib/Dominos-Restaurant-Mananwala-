@@ -55,6 +55,7 @@ class Product(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     category: Mapped["Category"] = relationship(back_populates="products")
+    sizes: Mapped[list["ProductSize"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
     @property
     def status(self) -> str:
@@ -69,6 +70,26 @@ class Product(Base):
         if self.stock <= self.min_stock:
             return "LOW_STOCK"
         return "IN_STOCK"
+
+class ProductSize(Base):
+    """Size variants for a product. Each product can have multiple sizes (e.g., Small/Medium/Large)
+    with different prices. Sizes are product-specific, not global.
+    Rule 5 (polymorphic stock ledger) reserves size tracking for Phase 12+; this phase only affects price.
+    """
+    __tablename__ = "product_sizes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))  # e.g., "Small", "F1", "Roll"
+    price: Mapped[int] = mapped_column(Integer)  # selling price in paisa, same convention as Product.price
+    sort_order: Mapped[int] = mapped_column(Integer)  # display order in menu (1, 2, 3...), not alphabetical
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    product: Mapped["Product"] = relationship(back_populates="sizes")
+
+    __table_args__ = (
+        UniqueConstraint('product_id', 'name', name='uq_product_size_name'),
+    )
 
 class StockMovement(Base):
     """Task 0.7 ledger (polymorphic) — every stock change for products or ingredients
@@ -227,6 +248,7 @@ class OrderItem(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
     product_name: Mapped[str] = mapped_column(String(150))
+    size_name: Mapped[str | None] = mapped_column(String(100), nullable=True)  # size variant name (e.g., "Small"), NULL for unsized products
     quantity: Mapped[int] = mapped_column(Integer)
     price: Mapped[int] = mapped_column(Integer)
     line_total: Mapped[int] = mapped_column(Integer)
