@@ -6,10 +6,12 @@ export interface Settings { id:number; restaurant_name:string; restaurant_addres
 export interface SettingsUpdate { restaurant_name?:string; restaurant_address?:string; restaurant_phone?:string; currency_symbol?:string; tax_rate?:number; /* basis points */ tax_enabled?:boolean; delivery_charge?:number; /* paisa */ day_starts_at?:string; receipt_footer_text?:string; theme?:string; }
 export interface Category { id:number; name_display:string; active:boolean; }
 export interface CategoryInfo { id:number; name_display:string; active:boolean; }
+// Product sizes (Phase 10 Step 2) — size variants with individual prices
+export interface ProductSize { id:number; name:string; price:number; /* paisa */ sort_order:number; }
 // Inventory fields (Phase 3) live on the same Product row the POS/cart/receipt already
 // read — sku/min_stock/unit/purchase_price/stock_status/updated_at are additive, and
 // price/stock remain the single authoritative selling-price/current-stock values.
-export interface Product { id:number; category_id:number; category:CategoryInfo; name_display:string; price:number; /* paisa */ stock:number; image?:string|null; image_hash?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; updated_at:string; }
+export interface Product { id:number; category_id:number; category:CategoryInfo; name_display:string; price:number; /* paisa */ stock:number; image?:string|null; image_hash?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; sizes:ProductSize[]; /* size variants, empty if no sizes */ updated_at:string; }
 export interface InventoryUpdateInput { name?:string; sku?:string; min_stock?:number; unit?:string; purchase_price?:number; /* paisa */ price?:number; /* paisa */ }
 // Stock operations (Phase 4–8) — every change to Product.stock writes one of
 // these ledger rows in the same backend transaction; Product.stock stays the only
@@ -47,9 +49,10 @@ export interface DailySale { date:string; revenue:number; /* paisa */ }
 export interface StaffMetrics { user_id:number|null; user_name:string|null; sales:number; /* paisa */ orders:number; cancelled:number; discount_total:number; /* paisa */ }
 export interface DashboardRange { range_type:string; window_start:string; window_end:string; sales:number; /* paisa */ sales_previous:number; profit:number; profit_margin_pct:number; orders_missing_cost:number; orders:number; average_order_value:number; /* paisa */ cash_orders:number; card_orders:number; other_orders:number; cash_sales:number; /* paisa */ card_sales:number; /* paisa */ discount_total:number; /* paisa */ discount_order_count:number; cancelled_count:number; cancelled_value:number; /* paisa */ dine_in_count:number; takeaway_count:number; delivery_count:number; low_stock_count:number; daily_sales:DailySale[]; hourly_sales:HourlySale[]; top_products:TopProduct[]; slow_products:TopProduct[]; per_staff:StaffMetrics[]; }
 // Product Management (Phase 10)
-export interface ProductCreateInput { category_id:number; name:string; price:number; /* paisa */ purchase_price?:number; /* paisa */ stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
-export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; /* paisa */ purchase_price?:number; /* paisa */ min_stock?:number; sku?:string; unit?:string; image?:string; }
+export interface ProductCreateInput { category_id:number; name:string; price:number; /* paisa */ purchase_price?:number; /* paisa */ stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; sizes?:ProductSizeInput[]; /* optional size variants */ }
+export interface ProductUpdateInput { category_id?:number; name?:string; price?:number; /* paisa */ purchase_price?:number; /* paisa */ min_stock?:number; sku?:string; unit?:string; image?:string; sizes?:ProductSizeInput[]; /* optional size variants, undefined = unchanged */ }
+export interface ProductSizeInput { name:string; price:number; /* paisa */ sort_order:number; }
 // Form state for AddProductModal — separate from API types because category_id can be unset during form entry
-export interface ProductFormState { category_id:number|null; name:string; price:number; purchase_price?:number; stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; }
+export interface ProductFormState { category_id:number|null; name:string; price:number; purchase_price?:number; stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; has_sizes:boolean; sizes:ProductSizeInput[]; }
 // Authentication (Stage 7)
 export interface User { id:number; name:string; can_cancel:boolean; can_discount:boolean; can_manage_settings:boolean; is_active:boolean; is_owner:boolean; created_at:string; }

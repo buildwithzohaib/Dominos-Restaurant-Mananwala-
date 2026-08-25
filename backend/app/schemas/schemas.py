@@ -89,6 +89,28 @@ class CategoryCreate(BaseModel):
 class CategoryUpdate(BaseModel):
     name: str
 
+# --- Product Sizes (Phase 10 Step 2) ---
+
+class ProductSizeOut(BaseModel):
+    """Size variant for a product. Each size has its own price and display order."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str  # e.g., "Small", "F1", "Roll"
+    price: int  # paisa, selling price for this size
+    sort_order: int  # display order (1, 2, 3...), not alphabetical
+
+class ProductSizeCreate(BaseModel):
+    """Create a size for a product."""
+    name: str = Field(min_length=1, max_length=100)
+    price: int = Field(gt=0)  # paisa
+    sort_order: int = Field(ge=1)
+
+class ProductSizeUpdate(BaseModel):
+    """Update a size. All fields optional."""
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    price: int | None = Field(default=None, gt=0)  # paisa
+    sort_order: int | None = Field(default=None, ge=1)
+
 class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -106,6 +128,7 @@ class ProductOut(BaseModel):
     unit: str
     purchase_price: int  # paisa
     stock_status: str
+    sizes: list[ProductSizeOut] = []  # size variants, empty if product has no sizes
     updated_at: datetime
 
 class TableOut(BaseModel):
@@ -371,19 +394,31 @@ class DashboardRangeOut(BaseModel):
 # --- Product Management (Phase 10) ---
 
 class ProductCreate(BaseModel):
-    """Create a new product. price and purchase_price in paisa."""
+    """Create a new product. price and purchase_price in paisa.
+
+    If sizes is provided and non-empty, the product is created with sizes.
+    For sized products, price is ignored (sizes provide the pricing).
+    """
     category_id: int
     name: str = Field(min_length=1, max_length=150)
-    price: int = Field(gt=0)  # paisa
+    price: int = Field(gt=0)  # paisa (ignored if sizes provided)
     purchase_price: int | None = Field(default=None, ge=0)  # paisa
     stock: int = Field(default=0, ge=0)
     min_stock: int = Field(default=5, ge=0)
     sku: str | None = Field(default=None, max_length=50)
     unit: str = Field(min_length=1, max_length=30)
     image: str | None = Field(default=None, max_length=500)
+    sizes: list[ProductSizeCreate] | None = Field(default=None)  # optional size variants
 
 class ProductUpdate(BaseModel):
-    """Update product. price and purchase_price in paisa. SKU is immutable."""
+    """Update product. price and purchase_price in paisa. SKU is immutable.
+
+    If sizes is provided, it replaces the complete set of sizes for the product:
+    - Sizes in the list are created or updated (identified by name)
+    - Sizes not in the list are removed
+    - Empty list means remove all sizes
+    - None means leave sizes unchanged
+    """
     category_id: int | None = None
     name: str | None = Field(default=None, min_length=1, max_length=150)
     price: int | None = Field(default=None, gt=0)  # paisa
@@ -391,6 +426,7 @@ class ProductUpdate(BaseModel):
     min_stock: int | None = Field(default=None, ge=0)
     unit: str | None = Field(default=None, min_length=1, max_length=30)
     image: str | None = Field(default=None, max_length=500)
+    sizes: list[ProductSizeCreate] | None = Field(default=None)  # optional size variants, None = unchanged
 
 # --- Customers (Phase 3.2) ---
 

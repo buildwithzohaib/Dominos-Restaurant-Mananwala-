@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { X, Upload } from "lucide-react";
+import { X, Upload, Plus, Trash2 } from "lucide-react";
 import { api, API_URL } from "../services/api";
 import { rupeesToPaisa, paisaToRupees } from "../utils/money";
 import { useCatalog } from "../context/CatalogContext";
-import type { Category, Product, ProductUpdateInput } from "../types";
+import type { Category, Product, ProductUpdateInput, ProductSizeInput } from "../types";
 
 export function EditProductModal({
   product,
@@ -17,6 +17,7 @@ export function EditProductModal({
   onSaved: (product: Product) => void;
 }) {
   const { refresh } = useCatalog();
+  const hasSizes = product.sizes && product.sizes.length > 0;
   const [formData, setFormData] = useState<ProductUpdateInput>({
     name: product.name_display,
     category_id: product.category_id,
@@ -24,7 +25,13 @@ export function EditProductModal({
     purchase_price: Number(product.purchase_price),
     min_stock: product.min_stock,
     unit: product.unit,
+    sizes: hasSizes ? product.sizes.map(s => ({ name: s.name, price: s.price, sort_order: s.sort_order })) : undefined,
   });
+
+  const [sizes, setSizes] = useState<ProductSizeInput[]>(
+    hasSizes ? product.sizes.map(s => ({ name: s.name, price: s.price, sort_order: s.sort_order })) : []
+  );
+  const [showSizeManagement, setShowSizeManagement] = useState(hasSizes);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -77,7 +84,43 @@ export function EditProductModal({
     }
   }
 
+  function addSize() {
+    const newSize: ProductSizeInput = {
+      name: "",
+      price: 0,
+      sort_order: sizes.length + 1,
+    };
+    setSizes([...sizes, newSize]);
+  }
+
+  function removeSize(index: number) {
+    setSizes(sizes.filter((_, i) => i !== index));
+  }
+
+  function updateSize(index: number, updates: Partial<ProductSizeInput>) {
+    const updated = [...sizes];
+    updated[index] = { ...updated[index], ...updates };
+    setSizes(updated);
+  }
+
   async function submit() {
+    if (showSizeManagement) {
+      if (sizes.length === 0) {
+        setError("Add at least one size when sizes are enabled");
+        return;
+      }
+      for (const size of sizes) {
+        if (!size.name || !size.name.trim()) {
+          setError("Size name cannot be empty");
+          return;
+        }
+        if (size.price <= 0) {
+          setError("Size price must be positive");
+          return;
+        }
+      }
+    }
+
     setBusy(true);
     setError("");
     try {
@@ -85,6 +128,7 @@ export function EditProductModal({
         ...formData,
         price: priceText !== "" ? rupeesToPaisa(parseFloat(priceText) || 0) : undefined,
         purchase_price: purchasePriceText !== "" ? rupeesToPaisa(parseFloat(purchasePriceText) || 0) : undefined,
+        sizes: showSizeManagement ? sizes : undefined,
       });
       onSaved(updated);
     } catch (e) {
@@ -146,13 +190,35 @@ export function EditProductModal({
           </label>
 
           <label className="modal-field">
-            Selling Price
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span>Selling Price</span>
+              <label style={{ fontSize: "12px", fontWeight: "normal", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={showSizeManagement}
+                  onChange={(e) => {
+                    setShowSizeManagement(e.target.checked);
+                    if (e.target.checked && sizes.length === 0) {
+                      setSizes([{ name: "", price: 0, sort_order: 1 }]);
+                    }
+                  }}
+                />
+                Enable Sizes
+              </label>
+            </div>
             <input
               type="number"
               step="0.01"
               value={priceText}
               onChange={(e) => setPriceText(e.target.value)}
+              disabled={showSizeManagement}
+              style={{ opacity: showSizeManagement ? 0.5 : 1 }}
             />
+            {showSizeManagement && (
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                Sizes define the price for this product
+              </div>
+            )}
           </label>
 
           <label className="modal-field">
@@ -186,6 +252,72 @@ export function EditProductModal({
             />
           </label>
         </div>
+
+        {showSizeManagement && (
+          <div style={{ marginTop: "20px" }}>
+            <p className="modal-label">Sizes</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {sizes.map((size, index) => (
+                <div key={index} style={{ display: "grid", gridTemplateColumns: "1fr 100px 40px", gap: "8px", alignItems: "end" }}>
+                  <input
+                    type="text"
+                    placeholder="Size name (e.g., Small)"
+                    value={size.name}
+                    onChange={(e) => updateSize(index, { name: e.target.value })}
+                    style={{ padding: "8px", border: "1px solid var(--border)", borderRadius: "6px", fontSize: "13px" }}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Price"
+                    step="0.01"
+                    value={size.price > 0 ? paisaToRupees(size.price) : ""}
+                    onChange={(e) =>
+                      updateSize(index, { price: rupeesToPaisa(parseFloat(e.target.value) || 0) })
+                    }
+                    style={{ padding: "8px", border: "1px solid var(--border)", borderRadius: "6px", fontSize: "13px" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSize(index)}
+                    style={{
+                      padding: "6px",
+                      background: "var(--danger-bg)",
+                      color: "var(--danger-text)",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    title="Remove size"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addSize}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 12px",
+                  background: "var(--surface-alt)",
+                  color: "var(--text)",
+                  border: "1px dashed var(--border)",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                }}
+              >
+                <Plus size={16} />
+                Add Size
+              </button>
+            </div>
+          </div>
+        )}
 
         {product.image && (
           <div style={{ marginTop: "12px", marginBottom: "12px" }}>

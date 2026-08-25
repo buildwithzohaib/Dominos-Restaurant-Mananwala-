@@ -1233,6 +1233,12 @@ h2 {
   color: var(--danger-text);
 }
 
+.status-badge.size-options {
+  background: var(--info-bg);
+  color: var(--info);
+  font-weight: 600;
+}
+
 
 .inventory-modal {
   position: relative;

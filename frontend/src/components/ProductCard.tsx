@@ -18,6 +18,7 @@ export function ProductCard({
   // re-deriving availability from stock/available locally — one status
   // calculation, computed on the server, read everywhere.
   const outOfStock = product.stock_status === "OUT_OF_STOCK";
+  const hasSizes = product.sizes && product.sizes.length > 0;
   const showImage = product.image && !imageError;
 
   return (
@@ -42,6 +43,8 @@ export function ProductCard({
         <strong>{product.name_display}</strong>
         {outOfStock ? (
           <span className="status-badge out-of-stock">Out of Stock</span>
+        ) : hasSizes ? (
+          <span className="status-badge size-options">Choose Size</span>
         ) : (
           <>
             <span>{formatCurrency(product.price)}</span>

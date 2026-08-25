@@ -8,8 +8,8 @@ from fastapi import HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import Product, Category
-from app.schemas.schemas import ProductCreate, ProductUpdate
+from app.models.models import Product, Category, ProductSize
+from app.schemas.schemas import ProductCreate, ProductUpdate, ProductSizeCreate
 from app.utils.normalization import derive_key, normalize_display
 from app.services.sku_service import generate_sku
 
@@ -70,6 +70,19 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
     else:
         sku = generate_sku(db, payload.category_id, category.name_key, name_key)
 
+    # Validate sizes if provided
+    if payload.sizes:
+        size_names = set()
+        for size in payload.sizes:
+            if not size.name or not size.name.strip():
+                raise HTTPException(400, "Size name cannot be empty.")
+            size_name_normalized = size.name.strip().lower()
+            if size_name_normalized in size_names:
+                raise HTTPException(400, f'Duplicate size name "{size.name}".')
+            size_names.add(size_name_normalized)
+            if size.price <= 0:
+                raise HTTPException(400, "Size price must be positive.")
+
     # Create product
     product = Product(
         category_id=payload.category_id,
@@ -86,6 +99,16 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
         image=payload.image
     )
 
+    # Add sizes if provided
+    if payload.sizes:
+        for i, size_payload in enumerate(payload.sizes, start=1):
+            size = ProductSize(
+                name=size_payload.name.strip(),
+                price=size_payload.price,
+                sort_order=size_payload.sort_order if size_payload.sort_order else i
+            )
+            product.sizes.append(size)
+
     db.add(product)
     try:
         db.commit()
@@ -99,7 +122,10 @@ def create_product(db: Session, payload: ProductCreate) -> Product:
 
 def get_product(db: Session, product_id: int, include_disabled: bool = False) -> Product:
     """Get a product by ID"""
-    product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+    product = db.query(Product).options(
+        joinedload(Product.category),
+        joinedload(Product.sizes)
+    ).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(404, "Product not found.")
     if not include_disabled and not product.available:
@@ -109,7 +135,10 @@ def get_product(db: Session, product_id: int, include_disabled: bool = False) ->
 
 def list_products(db: Session, search: str | None = None, include_disabled: bool = False) -> list[Product]:
     """List products with optional search"""
-    query = db.query(Product).options(joinedload(Product.category))
+    query = db.query(Product).options(
+        joinedload(Product.category),
+        joinedload(Product.sizes)
+    )
 
     if not include_disabled:
         query = query.filter(Product.available.is_(True))
@@ -127,7 +156,12 @@ def list_products(db: Session, search: str | None = None, include_disabled: bool
 
 
 def update_product(db: Session, product_id: int, payload: ProductUpdate) -> Product:
-    """Update product details (name, category, pricing, SKU, unit)"""
+    """Update product details (name, category, pricing, SKU, unit, sizes).
+
+    If sizes are provided, they replace the entire set: sizes in the list are
+    created/updated, sizes not in the list are deleted. All changes happen
+    in a single transaction.
+    """
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(404, "Product not found.")
@@ -194,6 +228,32 @@ def update_product(db: Session, product_id: int, payload: ProductUpdate) -> Prod
     # Update image
     if payload.image is not None:
         product.image = payload.image
+
+    # Update sizes if provided (None means leave unchanged)
+    if payload.sizes is not None:
+        # Validate all sizes first
+        size_names = set()
+        for size in payload.sizes:
+            if not size.name or not size.name.strip():
+                raise HTTPException(400, "Size name cannot be empty.")
+            size_name_normalized = size.name.strip().lower()
+            if size_name_normalized in size_names:
+                raise HTTPException(400, f'Duplicate size name "{size.name}".')
+            size_names.add(size_name_normalized)
+            if size.price <= 0:
+                raise HTTPException(400, "Size price must be positive.")
+
+        # Delete all existing sizes and create new ones (replace mode)
+        db.query(ProductSize).filter(ProductSize.product_id == product_id).delete()
+
+        for i, size_payload in enumerate(payload.sizes, start=1):
+            size = ProductSize(
+                product_id=product_id,
+                name=size_payload.name.strip(),
+                price=size_payload.price,
+                sort_order=size_payload.sort_order if size_payload.sort_order else i
+            )
+            db.add(size)
 
     product.updated_at = datetime.utcnow()
     db.commit()
