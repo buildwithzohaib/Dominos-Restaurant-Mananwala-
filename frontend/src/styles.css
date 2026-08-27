@@ -1237,6 +1237,32 @@ h2 {
   background: var(--info-bg);
   color: var(--info);
   font-weight: 600;
+  display: block;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+/* Size option button rows in modal — primary text on modal surface background */
+.size-option-button {
+  color: var(--text);
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.size-option-button:hover:not(:disabled) {
+  box-shadow: 0 2px 8px #0001;
+}
+
+.size-option-button:disabled {
+  cursor: not-allowed;
 }
 
 

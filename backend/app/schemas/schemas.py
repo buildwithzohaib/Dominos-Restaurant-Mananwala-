@@ -147,8 +147,11 @@ class TableRename(BaseModel):
     name: str = Field(max_length=50)
 
 class OrderItemCreate(BaseModel):
+    """Create or add an order item. If product has sizes, size_id is required.
+    If product has no sizes, size_id must be omitted."""
     product_id: int
     quantity: int = Field(gt=0)
+    size_id: int | None = Field(default=None)  # required for sized products, forbidden for unsized
 
 class OrderCreate(BaseModel):
     """Create a new order. All money values in paisa.
@@ -199,6 +202,7 @@ class OrderItemOut(BaseModel):
     id: int
     product_id: int
     product_name: str
+    size_name: str | None = None  # size variant name, NULL for unsized products
     quantity: int
     price: int  # paisa
     line_total: int  # paisa

@@ -101,8 +101,10 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
           state.cart.map((i) => {
             const productId=i.kind==="local"?i.product.id:i.productId;
             const productName=i.kind==="local"?i.product.name_display:i.productName;
-            const productPrice=i.kind==="local"?i.product.price:i.price;
-            const rowKey=i.kind==="local"?`local-${i.product.id}`:`server-${i.itemId}`;
+            const sizeName=i.kind==="local"?i.sizeName:i.sizeName;
+            const displayName=sizeName?`${productName} (${sizeName})`:productName;
+            const productPrice=i.kind==="local"?(i.sizePrice??i.product.price):i.price;
+            const rowKey=i.kind==="local"?`local-${i.product.id}-${i.sizeId??""}`:`server-${i.itemId}`;
             const isLocal=i.kind==="local";
             const atStockLimit=isLocal&&i.quantity>=i.product.stock;
 
@@ -111,7 +113,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
             return (
               <div className={`cart-row ${isSent ? "cart-row-sent" : ""}`} key={rowKey}>
                 <div className="cart-main">
-                  <strong>{productName}</strong>
+                  <strong>{displayName}</strong>
 
                   <span>
                     {formatCurrency(productPrice)} each
@@ -130,7 +132,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                     onClick={async () => {
                       try {
                         if (i.kind === "local") {
-                          setQty(productId, i.quantity - 1);
+                          setQty(productId, i.quantity - 1, i.sizeId);
                         } else {
                           await setQtyOnServerItem(state.serverId!, i.itemId, i.quantity - 1);
                         }
@@ -152,7 +154,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                     onClick={async () => {
                       try {
                         if (i.kind === "local") {
-                          setQty(productId, i.quantity + 1);
+                          setQty(productId, i.quantity + 1, i.sizeId);
                         } else {
                           await setQtyOnServerItem(state.serverId!, i.itemId, i.quantity + 1);
                         }
@@ -187,7 +189,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                           });
                           loadOrder(updated);
                         } else if (i.kind === "local") {
-                          removeProduct(productId);
+                          removeProduct(productId, i.sizeId);
                         } else {
                           await removeServerItem(state.serverId!, i.itemId);
                         }

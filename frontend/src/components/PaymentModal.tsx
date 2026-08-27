@@ -100,6 +100,7 @@ export function PaymentModal({
           items: state.cart.map((i) => ({
             product_id: i.kind==="local"?i.product.id:i.productId,
             quantity: i.quantity,
+            size_id: i.kind==="local"?i.sizeId:undefined,
           })),
 
           discount: discountToSubmit,

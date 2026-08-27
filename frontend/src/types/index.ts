@@ -26,8 +26,8 @@ export interface StockReconciliationItemIn { product_id:number; counted_quantity
 export interface StockReconciliationIn { items:StockReconciliationItemIn[]; }
 export interface RestaurantTable { id:number; name:string; seats:number; active?:boolean; }
 export interface RestaurantTableNested { id:number; name:string; seats:number; }
-export type CartItem={kind:"local";product:Product;quantity:number}|{kind:"server";itemId:number;productId:number;productName:string;price:number;lineTotal:number;quantity:number;batchId:number|null;sentAt:string|null};
-export interface OrderItem { id:number; product_id:number; product_name:string; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ batch_id:number|null; sent_at:string|null; }
+export type CartItem={kind:"local";product:Product;quantity:number;sizeId?:number;sizeName?:string;sizePrice?:number}|{kind:"server";itemId:number;productId:number;productName:string;sizeName:string|null;price:number;lineTotal:number;quantity:number;batchId:number|null;sentAt:string|null};
+export interface OrderItem { id:number; product_id:number; product_name:string; size_name:string|null; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ batch_id:number|null; sent_at:string|null; }
 // Customers (Phase 3.2–3.5)
 export interface Customer { id:number; name_display:string; phone_raw:string|null; phone_key:string|null; address:string|null; /* Phase 3.5: last used delivery address */ is_active:boolean; created_at:string; updated_at:string; }
 export interface CustomerInfo { id:number; name_display:string; phone_raw:string|null; }

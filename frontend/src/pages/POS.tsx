@@ -9,6 +9,7 @@ import {
 } from "../components/PaymentModal";
 import { ProductCard } from "../components/ProductCard";
 import { SuccessModal } from "../components/SuccessModal";
+import { SizeSelectModal } from "../components/SizeSelectModal";
 
 import { usePOS } from "../context/POSContext";
 import { useCatalog } from "../context/CatalogContext";
@@ -42,6 +43,7 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
   const [openOrderCount, setOpenOrderCount] = useState(0);
   const [isAddingToDineIn, setIsAddingToDineIn] = useState(false);
   const addingRef = useRef(false);
+  const [selectedProductForSize, setSelectedProductForSize] = useState<Product | null>(null);
 
   // Fetch open order count
   const refreshOpenOrders = async () => {
@@ -63,6 +65,13 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
   const handleAddProduct = async (product: Product) => {
     if (addingRef.current) return; // Refuse if request already in flight
 
+    // If product has sizes, open the size selection modal
+    if (product.sizes && product.sizes.length > 0) {
+      setSelectedProductForSize(product);
+      return;
+    }
+
+    // Product has no sizes; proceed with adding
     if (state.orderType === "DINE_IN") {
       if (!state.selectedTable) {
         setAddError("Select a table first");
@@ -93,6 +102,45 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
       }
     } else {
       addProduct(product);
+    }
+  };
+
+  const handleSizeSelected = async (size: import("../types").ProductSize) => {
+    const product = selectedProductForSize;
+    if (!product) return;
+
+    setSelectedProductForSize(null);
+
+    if (state.orderType === "DINE_IN") {
+      if (!state.selectedTable) {
+        setAddError("Select a table first");
+        return;
+      }
+      try {
+        setAddError("");
+        addingRef.current = true;
+        setIsAddingToDineIn(true);
+        const isNewOrder = !state.serverId;
+        await addProductToDineIn(state.selectedTable.id, product, size.id);
+        // If this was the first item (new order opened), update the count immediately
+        if (isNewOrder) {
+          refreshOpenOrders();
+        }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to add item";
+        if (isOrderNotOpenError(msg)) {
+          clear();
+          setAddError("This tab is no longer open — it may have been paid or cancelled on another terminal.");
+        } else {
+          const detail = state.serverId && state.selectedTable ? ` The tab is open on ${state.selectedTable.name} and can be managed from Active Orders.` : "";
+          setAddError(msg + detail);
+        }
+      } finally {
+        addingRef.current = false;
+        setIsAddingToDineIn(false);
+      }
+    } else {
+      addProduct(product, size.id, size.name, size.price);
     }
   };
 
@@ -399,6 +447,16 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
           onClose={() =>
             setSuccess(null)
           }
+        />
+
+      )}
+
+      {selectedProductForSize && (
+
+        <SizeSelectModal
+          product={selectedProductForSize}
+          onClose={() => setSelectedProductForSize(null)}
+          onSelect={handleSizeSelected}
         />
 
       )}

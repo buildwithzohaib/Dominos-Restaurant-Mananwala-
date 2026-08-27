@@ -7,7 +7,7 @@ from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings
+from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings, ProductSize
 from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, PayOrderIn, UpdatePendingItemIn
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,34 @@ CANCEL_REASON_LABELS = {
     "DUPLICATE_ORDER": "Duplicate order",
     "OTHER": "Other",
 }
+
+
+def _validate_and_resolve_item_price(db: Session, product: Product, size_id: int | None) -> tuple[int, str | None]:
+    """
+    Validate size_id for a product and return the price and size_name.
+
+    If product has sizes, size_id must be provided and must exist.
+    If product has no sizes, size_id must be None.
+
+    Returns: (price_in_paisa, size_name_or_none)
+    Raises: HTTPException for validation errors
+    """
+    has_sizes = product.sizes and len(product.sizes) > 0
+
+    if has_sizes:
+        if size_id is None:
+            raise HTTPException(400, f'"{product.name_display}" requires a size selection.')
+        size = db.query(ProductSize).filter(
+            ProductSize.id == size_id,
+            ProductSize.product_id == product.id
+        ).first()
+        if not size:
+            raise HTTPException(400, f'Selected size does not exist or does not belong to "{product.name_display}".')
+        return size.price, size.name
+    else:
+        if size_id is not None:
+            raise HTTPException(400, f'"{product.name_display}" does not have sizes.')
+        return product.price, None
 
 def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | None = None) -> Order:
     # Validate table
@@ -39,28 +67,38 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
         if not customer.is_active:
             raise HTTPException(400, f'"{customer.name_display}" is inactive.')
 
-    # Aggregate by product in case the same product appears on more than one line,
-    # so overselling checks compare against the *total* requested quantity.
-    requested: dict[int, int] = defaultdict(int)
-    for item in payload.items:
-        requested[item.product_id] += item.quantity
-
+    # Validate sizes and resolve prices for each item; aggregate by product for stock checks
+    item_details: list[tuple[int, int, int | None, int, str | None]] = []  # (product_id, quantity, size_id, price, size_name)
+    requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity
     subtotal = 0
-    products: dict[int, Product] = {}
-    for product_id, quantity in requested.items():
-        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+
+    for item in payload.items:
+        product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes)).filter(Product.id == item.product_id).first()
         if not product:
             raise HTTPException(400, "Product not found.")
         if not product.available:
             raise HTTPException(400, f'"{product.name_display}" is disabled.')
         if not product.category.active:
             raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
+
+        # Validate size (if any) and get the price
+        price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
+
+        item_details.append((item.product_id, item.quantity, item.size_id, price, size_name))
+        requested[item.product_id] += item.quantity
+        subtotal += price * item.quantity
+
+    # Stock validation: check if enough stock for total quantity per product
+    products: dict[int, Product] = {}
+    for product_id, total_quantity in requested.items():
+        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(400, "Product not found.")
         if product.stock <= 0:
             raise HTTPException(400, f'"{product.name_display}" is out of stock.')
-        if product.stock < quantity:
+        if product.stock < total_quantity:
             raise HTTPException(400, f'Only {product.stock} of "{product.name_display}" available.')
         products[product_id] = product
-        subtotal += product.price * quantity
 
     # Get tax_rate and delivery_charge from settings (Rule 7: snapshot at order time)
     settings = db.query(Settings).filter(Settings.id == 1).first()
@@ -159,15 +197,6 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
         stock_after = product.stock
         stock_before = stock_after + quantity
 
-        db.add(OrderItem(
-            order_id=order.id,
-            product_id=product.id,
-            product_name=product.name_display,
-            quantity=quantity,
-            price=product.price,
-            line_total=product.price * quantity,
-            cost=product.purchase_price,
-        ))
         db.add(StockMovement(
             item_type="PRODUCT",
             item_id=product.id,
@@ -180,6 +209,20 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
             stock_before=stock_before,
             stock_after=stock_after,
             reference=order.order_number,
+        ))
+
+    # Create OrderItem rows for each item (now including size_name and size-resolved price)
+    for product_id, quantity, size_id, price, size_name in item_details:
+        product = products[product_id]
+        db.add(OrderItem(
+            order_id=order.id,
+            product_id=product.id,
+            product_name=product.name_display,
+            size_name=size_name,
+            quantity=quantity,
+            price=price,
+            line_total=price * quantity,
+            cost=product.purchase_price,
         ))
 
     db.commit()
@@ -415,21 +458,31 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
     if order.status != "OPEN":
         raise HTTPException(400, "Only an open order can be modified.")
 
-    # Aggregate incoming items by product_id
-    requested: dict[int, int] = defaultdict(int)
-    for item in payload.items:
-        requested[item.product_id] += item.quantity
+    # Validate sizes and resolve prices for each item; aggregate by product for stock checks
+    item_details: list[tuple[int, int, int | None, int, str | None]] = []  # (product_id, quantity, size_id, price, size_name)
+    requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity
 
-    # Validate each product and check stock, accounting for PENDING items
-    products: dict[int, Product] = {}
-    for product_id, quantity in requested.items():
-        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+    for item in payload.items:
+        product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes)).filter(Product.id == item.product_id).first()
         if not product:
             raise HTTPException(400, "Product not found.")
         if not product.available:
             raise HTTPException(400, f'"{product.name_display}" is disabled.')
         if not product.category.active:
             raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
+
+        # Validate size (if any) and get the price
+        price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
+
+        item_details.append((item.product_id, item.quantity, item.size_id, price, size_name))
+        requested[item.product_id] += item.quantity
+
+    # Validate stock, accounting for PENDING items
+    products: dict[int, Product] = {}
+    for product_id, quantity in requested.items():
+        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(400, "Product not found.")
         if product.stock <= 0:
             raise HTTPException(400, f'"{product.name_display}" is out of stock.')
 
@@ -450,17 +503,19 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
 
         products[product_id] = product
 
-    # Add or merge OrderItem rows for each aggregated product
+    # Add or merge OrderItem rows for each item
     # Do NOT decrement stock; no StockMovement rows are created
-    # For each product: if a PENDING line (batch_id IS NULL) exists, merge into it.
-    # Otherwise, create a new line. Never merge into sent lines (batch_id NOT NULL).
-    for product_id, quantity in requested.items():
+    # For sized items: merge key is product + size. For unsized: merge key is product only.
+    # If a PENDING line with same product and size exists, merge into it (increase quantity).
+    # Otherwise, create a new line.
+    for product_id, quantity, size_id, price, size_name in item_details:
         product = products[product_id]
 
-        # Look for an existing PENDING line (batch_id IS NULL) for this product
+        # Look for an existing PENDING line (batch_id IS NULL) for this product+size combo
         existing_pending = db.query(OrderItem).filter(
             OrderItem.order_id == order.id,
             OrderItem.product_id == product_id,
+            OrderItem.size_name == size_name,
             OrderItem.batch_id.is_(None),
         ).first()
 
@@ -469,14 +524,15 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
             existing_pending.quantity += quantity
             existing_pending.line_total = existing_pending.price * existing_pending.quantity
         else:
-            # No PENDING line exists; create a new one
+            # No PENDING line exists for this product+size; create a new one
             db.add(OrderItem(
                 order_id=order.id,
                 product_id=product.id,
                 product_name=product.name_display,
+                size_name=size_name,
                 quantity=quantity,
-                price=product.price,
-                line_total=product.price * quantity,
+                price=price,
+                line_total=price * quantity,
                 cost=product.purchase_price,
                 batch_id=None,
                 sent_at=None,

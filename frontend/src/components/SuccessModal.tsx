@@ -114,14 +114,17 @@ export function SuccessModal({
           </div>
 
           <div className="receipt-items">
-            {receipt.items.map((item) => (
-              <div className="receipt-item" key={item.id}>
-                <div className="receipt-col-name">{item.product_name}</div>
-                <div className="receipt-col-qty">{item.quantity}</div>
-                <div className="receipt-col-price">{formatBare(item.price)}</div>
-                <div className="receipt-col-total">{formatBare(item.line_total)}</div>
-              </div>
-            ))}
+            {receipt.items.map((item) => {
+              const displayName = item.size_name ? `${item.product_name} (${item.size_name})` : item.product_name;
+              return (
+                <div className="receipt-item" key={item.id}>
+                  <div className="receipt-col-name">{displayName}</div>
+                  <div className="receipt-col-qty">{item.quantity}</div>
+                  <div className="receipt-col-price">{formatBare(item.price)}</div>
+                  <div className="receipt-col-total">{formatBare(item.line_total)}</div>
+                </div>
+              );
+            })}
           </div>
 
           <div className="receipt-line" />
@@ -271,14 +274,17 @@ export function SuccessModal({
 
         <div className="receipt-divider">--------------------------------</div>
 
-        {receipt.items.map((item) => (
-          <div className="thermal-item" key={item.id}>
-            <div className="thermal-col-name">{item.product_name}</div>
-            <div className="thermal-col-qty">{item.quantity}</div>
-            <div className="thermal-col-price">{formatBare(item.price)}</div>
-            <div className="thermal-col-total">{formatBare(item.line_total)}</div>
-          </div>
-        ))}
+        {receipt.items.map((item) => {
+          const displayName = item.size_name ? `${item.product_name} (${item.size_name})` : item.product_name;
+          return (
+            <div className="thermal-item" key={item.id}>
+              <div className="thermal-col-name">{displayName}</div>
+              <div className="thermal-col-qty">{item.quantity}</div>
+              <div className="thermal-col-price">{formatBare(item.price)}</div>
+              <div className="thermal-col-total">{formatBare(item.line_total)}</div>
+            </div>
+          );
+        })}
 
         <div className="receipt-divider">--------------------------------</div>
 
