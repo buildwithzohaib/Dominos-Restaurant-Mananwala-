@@ -54,6 +54,9 @@ class Product(Base):
     purchase_price: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # --- Product type (Phase 11) — 'PRODUCT' for regular items, 'DEAL' for combo products ---
+    product_type: Mapped[str] = mapped_column(String(20), default="PRODUCT")
+
     category: Mapped["Category"] = relationship(back_populates="products")
     sizes: Mapped[list["ProductSize"]] = relationship(back_populates="product", cascade="all, delete-orphan")
 
@@ -89,6 +92,27 @@ class ProductSize(Base):
 
     __table_args__ = (
         UniqueConstraint('product_id', 'name', name='uq_product_size_name'),
+    )
+
+class DealComponent(Base):
+    """A component of a deal product. Each row defines one item that must be included
+    in the deal (e.g., Pizza + Drink + Burger). product_id points to the DEAL
+    (product with type='DEAL'), component_product_id points to the component product.
+    If size_id is specified, that component must use that size."""
+    __tablename__ = "deal_components"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))  # the deal (product with type='DEAL')
+    component_product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))  # the component product
+    quantity: Mapped[int] = mapped_column(Integer)  # qty required, e.g., 1
+    size_id: Mapped[int | None] = mapped_column(ForeignKey("product_sizes.id"), nullable=True)  # mandatory size if specified
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)  # display order in deal detail
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('ix_deal_components_product_id', 'product_id'),
+        Index('ix_deal_components_component_product_id', 'component_product_id'),
+        UniqueConstraint('product_id', 'component_product_id', 'size_id', name='uq_deal_component'),
     )
 
 class StockMovement(Base):
@@ -261,4 +285,37 @@ class OrderItem(Base):
     # --- Stage 8: Cost snapshot ---
     # cost in paisa at the moment the item was added; NULL for items created before Stage 8
     cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # --- Phase 11: Deal support ---
+    # deal_id: if this line is a deal, points to product with type='DEAL'; NULL for regular items
+    deal_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"), nullable=True)
+    # price_override: the deal's standard price at sale time (for audit), NULL if charged the standard price
+    price_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     order: Mapped["Order"] = relationship(back_populates="items")
+    components: Mapped[list["OrderItemComponent"]] = relationship(back_populates="order_item", cascade="all, delete-orphan")
+
+
+class OrderItemComponent(Base):
+    """Snapshot of a deal component as it was added to an order. Tracks which
+    components were included, which were removed, and which sizes were swapped.
+    Serves as the audit record of what actually went into the deal at sale time.
+    One row per component per order line."""
+    __tablename__ = "order_item_components"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    order_item_id: Mapped[int] = mapped_column(ForeignKey("order_items.id"))  # ties to the deal line
+    deal_component_id: Mapped[int] = mapped_column(ForeignKey("deal_components.id"))  # which component in deal definition
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))  # the component product
+    product_name: Mapped[str] = mapped_column(String(150))  # snapshot, never changes after creation
+    quantity: Mapped[int] = mapped_column(Integer)  # qty of this component
+    size_id: Mapped[int | None] = mapped_column(ForeignKey("product_sizes.id"), nullable=True)  # actual size used (may differ from deal definition)
+    was_removed: Mapped[bool] = mapped_column(Boolean, default=False)  # did cashier remove this component?
+    removed_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)  # why removed (e.g., "Out of stock")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    order_item: Mapped["OrderItem"] = relationship(back_populates="components")
+
+    __table_args__ = (
+        Index('ix_order_item_components_order_item_id', 'order_item_id'),
+        Index('ix_order_item_components_deal_component_id', 'deal_component_id'),
+        Index('ix_order_item_components_product_id', 'product_id'),
+    )
