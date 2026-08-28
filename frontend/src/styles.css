@@ -1455,6 +1455,21 @@ h2 {
   flex: 1;
 }
 
+.deal-modify-size-select {
+  font-size: 0.875rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.deal-modify-size-select:focus {
+  outline: none;
+  border-color: var(--info);
+}
+
 .deal-modify-error {
   margin-top: 12px;
 }

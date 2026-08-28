@@ -422,17 +422,20 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
 
             # Create OrderItemComponent rows for each deal component (including removed ones)
             if deal_mods:
-                # For modified deals, create components with was_removed flag
+                # For modified deals, create components with was_removed flag and modified size_id
                 removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
+                size_map = {c.product_id: c.size_id for c in deal_mods.components}
                 for comp_data in deal_item_components.get(i, []):
                     was_removed = removed_map.get(comp_data["product_id"], False)
+                    # Use modified size_id if it was changed, otherwise use original
+                    modified_size_id = size_map.get(comp_data["product_id"], comp_data["size_id"])
                     db.add(OrderItemComponent(
                         order_item_id=order_item.id,
                         deal_component_id=comp_data["deal_component_id"],
                         product_id=comp_data["product_id"],
                         product_name=comp_data["product_name"],
                         quantity=comp_data["quantity"],
-                        size_id=comp_data["size_id"],
+                        size_id=modified_size_id,
                         was_removed=was_removed,
                     ))
                 # Also create OrderItemComponent rows for removed components (these won't have stock decrements)
@@ -834,12 +837,15 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
 
             # Create OrderItemComponent rows for each deal component (including removed ones)
             if deal_mods:
-                # For modified deals, create components with was_removed flag
+                # For modified deals, create components with was_removed flag and modified size_id
                 removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
+                size_map = {c.product_id: c.size_id for c in deal_mods.components}
                 for comp_data in deal_components_data[deal.id]:
                     # Calculate component quantity for THIS deal line (component qty × line qty)
                     component_qty = comp_data[0].quantity * quantity
                     was_removed = removed_map.get(comp_data[0].component_product_id, False)
+                    # Use modified size_id if it was changed, otherwise use original
+                    modified_size_id = size_map.get(comp_data[0].component_product_id, comp_data[0].size_id)
 
                     db.add(OrderItemComponent(
                         order_item_id=order_item.id,
@@ -847,7 +853,7 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
                         product_id=comp_data[0].component_product_id,
                         product_name=db.get(Product, comp_data[0].component_product_id).name_display,
                         quantity=component_qty,
-                        size_id=comp_data[0].size_id,
+                        size_id=modified_size_id,
                         was_removed=was_removed,
                     ))
                 # Also create OrderItemComponent rows for removed components

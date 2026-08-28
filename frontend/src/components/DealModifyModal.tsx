@@ -1,14 +1,16 @@
 import { useState, useMemo } from "react";
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, ChevronDown } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
 import type { Product, DealModificationComponent, DealModifications } from "../types";
 
 export function DealModifyModal({
   deal,
+  catalogProducts,
   onClose,
   onAccept,
 }: {
   deal: Product;
+  catalogProducts: Product[];
   onClose: () => void;
   onAccept: (modifications: DealModifications) => void;
 }) {
@@ -43,12 +45,29 @@ export function DealModifyModal({
           amount: -removed,
         });
         total -= removed;
+      } else if (comp.size_id !== original.size_id && comp.size_id) {
+        // Size changed: calculate difference
+        const compProduct = catalogProducts.find(p => p.id === comp.product_id);
+        const oldSize = original.size_id
+          ? compProduct?.sizes.find(s => s.id === original.size_id)
+          : null;
+        const newSize = compProduct?.sizes.find(s => s.id === comp.size_id);
+
+        if (oldSize && newSize) {
+          const difference = newSize.price - oldSize.price;
+          const oldSizeName = oldSize.name;
+          const newSizeName = newSize.name;
+          changes.push({
+            label: `${original.product_name}: ${oldSizeName} → ${newSizeName}`,
+            amount: difference,
+          });
+          total += difference;
+        }
       }
-      // Size changes not yet implemented (Phase 11 Part 2 Step B)
     }
 
     return { changes, total, activeCount: active.length };
-  }, [components, deal]);
+  }, [components, deal, catalogProducts]);
 
   const finalPrice = priceOverride
     ? Math.floor(parseFloat(priceOverride) * 100 || 0)
@@ -58,6 +77,14 @@ export function DealModifyModal({
     setComponents(c => {
       const updated = [...c];
       updated[idx].was_removed = !updated[idx].was_removed;
+      return updated;
+    });
+  };
+
+  const handleSizeChange = (idx: number, sizeId: number) => {
+    setComponents(c => {
+      const updated = [...c];
+      updated[idx].size_id = sizeId;
       return updated;
     });
   };
@@ -96,6 +123,9 @@ export function DealModifyModal({
             {deal.components.map((comp, idx) => {
               const comp_mod = components[idx];
               const isRemoved = comp_mod.was_removed;
+              const compProduct = catalogProducts.find(p => p.id === comp.product_id);
+              const hasSizes = compProduct && compProduct.sizes && compProduct.sizes.length > 0;
+
               return (
                 <div
                   key={idx}
@@ -103,7 +133,22 @@ export function DealModifyModal({
                 >
                   <div className="deal-modify-component-info">
                     <strong>{comp.product_name}</strong>
-                    {comp.size_name && <span className="component-size">({comp.size_name})</span>}
+                    {hasSizes ? (
+                      <select
+                        value={comp_mod.size_id || ""}
+                        onChange={(e) => handleSizeChange(idx, parseInt(e.target.value) || 0)}
+                        className="deal-modify-size-select"
+                        disabled={isRemoved}
+                      >
+                        {compProduct?.sizes.map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : comp.size_name ? (
+                      <span className="component-size">({comp.size_name})</span>
+                    ) : null}
                   </div>
                   <button
                     className="row-action-button"

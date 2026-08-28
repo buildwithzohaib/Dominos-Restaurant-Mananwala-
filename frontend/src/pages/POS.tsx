@@ -512,6 +512,7 @@ export function POS({ onActiveOrdersClick }: { onActiveOrdersClick?: () => void 
 
         <DealModifyModal
           deal={selectedDealForModify}
+          catalogProducts={catalogProducts}
           onClose={() => setSelectedDealForModify(null)}
           onAccept={handleDealModified}
         />
