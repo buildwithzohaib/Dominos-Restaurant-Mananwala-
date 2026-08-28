@@ -792,3 +792,8 @@ fastapi.exceptions.ResponseValidationError: 5 validation errors:
 2026-08-28 16:29:35 [INFO] Application shutdown complete.
 2026-08-28 16:29:35 [INFO] Finished server process [3460]
 2026-08-28 16:29:35 [INFO] Restaurant POS shut down cleanly
+2026-08-28 16:30:07 [INFO] Starting Restaurant POS server on 127.0.0.1:8000
+2026-08-28 16:30:07 [INFO] App started. Database at head revision: 14e6f7a1...
+2026-08-28 16:30:07 [INFO] Application startup complete.
+2026-08-28 16:30:07 [INFO] Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-08-28 16:30:08 [INFO] Server is healthy, opening window
