@@ -131,6 +131,54 @@ class ProductOut(BaseModel):
     sizes: list[ProductSizeOut] = []  # size variants, empty if product has no sizes
     updated_at: datetime
 
+# --- Deal Management (Phase 11) ---
+
+class DealComponentCreate(BaseModel):
+    """A component of a deal. product_id must not be a deal."""
+    product_id: int
+    quantity: int = Field(gt=0)
+    size_id: int | None = Field(default=None)  # optional size if product has sizes
+
+class DealComponentOut(BaseModel):
+    """A component of a deal, as returned from the API.
+
+    product_id is the component's product ID (not the deal's ID).
+    product_name is the component product's display name.
+    size_name is the component's size name (if applicable).
+    """
+    id: int
+    product_id: int  # The component product's ID
+    product_name: str  # Display name of the component product
+    quantity: int
+    size_id: int | None = None
+    size_name: str | None = None  # Size display name, if a size is set
+
+class DealCreate(BaseModel):
+    """Create a new deal. A deal is a Product with product_type='DEAL'."""
+    category_id: int
+    name: str = Field(min_length=1, max_length=150)
+    price: int = Field(gt=0)  # paisa - the deal's total price
+    components: list[DealComponentCreate] = Field(min_length=1)  # at least one component
+
+class DealUpdate(BaseModel):
+    """Update a deal. All fields optional except when provided."""
+    category_id: int | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=150)
+    price: int | None = Field(default=None, gt=0)  # paisa
+    components: list[DealComponentCreate] | None = Field(default=None)  # None = unchanged; empty list = remove all (invalid)
+
+class DealOut(BaseModel):
+    """A deal product, as returned from the API."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    category_id: int
+    category: CategoryNested
+    name_display: str
+    price: int  # paisa - the deal's price
+    available: bool
+    components: list[DealComponentOut] = []  # components of this deal
+    updated_at: datetime
+
 class TableOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

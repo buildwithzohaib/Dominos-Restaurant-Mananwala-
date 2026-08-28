@@ -10,6 +10,7 @@ from app.routes.auth import router as auth_router
 from app.routes.catalog import router as catalog_router
 from app.routes.categories import router as categories_router
 from app.routes.customers import router as customers_router
+from app.routes.deals import router as deals_router
 from app.routes.inventory import router as inventory_router
 from app.routes.orders import router as orders_router
 from app.routes.stock_movements import router as stock_movements_router
@@ -67,6 +68,7 @@ app.include_router(users_router)
 app.include_router(catalog_router)
 app.include_router(categories_router)
 app.include_router(customers_router)
+app.include_router(deals_router)
 app.include_router(inventory_router)
 app.include_router(orders_router)
 app.include_router(stock_movements_router)

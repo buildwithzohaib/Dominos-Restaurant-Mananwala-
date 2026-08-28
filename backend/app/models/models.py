@@ -59,6 +59,13 @@ class Product(Base):
 
     category: Mapped["Category"] = relationship(back_populates="products")
     sizes: Mapped[list["ProductSize"]] = relationship(back_populates="product", cascade="all, delete-orphan")
+    # Phase 11: If this product is a deal, components contains its component list
+    components: Mapped[list["DealComponent"]] = relationship(
+        foreign_keys="DealComponent.product_id",
+        back_populates="product",
+        cascade="all, delete-orphan",
+        primaryjoin="Product.id == foreign(DealComponent.product_id)"
+    )
 
     @property
     def status(self) -> str:
@@ -108,6 +115,11 @@ class DealComponent(Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0)  # display order in deal detail
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    product: Mapped["Product"] = relationship(
+        foreign_keys=[product_id],
+        back_populates="components"
+    )
 
     __table_args__ = (
         Index('ix_deal_components_product_id', 'product_id'),

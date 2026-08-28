@@ -15,9 +15,10 @@ def catalog_categories(db: Session = Depends(get_db)):
 
 @router.get("/catalog/products", response_model=list[ProductOut])
 def catalog_products(db: Session = Depends(get_db)):
+    # Return only regular products (not deals) for the POS grid (Phase 11)
     return db.query(Product)\
         .join(Category, Product.category_id == Category.id)\
-        .filter(Product.available.is_(True), Category.active.is_(True))\
+        .filter(Product.available.is_(True), Category.active.is_(True), Product.product_type == "PRODUCT")\
         .order_by(Product.name_display)\
         .all()
 

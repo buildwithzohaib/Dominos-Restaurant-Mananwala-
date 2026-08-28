@@ -56,3 +56,9 @@ export interface ProductSizeInput { name:string; price:number; /* paisa */ sort_
 export interface ProductFormState { category_id:number|null; name:string; price:number; purchase_price?:number; stock?:number; min_stock?:number; sku?:string; unit:string; image?:string; has_sizes:boolean; sizes:ProductSizeInput[]; }
 // Authentication (Stage 7)
 export interface User { id:number; name:string; can_cancel:boolean; can_discount:boolean; can_manage_settings:boolean; is_active:boolean; is_owner:boolean; created_at:string; }
+// Deal Management (Phase 11) — bundled products with components
+export interface DealComponentCreate { product_id:number; quantity:number; size_id?:number|null; }
+export interface DealComponentOut { id:number; product_id:number; product_name:string; quantity:number; size_id:number|null; size_name:string|null; }
+export interface DealCreate { category_id:number; name:string; price:number; /* paisa */ components:DealComponentCreate[]; }
+export interface DealUpdate { category_id?:number; name?:string; price?:number; /* paisa */ components?:DealComponentCreate[]|null; }
+export interface DealOut { id:number; category_id:number; category:CategoryInfo; name_display:string; price:number; /* paisa */ available:boolean; components:DealComponentOut[]; updated_at:string; }

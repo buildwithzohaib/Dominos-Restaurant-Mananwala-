@@ -305,6 +305,7 @@ h2 {
   outline: 0;
   width: 100%;
   background: transparent;
+  color: var(--text);
 }
 
 /* Delivery order search box - darker border to match delivery fields */
@@ -3197,6 +3198,148 @@ h2 {
 .staff-col.name {
   text-align: left;
   font-weight: 500;
+}
+
+/* ============================= */
+/* DEAL MANAGEMENT (Phase 11)    */
+/* ============================= */
+
+.tab-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-button {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+  color: var(--text-secondary);
+}
+
+.tab-button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* Deal components list in modal */
+.modal-section {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--surface-alt);
+  border-radius: 8px;
+}
+
+.modal-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.modal-section-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  background: var(--surface);
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+}
+
+.deal-components-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deal-component-row {
+  display: grid;
+  grid-template-columns: 1fr 60px 120px 32px;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.component-product-select,
+.component-quantity-input,
+.component-size-select {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 9px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--surface);
+  outline: 0;
+}
+
+.component-product-select:focus,
+.component-quantity-input:focus,
+.component-size-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.component-quantity-input {
+  text-align: center;
+}
+
+.component-size-placeholder {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 8px 9px;
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+  justify-content: flex-end;
+}
+
+.modal-actions button {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.badge {
+  background: var(--info-bg);
+  color: var(--info);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

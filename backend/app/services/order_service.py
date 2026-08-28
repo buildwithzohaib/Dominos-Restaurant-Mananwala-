@@ -7,7 +7,7 @@ from sqlalchemy import func, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings, ProductSize
+from app.models.models import Order, OrderItem, Product, RestaurantTable, StockMovement, Customer, Settings, ProductSize, DealComponent, OrderItemComponent
 from app.schemas.schemas import AddItemsIn, OrderCancelIn, OrderCreate, OpenOrderCreate, PayOrderIn, UpdatePendingItemIn
 
 logger = logging.getLogger(__name__)
@@ -48,6 +48,124 @@ def _validate_and_resolve_item_price(db: Session, product: Product, size_id: int
             raise HTTPException(400, f'"{product.name_display}" does not have sizes.')
         return product.price, None
 
+
+def _validate_deal_components(db: Session, deal: Product, line_quantity: int) -> list[tuple[DealComponent, int]]:
+    """
+    Validate that a deal and all its components exist and have sufficient stock.
+
+    Args:
+        db: database session
+        deal: Product with product_type='DEAL'
+        line_quantity: quantity of this deal being ordered (e.g., 3 deals)
+
+    Returns:
+        List of (DealComponent, available_qty) tuples
+
+    Raises:
+        HTTPException if any component is missing or out of stock
+    """
+    if deal.product_type != "DEAL":
+        raise HTTPException(400, f'"{deal.name_display}" is not a deal.')
+
+    components = db.query(DealComponent).filter(DealComponent.product_id == deal.id).all()
+    if not components:
+        raise HTTPException(400, f'Deal "{deal.name_display}" has no components.')
+
+    result = []
+    for component in components:
+        comp_product = db.get(Product, component.component_product_id)
+        if not comp_product:
+            raise HTTPException(400, f'Component product {component.component_product_id} not found.')
+
+        needed = component.quantity * line_quantity
+        if comp_product.stock < needed:
+            raise HTTPException(
+                400,
+                f'Only {comp_product.stock} of "{comp_product.name_display}" available '
+                f'(need {needed} for this deal).'
+            )
+        result.append((component, comp_product.stock))
+
+    return result
+
+
+def _decrement_deal_components(db: Session, deal: Product, components_data: list[tuple[DealComponent, int]], line_quantity: int, order_number: str) -> list[OrderItemComponent]:
+    """
+    Atomically decrement stock for all deal components and create StockMovements.
+
+    If ANY component fails the atomic check, the entire transaction rolls back
+    and an HTTPException is raised. Otherwise, returns a list of OrderItemComponent
+    snapshots ready to be added to the order item.
+
+    Args:
+        db: database session
+        deal: Product with product_type='DEAL'
+        components_data: list of (DealComponent, original_stock) tuples from validation
+        line_quantity: quantity of this deal being ordered
+        order_number: the order's order_number for StockMovement reference
+
+    Returns:
+        List of OrderItemComponent dicts (not yet persisted) to add to the order
+
+    Raises:
+        HTTPException if any component fails the atomic stock check
+    """
+    item_components = []
+
+    for component, _ in components_data:
+        comp_product = db.get(Product, component.component_product_id)
+        needed = component.quantity * line_quantity
+
+        # Atomic conditional decrement
+        result = db.execute(
+            update(Product)
+            .where(Product.id == component.component_product_id, Product.stock >= needed)
+            .values(stock=Product.stock - needed, updated_at=datetime.utcnow())
+        )
+        if result.rowcount == 0:
+            db.rollback()
+            raise HTTPException(
+                400,
+                f'Only {comp_product.stock} of "{comp_product.name_display}" available '
+                f'(need {needed} for this deal).'
+            )
+
+        # Refresh to get the new stock value
+        db.refresh(comp_product)
+        stock_after = comp_product.stock
+        stock_before = stock_after + needed
+
+        # Create StockMovement for this component
+        db.add(StockMovement(
+            item_type="PRODUCT",
+            item_id=comp_product.id,
+            item_name=comp_product.name_display,
+            movement_type="SALE",
+            quantity_change=-needed,
+            reason="Sale",
+            supplier=None,
+            purchase_price=None,
+            stock_before=stock_before,
+            stock_after=stock_after,
+            reference=order_number,
+        ))
+
+        # Prepare OrderItemComponent snapshot
+        size_name = None
+        if component.size_id:
+            size = db.query(ProductSize).filter(ProductSize.id == component.size_id).first()
+            size_name = size.name if size else None
+
+        item_components.append({
+            "deal_component_id": component.id,
+            "product_id": comp_product.id,
+            "product_name": comp_product.name_display,
+            "quantity": component.quantity * line_quantity,
+            "size_id": component.size_id,
+        })
+
+    return item_components
+
 def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | None = None) -> Order:
     # Validate table
     if payload.order_type == "DINE_IN" and payload.table_id is None:
@@ -67,9 +185,12 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
         if not customer.is_active:
             raise HTTPException(400, f'"{customer.name_display}" is inactive.')
 
-    # Validate sizes and resolve prices for each item; aggregate by product for stock checks
-    item_details: list[tuple[int, int, int | None, int, str | None]] = []  # (product_id, quantity, size_id, price, size_name)
-    requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity
+    # Validate sizes and resolve prices for each item; separate regular products from deals
+    item_details: list[tuple[int, int, int | None, int, str | None, bool]] = []  # (product_id, quantity, size_id, price, size_name, is_deal)
+    requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity (regular products only)
+    deal_requests: list[tuple[Product, int]] = []  # (deal Product, quantity) for deal items
+    products: dict[int, Product] = {}  # product_id -> Product (regular products only)
+    deals: dict[int, Product] = {}  # product_id -> Product (deals only)
     subtotal = 0
 
     for item in payload.items:
@@ -81,24 +202,37 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
         if not product.category.active:
             raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
 
-        # Validate size (if any) and get the price
-        price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
+        is_deal = product.product_type == "DEAL"
 
-        item_details.append((item.product_id, item.quantity, item.size_id, price, size_name))
-        requested[item.product_id] += item.quantity
-        subtotal += price * item.quantity
+        if is_deal:
+            # For deals, price is the deal's price (not sum of components)
+            price = product.price
+            size_name = None  # Deals don't have sizes
+            item_details.append((item.product_id, item.quantity, None, price, size_name, True))
+            deal_requests.append((product, item.quantity))
+            deals[item.product_id] = product
+            subtotal += price * item.quantity
+        else:
+            # Regular product: validate size and get price
+            price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
+            item_details.append((item.product_id, item.quantity, item.size_id, price, size_name, False))
+            requested[item.product_id] += item.quantity
+            products[item.product_id] = product
+            subtotal += price * item.quantity
 
-    # Stock validation: check if enough stock for total quantity per product
-    products: dict[int, Product] = {}
+    # Stock validation for regular products (deals are validated separately below)
     for product_id, total_quantity in requested.items():
-        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(400, "Product not found.")
+        product = products[product_id]
         if product.stock <= 0:
             raise HTTPException(400, f'"{product.name_display}" is out of stock.')
         if product.stock < total_quantity:
             raise HTTPException(400, f'Only {product.stock} of "{product.name_display}" available.')
-        products[product_id] = product
+
+    # Stock validation for deals (and fetch component info for later decrement)
+    deal_components_data: dict[int, list[tuple[DealComponent, int]]] = {}  # deal_id -> components_data
+    for deal, quantity in deal_requests:
+        components_data = _validate_deal_components(db, deal, quantity)
+        deal_components_data[deal.id] = components_data
 
     # Get tax_rate and delivery_charge from settings (Rule 7: snapshot at order time)
     settings = db.query(Settings).filter(Settings.id == 1).first()
@@ -167,18 +301,9 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
     if order is None:
         raise HTTPException(409, "Could not create the order, please try again.")
 
-    # Atomic, race-safe stock decrement. The WHERE clause re-checks stock at write
-    # time (not just at the read above), so if two orders race for the last unit,
-    # only one UPDATE can match `stock >= quantity` — the loser rolls back instead
-    # of driving stock negative or double-selling the same item.
-    #
-    # Phase 5: each successful decrement also writes a SALE StockMovement, staged on
-    # this same Session/transaction as the Order/OrderItem rows below and flushed by
-    # the one db.commit() at the end — a payment that fails after this point (there
-    # isn't one; nothing below can fail) can never leave stock decremented without a
-    # matching movement, or vice versa. stock_before/after come from the row *after*
-    # the atomic UPDATE (via refresh), not a separately-read value, so they're
-    # correct even under concurrent writes to the same product.
+    # Atomic, race-safe stock decrement for regular products (existing logic, unchanged)
+    # The WHERE clause re-checks stock at write time, so if two orders race for the last unit,
+    # only one UPDATE can match `stock >= quantity` — the loser rolls back instead.
     for product_id, quantity in requested.items():
         result = db.execute(
             update(Product)
@@ -211,19 +336,56 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
             reference=order.order_number,
         ))
 
-    # Create OrderItem rows for each item (now including size_name and size-resolved price)
-    for product_id, quantity, size_id, price, size_name in item_details:
-        product = products[product_id]
-        db.add(OrderItem(
-            order_id=order.id,
-            product_id=product.id,
-            product_name=product.name_display,
-            size_name=size_name,
-            quantity=quantity,
-            price=price,
-            line_total=price * quantity,
-            cost=product.purchase_price,
-        ))
+    # Stock decrement for deals: each component is decremented separately (Phase 11)
+    # All-or-nothing: if ANY component fails, the entire order is rolled back
+    deal_item_components: dict[int, list[OrderItemComponent]] = {}  # item_index -> components
+    for i, (product_id, quantity, size_id, price, size_name, is_deal) in enumerate(item_details):
+        if is_deal:
+            deal = deals[product_id]
+            components_data = deal_components_data[deal.id]
+            item_components = _decrement_deal_components(db, deal, components_data, quantity, order.order_number)
+            deal_item_components[i] = item_components
+
+    # Create OrderItem rows for each item (including deals)
+    for i, (product_id, quantity, size_id, price, size_name, is_deal) in enumerate(item_details):
+        if is_deal:
+            deal = deals[product_id]
+            order_item = OrderItem(
+                order_id=order.id,
+                product_id=deal.id,
+                product_name=deal.name_display,
+                size_name=None,
+                quantity=quantity,
+                price=price,  # deal's price
+                line_total=price * quantity,
+                cost=deal.purchase_price,
+                deal_id=deal.id,
+            )
+            db.add(order_item)
+            db.flush()  # Get the order_item.id before adding components
+
+            # Create OrderItemComponent rows for each deal component
+            for comp_data in deal_item_components.get(i, []):
+                db.add(OrderItemComponent(
+                    order_item_id=order_item.id,
+                    deal_component_id=comp_data["deal_component_id"],
+                    product_id=comp_data["product_id"],
+                    product_name=comp_data["product_name"],
+                    quantity=comp_data["quantity"],
+                    size_id=comp_data["size_id"],
+                ))
+        else:
+            product = products[product_id]
+            db.add(OrderItem(
+                order_id=order.id,
+                product_id=product.id,
+                product_name=product.name_display,
+                size_name=size_name,
+                quantity=quantity,
+                price=price,
+                line_total=price * quantity,
+                cost=product.purchase_price,
+            ))
 
     db.commit()
     order_result = db.query(Order).options(joinedload(Order.items)).filter(Order.id == order.id).first()
@@ -458,9 +620,12 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
     if order.status != "OPEN":
         raise HTTPException(400, "Only an open order can be modified.")
 
-    # Validate sizes and resolve prices for each item; aggregate by product for stock checks
-    item_details: list[tuple[int, int, int | None, int, str | None]] = []  # (product_id, quantity, size_id, price, size_name)
-    requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity
+    # Validate sizes and resolve prices for each item; separate regular products from deals
+    item_details: list[tuple[int, int, int | None, int, str | None, bool]] = []  # (product_id, quantity, size_id, price, size_name, is_deal)
+    requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity (regular products only)
+    deal_requests: list[tuple[Product, int]] = []  # (deal Product, quantity) for deal items
+    products: dict[int, Product] = {}  # product_id -> Product (regular products only)
+    deals: dict[int, Product] = {}  # product_id -> Product (deals only)
 
     for item in payload.items:
         product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes)).filter(Product.id == item.product_id).first()
@@ -471,23 +636,29 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
         if not product.category.active:
             raise HTTPException(400, f'"{product.name_display}" is in a disabled category.')
 
-        # Validate size (if any) and get the price
-        price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
+        is_deal = product.product_type == "DEAL"
 
-        item_details.append((item.product_id, item.quantity, item.size_id, price, size_name))
-        requested[item.product_id] += item.quantity
+        if is_deal:
+            # For deals, price is the deal's price (not sum of components)
+            price = product.price
+            size_name = None  # Deals don't have sizes
+            item_details.append((item.product_id, item.quantity, None, price, size_name, True))
+            deal_requests.append((product, item.quantity))
+            deals[item.product_id] = product
+        else:
+            # Regular product: validate size and get price
+            price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
+            item_details.append((item.product_id, item.quantity, item.size_id, price, size_name, False))
+            requested[item.product_id] += item.quantity
+            products[item.product_id] = product
 
-    # Validate stock, accounting for PENDING items
-    products: dict[int, Product] = {}
+    # Validate stock for regular products, accounting for existing PENDING items
     for product_id, quantity in requested.items():
-        product = db.query(Product).options(joinedload(Product.category)).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(400, "Product not found.")
+        product = products[product_id]
         if product.stock <= 0:
             raise HTTPException(400, f'"{product.name_display}" is out of stock.')
 
         # Stock check must account for PENDING items already on this order
-        # Sum the quantities of this order's existing PENDING items (batch_id IS NULL)
         pending_total = db.query(
             func.coalesce(func.sum(OrderItem.quantity), 0)
         ).filter(
@@ -501,42 +672,80 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
             available = product.stock - pending_total
             raise HTTPException(400, f'Only {available} of "{product.name_display}" available.')
 
-        products[product_id] = product
+    # Validate deals (no stock check for PENDING items; stock is checked at send time)
+    # But we DO validate that deal and components exist and have definitions
+    deal_components_data: dict[int, list[tuple[DealComponent, int]]] = {}
+    for deal, quantity in deal_requests:
+        components_data = _validate_deal_components(db, deal, quantity)
+        deal_components_data[deal.id] = components_data
 
-    # Add or merge OrderItem rows for each item
-    # Do NOT decrement stock; no StockMovement rows are created
-    # For sized items: merge key is product + size. For unsized: merge key is product only.
-    # If a PENDING line with same product and size exists, merge into it (increase quantity).
-    # Otherwise, create a new line.
-    for product_id, quantity, size_id, price, size_name in item_details:
-        product = products[product_id]
-
-        # Look for an existing PENDING line (batch_id IS NULL) for this product+size combo
-        existing_pending = db.query(OrderItem).filter(
-            OrderItem.order_id == order.id,
-            OrderItem.product_id == product_id,
-            OrderItem.size_name == size_name,
-            OrderItem.batch_id.is_(None),
-        ).first()
-
-        if existing_pending:
-            # Merge: increase quantity and recompute line_total using the line's original price
-            existing_pending.quantity += quantity
-            existing_pending.line_total = existing_pending.price * existing_pending.quantity
-        else:
-            # No PENDING line exists for this product+size; create a new one
-            db.add(OrderItem(
+    # Add or merge OrderItem rows for each item (do NOT decrement stock; PENDING items)
+    # For regular products: merge key is product + size.
+    # For deals: do not merge; each deal is a separate line with its components.
+    for i, (product_id, quantity, size_id, price, size_name, is_deal) in enumerate(item_details):
+        if is_deal:
+            # Deals are never merged; always create a new line
+            deal = deals[product_id]
+            order_item = OrderItem(
                 order_id=order.id,
-                product_id=product.id,
-                product_name=product.name_display,
-                size_name=size_name,
+                product_id=deal.id,
+                product_name=deal.name_display,
+                size_name=None,
                 quantity=quantity,
-                price=price,
+                price=price,  # deal's price
                 line_total=price * quantity,
-                cost=product.purchase_price,
+                cost=deal.purchase_price,
                 batch_id=None,
                 sent_at=None,
-            ))
+                deal_id=deal.id,
+            )
+            db.add(order_item)
+            db.flush()  # Get the order_item.id before adding components
+
+            # Create OrderItemComponent rows for each deal component
+            for comp_data in deal_components_data[deal.id]:
+                # Calculate component quantity for THIS deal line (component qty × line qty)
+                component_qty = comp_data[0].quantity * quantity
+
+                db.add(OrderItemComponent(
+                    order_item_id=order_item.id,
+                    deal_component_id=comp_data[0].id,
+                    product_id=comp_data[0].component_product_id,
+                    product_name=db.get(Product, comp_data[0].component_product_id).name_display,
+                    quantity=component_qty,
+                    size_id=comp_data[0].size_id,
+                ))
+        else:
+            # Regular product: merge if PENDING line with same product+size exists
+            product = products[product_id]
+
+            # Look for an existing PENDING line (batch_id IS NULL) for this product+size combo
+            existing_pending = db.query(OrderItem).filter(
+                OrderItem.order_id == order.id,
+                OrderItem.product_id == product_id,
+                OrderItem.size_name == size_name,
+                OrderItem.batch_id.is_(None),
+                OrderItem.deal_id.is_(None),  # Not a deal
+            ).first()
+
+            if existing_pending:
+                # Merge: increase quantity and recompute line_total using the line's original price
+                existing_pending.quantity += quantity
+                existing_pending.line_total = existing_pending.price * existing_pending.quantity
+            else:
+                # No PENDING line exists for this product+size; create a new one
+                db.add(OrderItem(
+                    order_id=order.id,
+                    product_id=product.id,
+                    product_name=product.name_display,
+                    size_name=size_name,
+                    quantity=quantity,
+                    price=price,
+                    line_total=price * quantity,
+                    cost=product.purchase_price,
+                    batch_id=None,
+                    sent_at=None,
+                ))
 
     # Recompute order's money fields from ALL items (existing + new)
     db.flush()  # Ensure new items are in the session before we query
@@ -727,11 +936,13 @@ def send_batch_to_kitchen(db: Session, order_id: int) -> Order:
     """
     Send all currently PENDING items on an OPEN order to the kitchen as one batch.
 
-    This is the FIRST and ONLY place stock is decremented (Rule 8). Items are stamped
+    This is the FIRST and ONLY place stock is decremented for dine-in (Rule 8). Items are stamped
     with a batch_id (1, 2, 3...) and sent_at timestamp. If ANY item cannot be decremented
     (insufficient stock), the ENTIRE transaction is rolled back (all-or-nothing).
 
     Batch numbering is per-order: order 5 and order 9 each start at batch 1.
+
+    For deals: each component is decremented separately (Phase 11).
 
     Args:
         db: database session
@@ -764,15 +975,18 @@ def send_batch_to_kitchen(db: Session, order_id: int) -> Order:
     ).scalar()
     next_batch = (max_batch or 0) + 1
 
-    # Aggregate PENDING items by product_id
-    requested: dict[int, int] = defaultdict(int)
-    for item in pending_items:
-        requested[item.product_id] += item.quantity
+    # Separate regular products from deal items
+    regular_items: dict[int, int] = defaultdict(int)  # product_id -> total quantity
+    deal_items: list[OrderItem] = []  # OrderItem objects that are deals
 
-    # Decrement stock and write StockMovements for each product (all-or-nothing).
-    # Each product: decrement, refresh, create movement — all in one iteration
-    # to prevent another transaction from changing stock between operations.
-    for product_id, quantity in requested.items():
+    for item in pending_items:
+        if item.deal_id is not None:
+            deal_items.append(item)
+        else:
+            regular_items[item.product_id] += item.quantity
+
+    # Decrement regular products (existing logic, unchanged)
+    for product_id, quantity in regular_items.items():
         product = db.get(Product, product_id)
         if not product:
             raise HTTPException(400, "Product not found.")
@@ -808,6 +1022,59 @@ def send_batch_to_kitchen(db: Session, order_id: int) -> Order:
             stock_after=stock_after,
             reference=order.order_number,
         ))
+
+    # Decrement deal components (Phase 11)
+    # Each deal's components are decremented with all-or-nothing semantics
+    for deal_item in deal_items:
+        deal = db.get(Product, deal_item.product_id)
+        if not deal:
+            raise HTTPException(400, "Deal product not found.")
+
+        # Load this deal's components from OrderItemComponent rows (the snapshot)
+        item_components = db.query(OrderItemComponent).filter(
+            OrderItemComponent.order_item_id == deal_item.id
+        ).all()
+
+        for item_component in item_components:
+            comp_product = db.get(Product, item_component.product_id)
+            if not comp_product:
+                raise HTTPException(400, "Component product not found.")
+
+            needed = item_component.quantity  # Already includes line_quantity × component.quantity
+
+            # Atomic conditional decrement
+            result = db.execute(
+                update(Product)
+                .where(Product.id == item_component.product_id, Product.stock >= needed)
+                .values(stock=Product.stock - needed, updated_at=datetime.utcnow())
+            )
+            if result.rowcount == 0:
+                db.rollback()
+                raise HTTPException(
+                    400,
+                    f'Only {comp_product.stock} of "{comp_product.name_display}" available '
+                    f'(need {needed} for this deal).'
+                )
+
+            # Refresh to get the new stock value
+            db.refresh(comp_product)
+            stock_after = comp_product.stock
+            stock_before = stock_after + needed
+
+            # Create StockMovement for this component
+            db.add(StockMovement(
+                item_type="PRODUCT",
+                item_id=comp_product.id,
+                item_name=comp_product.name_display,
+                movement_type="SALE",
+                quantity_change=-needed,
+                reason="Sale",
+                supplier=None,
+                purchase_price=None,
+                stock_before=stock_before,
+                stock_after=stock_after,
+                reference=order.order_number,
+            ))
 
     # Stamp every PENDING item with batch_id and sent_at
     for item in pending_items:

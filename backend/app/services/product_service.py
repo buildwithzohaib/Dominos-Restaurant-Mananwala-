@@ -134,11 +134,14 @@ def get_product(db: Session, product_id: int, include_disabled: bool = False) ->
 
 
 def list_products(db: Session, search: str | None = None, include_disabled: bool = False) -> list[Product]:
-    """List products with optional search"""
+    """List products with optional search (excludes deals - Phase 11)"""
     query = db.query(Product).options(
         joinedload(Product.category),
         joinedload(Product.sizes)
     )
+
+    # Exclude deals; only show regular products (Phase 11)
+    query = query.filter(Product.product_type == "PRODUCT")
 
     if not include_disabled:
         query = query.filter(Product.available.is_(True))

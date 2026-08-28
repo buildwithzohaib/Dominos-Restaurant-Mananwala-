@@ -1,4 +1,4 @@
-import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,DashboardRange,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
+import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,DashboardRange,DealCreate,DealOut,DealUpdate,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
 
 export const API_URL=import.meta.env.VITE_API_URL||"";
 
@@ -153,6 +153,18 @@ export const api={
  enableProduct:(id:number)=>request<Product>(`/api/products/${id}/enable`,{method:"PATCH",body:JSON.stringify({})}),
  uploadProductImage:(id:number,file:File)=>uploadFile<Product>(`/api/products/${id}/image`,file),
  deleteProductImage:(id:number)=>request<Product>(`/api/products/${id}/image`,{method:"DELETE",body:JSON.stringify({})}),
+ // Deal Management (Phase 11)
+ getDeals:(search?:string,includeDisabled?:boolean)=>{
+  const q=new URLSearchParams();
+  if(search&&search.trim())q.set("search",search.trim());
+  if(includeDisabled)q.set("include_disabled","true");
+  const qs=q.toString();
+  return request<DealOut[]>(`/api/deals${qs?`?${qs}`:""}`);
+ },
+ getDeal:(id:number)=>request<DealOut>(`/api/deals/${id}`),
+ createDeal:(p:DealCreate)=>request<DealOut>("/api/deals",{method:"POST",body:JSON.stringify(p)}),
+ updateDeal:(id:number,p:DealUpdate)=>request<DealOut>(`/api/deals/${id}`,{method:"PUT",body:JSON.stringify(p)}),
+ deleteDeal:(id:number)=>request<void>(`/api/deals/${id}`,{method:"DELETE",body:JSON.stringify({})}),
  // Customers (Phase 3.2–3.5)
  searchCustomers:(query?:string,includeInactive:boolean=false)=>{
   const q=new URLSearchParams();
