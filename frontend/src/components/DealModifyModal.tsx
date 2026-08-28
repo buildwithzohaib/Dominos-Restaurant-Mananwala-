@@ -1,7 +1,121 @@
 import { useState, useMemo } from "react";
 import { X, Trash2, ChevronDown } from "lucide-react";
 import { useCurrencyFormat } from "../hooks/useCurrencyFormat";
-import type { Product, DealModificationComponent, DealModifications } from "../types";
+import type { Product, DealModificationComponent, DealModifications, DealComponentOut } from "../types";
+
+// Swap selection modal component
+function SwapProductModal({
+  catalogProducts,
+  originalComponent,
+  onSelect,
+  onCancel,
+}: {
+  catalogProducts: Product[];
+  originalComponent: DealComponentOut;
+  onSelect: (product: Product, sizeId?: number) => void;
+  onCancel: () => void;
+}) {
+  const [searchText, setSearchText] = useState("");
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedSize, setSelectedSize] = useState<number | null>(null);
+
+  // Filter to ordinary products only (not deals)
+  const filteredProducts = useMemo(() => {
+    const ordinary = catalogProducts.filter(p => p.product_type !== "DEAL");
+    if (!searchText.trim()) {
+      return ordinary;
+    }
+    const lower = searchText.toLowerCase();
+    return ordinary.filter(p => p.name_display.toLowerCase().includes(lower));
+  }, [catalogProducts, searchText]);
+
+  const handleSelectProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setSelectedSize(null); // Reset size selection when product changes
+  };
+
+  const handleConfirm = () => {
+    if (!selectedProduct) return;
+    if (selectedProduct.sizes.length > 0 && !selectedSize) {
+      return; // Size required
+    }
+    onSelect(selectedProduct, selectedSize || undefined);
+  };
+
+  const isValid = selectedProduct && (selectedProduct.sizes.length === 0 || selectedSize);
+
+  return (
+    <div className="modal-backdrop">
+      <div className="inventory-modal">
+        <button className="modal-close" onClick={onCancel}>
+          <X />
+        </button>
+
+        <p className="eyebrow">SWAP COMPONENT</p>
+        <h2>Replace {originalComponent.product_name}</h2>
+
+        <div className="deal-modify-section">
+          <label className="deal-modify-label">Search for replacement:</label>
+          <input
+            type="text"
+            autoFocus
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Type product name..."
+            className="deal-modify-input"
+          />
+        </div>
+
+        <div className="deal-modify-section">
+          <h4 className="deal-modify-heading">Available Products</h4>
+          <div className="product-swap-list">
+            {filteredProducts.length === 0 ? (
+              <div className="swap-no-results">No products found</div>
+            ) : (
+              filteredProducts.map(product => (
+                <button
+                  key={product.id}
+                  onClick={() => handleSelectProduct(product)}
+                  className={`swap-product-item ${selectedProduct?.id === product.id ? "selected" : ""}`}
+                >
+                  <div className="swap-product-name">{product.name_display}</div>
+                  <div className="swap-product-price">Rs. {(product.price / 100).toFixed(2)}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {selectedProduct && selectedProduct.sizes.length > 0 && (
+          <div className="deal-modify-section">
+            <label className="deal-modify-label">Size required:</label>
+            <select
+              value={selectedSize || ""}
+              onChange={(e) => setSelectedSize(parseInt(e.target.value) || null)}
+              className="deal-modify-input"
+            >
+              <option value="">Choose a size</option>
+              {selectedProduct.sizes.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} — Rs. {(s.price / 100).toFixed(2)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div className="deal-modify-actions">
+          <button className="secondary-button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="pay-button" onClick={handleConfirm} disabled={!isValid}>
+            Confirm Swap
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function DealModifyModal({
   deal,
@@ -25,6 +139,7 @@ export function DealModifyModal({
   );
   const [priceOverride, setPriceOverride] = useState<string>("");
   const [error, setError] = useState("");
+  const [swapIndex, setSwapIndex] = useState<number | null>(null);
 
   // Calculate price changes, total, and validation
   const priceCalculation = useMemo(() => {
@@ -45,6 +160,27 @@ export function DealModifyModal({
           amount: -removed,
         });
         total -= removed;
+      } else if (comp.product_id_original) {
+        // Component was swapped: subtract original price, add replacement price
+        const replacedFromPrice = original.component_price;
+        const replacedToProduct = catalogProducts.find(p => p.id === comp.product_id);
+        let replacedToPrice = 0;
+
+        if (replacedToProduct) {
+          if (comp.size_id) {
+            const size = replacedToProduct.sizes.find(s => s.id === comp.size_id);
+            replacedToPrice = size ? size.price : replacedToProduct.price;
+          } else {
+            replacedToPrice = replacedToProduct.price;
+          }
+        }
+
+        const difference = replacedToPrice - replacedFromPrice;
+        changes.push({
+          label: `${original.product_name} → ${replacedToProduct?.name_display || "Unknown"}`,
+          amount: difference,
+        });
+        total += difference;
       } else if (comp.size_id !== original.size_id && comp.size_id) {
         // Size changed: calculate difference
         const compProduct = catalogProducts.find(p => p.id === comp.product_id);
@@ -89,6 +225,45 @@ export function DealModifyModal({
     });
   };
 
+  const handleSwapClick = (idx: number) => {
+    setSwapIndex(idx);
+  };
+
+  const handleSwapProduct = (replacement: Product, sizeId?: number) => {
+    if (swapIndex === null) return;
+
+    setComponents(c => {
+      const updated = [...c];
+      const original = deal.components[swapIndex];
+      if (original) {
+        updated[swapIndex] = {
+          ...updated[swapIndex],
+          product_id: replacement.id,
+          product_id_original: original.product_id,
+          size_id: sizeId || (replacement.sizes.length === 0 ? null : undefined),
+        };
+      }
+      return updated;
+    });
+    setSwapIndex(null);
+  };
+
+  const handleUndoSwap = (idx: number) => {
+    setComponents(c => {
+      const updated = [...c];
+      const original = deal.components[idx];
+      if (original && updated[idx].product_id_original) {
+        updated[idx] = {
+          product_id: original.product_id,
+          quantity: original.quantity,
+          size_id: original.size_id,
+          was_removed: false,
+        };
+      }
+      return updated;
+    });
+  };
+
   // Show error immediately if all components removed
   const validationError = priceCalculation.activeCount === 0
     ? "Deal cannot have all components removed."
@@ -104,6 +279,17 @@ export function DealModifyModal({
       standard_price: deal.price,
     });
   };
+
+  if (swapIndex !== null) {
+    return (
+      <SwapProductModal
+        catalogProducts={catalogProducts}
+        originalComponent={deal.components[swapIndex]}
+        onSelect={handleSwapProduct}
+        onCancel={() => setSwapIndex(null)}
+      />
+    );
+  }
 
   return (
     <div className="modal-backdrop">
@@ -123,40 +309,60 @@ export function DealModifyModal({
             {deal.components.map((comp, idx) => {
               const comp_mod = components[idx];
               const isRemoved = comp_mod.was_removed;
-              const compProduct = catalogProducts.find(p => p.id === comp.product_id);
-              const hasSizes = compProduct && compProduct.sizes && compProduct.sizes.length > 0;
+              const isSwapped = !!comp_mod.product_id_original;
+              const displayProduct = catalogProducts.find(p => p.id === comp_mod.product_id);
+              const hasSizes = displayProduct && displayProduct.sizes && displayProduct.sizes.length > 0;
 
               return (
                 <div
                   key={idx}
-                  className={`deal-modify-component ${isRemoved ? "removed" : ""}`}
+                  className={`deal-modify-component ${isRemoved ? "removed" : ""} ${isSwapped ? "swapped" : ""}`}
                 >
                   <div className="deal-modify-component-info">
-                    <strong>{comp.product_name}</strong>
-                    {hasSizes ? (
+                    <strong>{displayProduct?.name_display || comp.product_name}</strong>
+                    {hasSizes && !isRemoved ? (
                       <select
                         value={comp_mod.size_id || ""}
                         onChange={(e) => handleSizeChange(idx, parseInt(e.target.value) || 0)}
                         className="deal-modify-size-select"
-                        disabled={isRemoved}
                       >
-                        {compProduct?.sizes.map(s => (
+                        {displayProduct?.sizes.map(s => (
                           <option key={s.id} value={s.id}>
                             {s.name}
                           </option>
                         ))}
                       </select>
-                    ) : comp.size_name ? (
+                    ) : !isSwapped && comp.size_name && !isRemoved ? (
                       <span className="component-size">({comp.size_name})</span>
                     ) : null}
                   </div>
-                  <button
-                    className="row-action-button"
-                    onClick={() => handleRemove(idx)}
-                    title={isRemoved ? "Restore" : "Remove"}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="deal-modify-component-actions">
+                    {isSwapped && (
+                      <button
+                        className="row-action-button"
+                        onClick={() => handleUndoSwap(idx)}
+                        title="Undo swap"
+                      >
+                        ↶
+                      </button>
+                    )}
+                    {!isRemoved && (
+                      <button
+                        className="row-action-button"
+                        onClick={() => handleSwapClick(idx)}
+                        title="Swap for different product"
+                      >
+                        ⇄
+                      </button>
+                    )}
+                    <button
+                      className="row-action-button"
+                      onClick={() => handleRemove(idx)}
+                      title={isRemoved ? "Restore" : "Remove"}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               );
             })}

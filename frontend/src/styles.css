@@ -1474,6 +1474,91 @@ h2 {
   margin-top: 12px;
 }
 
+.deal-modify-component-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.deal-modify-component.swapped {
+  background: var(--info-bg);
+  border-color: var(--info);
+}
+
+.product-swap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--surface);
+}
+
+.swap-product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.swap-product-item:hover {
+  border-color: var(--info);
+  background: var(--info-bg);
+}
+
+.swap-product-item.selected {
+  border-color: var(--info);
+  background: var(--info-bg);
+  font-weight: 600;
+}
+
+.swap-product-name {
+  flex: 1;
+  text-align: left;
+}
+
+.swap-product-price {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+.swap-no-results {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.row-action-button {
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.2s;
+}
+
+.row-action-button:hover {
+  background: var(--surface-alt);
+  color: var(--text);
+}
+
 .stock-preview span {
   display: block;
   color: var(--text-muted);

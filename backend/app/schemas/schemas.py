@@ -200,11 +200,17 @@ class TableRename(BaseModel):
     name: str = Field(max_length=50)
 
 class DealModificationComponent(BaseModel):
-    """A component of a deal as modified by cashier (Phase 11 Part 2)."""
+    """A component of a deal as modified by cashier (Phase 11 Part 2).
+
+    product_id: the product being served (original, or replacement if swapped).
+    product_id_original: if the component was swapped, the original product_id from deal definition.
+      This field is required WHEN a swap occurs, and must match an actual component of the deal.
+    """
     product_id: int
     quantity: int = Field(gt=0)
     size_id: int | None = Field(default=None)
     was_removed: bool = Field(default=False)
+    product_id_original: int | None = Field(default=None)  # set when component was swapped
 
 class DealModifications(BaseModel):
     """Deal modifications: components as modified, and final price (Phase 11 Part 2)."""

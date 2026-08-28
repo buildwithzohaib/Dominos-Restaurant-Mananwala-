@@ -26,7 +26,7 @@ export interface StockReconciliationItemIn { product_id:number; counted_quantity
 export interface StockReconciliationIn { items:StockReconciliationItemIn[]; }
 export interface RestaurantTable { id:number; name:string; seats:number; active?:boolean; }
 export interface RestaurantTableNested { id:number; name:string; seats:number; }
-export interface DealModificationComponent{product_id:number;quantity:number;size_id?:number|null;was_removed?:boolean;}
+export interface DealModificationComponent{product_id:number;quantity:number;size_id?:number|null;was_removed?:boolean;product_id_original?:number|null;}
 export interface DealModifications{components:DealModificationComponent[];price:number;standard_price:number;}
 export type CartItem={kind:"local";product:Product;quantity:number;sizeId?:number;sizeName?:string;sizePrice?:number;deal_modifications?:DealModifications}|{kind:"server";itemId:number;productId:number;productName:string;sizeName:string|null;price:number;lineTotal:number;quantity:number;batchId:number|null;sentAt:string|null};
 export interface OrderItem { id:number; product_id:number; product_name:string; size_name:string|null; quantity:number; price:number; /* paisa */ line_total:number; /* paisa */ batch_id:number|null; sent_at:string|null; }

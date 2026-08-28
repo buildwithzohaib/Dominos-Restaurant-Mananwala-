@@ -89,7 +89,7 @@ def _validate_deal_components(db: Session, deal: Product, line_quantity: int) ->
     return result
 
 
-def _decrement_deal_components(db: Session, deal: Product, components_data: list[tuple[DealComponent, int]], line_quantity: int, order_number: str) -> list[OrderItemComponent]:
+def _decrement_deal_components(db: Session, deal: Product, components_data: list[tuple[DealComponent, int]], line_quantity: int, order_number: str, product_map: dict[int, int] | None = None) -> list[OrderItemComponent]:
     """
     Atomically decrement stock for all deal components and create StockMovements.
 
@@ -103,6 +103,8 @@ def _decrement_deal_components(db: Session, deal: Product, components_data: list
         components_data: list of (DealComponent, original_stock) tuples from validation
         line_quantity: quantity of this deal being ordered
         order_number: the order's order_number for StockMovement reference
+        product_map: optional dict mapping original_product_id -> replacement_product_id (for swaps)
+                     if present, stock is decremented for the replacement, not the original
 
     Returns:
         List of OrderItemComponent dicts (not yet persisted) to add to the order
@@ -113,33 +115,39 @@ def _decrement_deal_components(db: Session, deal: Product, components_data: list
     item_components = []
 
     for component, _ in components_data:
-        comp_product = db.get(Product, component.component_product_id)
+        # Determine which product's stock to decrement: original or replacement (if swapped)
+        if product_map and component.component_product_id in product_map:
+            decrement_product_id = product_map[component.component_product_id]
+        else:
+            decrement_product_id = component.component_product_id
+
+        decrement_product = db.get(Product, decrement_product_id)
         needed = component.quantity * line_quantity
 
-        # Atomic conditional decrement
+        # Atomic conditional decrement on the PRODUCT BEING SERVED (replacement if swapped)
         result = db.execute(
             update(Product)
-            .where(Product.id == component.component_product_id, Product.stock >= needed)
+            .where(Product.id == decrement_product_id, Product.stock >= needed)
             .values(stock=Product.stock - needed, updated_at=datetime.utcnow())
         )
         if result.rowcount == 0:
             db.rollback()
             raise HTTPException(
                 400,
-                f'Only {comp_product.stock} of "{comp_product.name_display}" available '
+                f'Only {decrement_product.stock} of "{decrement_product.name_display}" available '
                 f'(need {needed} for this deal).'
             )
 
         # Refresh to get the new stock value
-        db.refresh(comp_product)
-        stock_after = comp_product.stock
+        db.refresh(decrement_product)
+        stock_after = decrement_product.stock
         stock_before = stock_after + needed
 
-        # Create StockMovement for this component
+        # Create StockMovement for the product ACTUALLY SERVED (StockMovement.item_id = replacement if swapped)
         db.add(StockMovement(
             item_type="PRODUCT",
-            item_id=comp_product.id,
-            item_name=comp_product.name_display,
+            item_id=decrement_product.id,
+            item_name=decrement_product.name_display,
             movement_type="SALE",
             quantity_change=-needed,
             reason="Sale",
@@ -150,7 +158,7 @@ def _decrement_deal_components(db: Session, deal: Product, components_data: list
             reference=order_number,
         ))
 
-        # Prepare OrderItemComponent snapshot
+        # Prepare OrderItemComponent snapshot with the ACTUAL PRODUCT SERVED
         size_name = None
         if component.size_id:
             size = db.query(ProductSize).filter(ProductSize.id == component.size_id).first()
@@ -158,8 +166,8 @@ def _decrement_deal_components(db: Session, deal: Product, components_data: list
 
         item_components.append({
             "deal_component_id": component.id,
-            "product_id": comp_product.id,
-            "product_name": comp_product.name_display,
+            "product_id": decrement_product.id,  # REPLACEMENT PRODUCT if swapped, original otherwise
+            "product_name": decrement_product.name_display,
             "quantity": component.quantity * line_quantity,
             "size_id": component.size_id,
         })
@@ -215,6 +223,13 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
 
                 # Validate each component in deal_modifications
                 for comp_mod in item.deal_modifications.components:
+                    # If this component is swapped, validate that the original is actually in the deal
+                    if comp_mod.product_id_original:
+                        orig_comp = next((c for c in product.components if c.component_product_id == comp_mod.product_id_original), None)
+                        if not orig_comp:
+                            raise HTTPException(400, f'Component {comp_mod.product_id_original} is not part of "{product.name_display}".')
+
+                    # Validate the component being served (replacement product if swapped, original otherwise)
                     comp_product = db.get(Product, comp_mod.product_id)
                     if not comp_product:
                         raise HTTPException(400, f'Component product {comp_mod.product_id} not found.')
@@ -381,24 +396,36 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
 
     # Stock decrement for deals: each component is decremented separately (Phase 11)
     # All-or-nothing: if ANY component fails, the entire order is rolled back
+    # CRITICAL: Maps key off the ORIGINAL component_product_id, but stock is decremented for the REPLACEMENT product
     deal_item_components: dict[int, list[OrderItemComponent]] = {}  # item_index -> components
     for i, (product_id, quantity, size_id, price, size_name, is_deal, deal_mods, price_override) in enumerate(item_details):
         if is_deal:
             deal = deals[product_id]
             components_data = deal_components_data[deal.id]
 
-            # If deal has modifications, filter components to only those not removed
+            # If deal has modifications, filter and map components
             if deal_mods:
+                # Build maps keyed off ORIGINAL component_product_id (use product_id_original if set, else product_id)
+                removed_map = {}  # original_product_id -> was_removed
+                product_map = {}  # original_product_id -> replacement_product_id (if swapped) or original
+                size_map = {}     # original_product_id -> size_id (if changed)
+
+                for comp_mod in deal_mods.components:
+                    orig_id = comp_mod.product_id_original or comp_mod.product_id
+                    removed_map[orig_id] = comp_mod.was_removed
+                    product_map[orig_id] = comp_mod.product_id  # what's actually being served
+                    size_map[orig_id] = comp_mod.size_id
+
                 components_to_decrement = []
-                # Build a map of component_product_id -> was_removed for quick lookup
-                removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
                 for comp, stock in components_data:
-                    if comp.component_product_id not in removed_map or not removed_map[comp.component_product_id]:
+                    orig_product_id = comp.component_product_id
+                    if orig_product_id not in removed_map or not removed_map[orig_product_id]:
                         components_to_decrement.append((comp, stock))
             else:
                 components_to_decrement = components_data
+                product_map = {}  # unused when no modifications
 
-            item_components = _decrement_deal_components(db, deal, components_to_decrement, quantity, order.order_number)
+            item_components = _decrement_deal_components(db, deal, components_to_decrement, quantity, order.order_number, product_map if deal_mods else None)
             deal_item_components[i] = item_components
 
     # Create OrderItem rows for each item (including deals)
@@ -739,6 +766,13 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
 
                 # Validate each component in deal_modifications
                 for comp_mod in item.deal_modifications.components:
+                    # If this component is swapped, validate that the original is actually in the deal
+                    if comp_mod.product_id_original:
+                        orig_comp = next((c for c in product.components if c.component_product_id == comp_mod.product_id_original), None)
+                        if not orig_comp:
+                            raise HTTPException(400, f'Component {comp_mod.product_id_original} is not part of "{product.name_display}".')
+
+                    # Validate the component being served (replacement product if swapped, original otherwise)
                     comp_product = db.get(Product, comp_mod.product_id)
                     if not comp_product:
                         raise HTTPException(400, f'Component product {comp_mod.product_id} not found.')
@@ -837,21 +871,34 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
 
             # Create OrderItemComponent rows for each deal component (including removed ones)
             if deal_mods:
-                # For modified deals, create components with was_removed flag and modified size_id
-                removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
-                size_map = {c.product_id: c.size_id for c in deal_mods.components}
+                # For modified deals: key maps off ORIGINAL component_product_id
+                # removed_map, size_map, product_map all use original_id as key
+                removed_map = {}  # original_product_id -> was_removed
+                product_map = {}  # original_product_id -> replacement_product_id (if swapped) or original
+                size_map = {}     # original_product_id -> size_id
+
+                for comp_mod in deal_mods.components:
+                    orig_id = comp_mod.product_id_original or comp_mod.product_id
+                    removed_map[orig_id] = comp_mod.was_removed
+                    product_map[orig_id] = comp_mod.product_id  # what's actually being served
+                    size_map[orig_id] = comp_mod.size_id
+
                 for comp_data in deal_components_data[deal.id]:
+                    orig_product_id = comp_data[0].component_product_id
                     # Calculate component quantity for THIS deal line (component qty × line qty)
                     component_qty = comp_data[0].quantity * quantity
-                    was_removed = removed_map.get(comp_data[0].component_product_id, False)
+                    was_removed = removed_map.get(orig_product_id, False)
                     # Use modified size_id if it was changed, otherwise use original
-                    modified_size_id = size_map.get(comp_data[0].component_product_id, comp_data[0].size_id)
+                    modified_size_id = size_map.get(orig_product_id, comp_data[0].size_id)
+                    # Use REPLACEMENT product_id if swapped, original otherwise (deal_component_id always points to original)
+                    served_product_id = product_map.get(orig_product_id, orig_product_id)
+                    served_product = db.get(Product, served_product_id)
 
                     db.add(OrderItemComponent(
                         order_item_id=order_item.id,
                         deal_component_id=comp_data[0].id,
-                        product_id=comp_data[0].component_product_id,
-                        product_name=db.get(Product, comp_data[0].component_product_id).name_display,
+                        product_id=served_product_id,  # REPLACEMENT if swapped, original otherwise
+                        product_name=served_product.name_display if served_product else "Unknown",
                         quantity=component_qty,
                         size_id=modified_size_id,
                         was_removed=was_removed,
@@ -859,13 +906,18 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
                 # Also create OrderItemComponent rows for removed components
                 for comp_mod in deal_mods.components:
                     if comp_mod.was_removed:
-                        orig_comp = next((c for c in deal.components if c.component_product_id == comp_mod.product_id), None)
+                        # For removed components, comp_mod.product_id is what the original component was
+                        # Find the original deal component definition
+                        orig_id = comp_mod.product_id_original or comp_mod.product_id
+                        orig_comp = next((c for c in deal.components if c.component_product_id == orig_id), None)
                         if orig_comp:
-                            comp_product = db.get(Product, comp_mod.product_id)
+                            # Use what's being served (replacement if swapped, original if not)
+                            served_product_id = comp_mod.product_id
+                            comp_product = db.get(Product, served_product_id)
                             db.add(OrderItemComponent(
                                 order_item_id=order_item.id,
                                 deal_component_id=orig_comp.id,
-                                product_id=comp_mod.product_id,
+                                product_id=served_product_id,  # REPLACEMENT if swapped, original if not
                                 product_name=comp_product.name_display if comp_product else "Unknown",
                                 quantity=orig_comp.quantity * quantity,
                                 size_id=comp_mod.size_id,
