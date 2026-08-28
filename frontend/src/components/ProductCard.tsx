@@ -14,18 +14,25 @@ export function ProductCard({
 }) {
   const formatCurrency = useCurrencyFormat();
   const [imageError, setImageError] = useState(false);
-  // Reuse the backend's authoritative stock_status (Phase 3) rather than
-  // re-deriving availability from stock/available locally — one status
-  // calculation, computed on the server, read everywhere.
-  const outOfStock = product.stock_status === "OUT_OF_STOCK";
+  const isDeal = product.product_type === "DEAL";
+
+  // For deals, never check stock_status — deals are always tappable.
+  // For regular products, use the backend's authoritative stock_status (Phase 3).
+  const outOfStock = !isDeal && product.stock_status === "OUT_OF_STOCK";
   const hasSizes = product.sizes && product.sizes.length > 0;
   const showImage = product.image && !imageError;
+
+  // For deals, format component names with sizes: "Name1 + Name2 (Large) + ..."
+  const componentNames = isDeal && product.components.length > 0
+    ? product.components.map(c => c.size_name ? `${c.product_name} (${c.size_name})` : c.product_name).join(" + ")
+    : null;
 
   return (
     <button
       className={outOfStock ? "product-card out-of-stock" : "product-card"}
       onClick={() => !outOfStock && onAdd(product)}
       disabled={outOfStock || isDisabled}
+      title={componentNames ? componentNames : undefined}
     >
       <div className="product-thumb">
         {showImage ? (
@@ -43,6 +50,11 @@ export function ProductCard({
         <strong>{product.name_display}</strong>
         {outOfStock ? (
           <span className="status-badge out-of-stock">Out of Stock</span>
+        ) : isDeal ? (
+          <>
+            <span className="status-badge deal-badge">DEAL</span>
+            <span className="deal-components">{componentNames}</span>
+          </>
         ) : hasSizes ? (
           <span className="status-badge size-options">Choose Size</span>
         ) : (

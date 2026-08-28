@@ -11,7 +11,7 @@ export interface ProductSize { id:number; name:string; price:number; /* paisa */
 // Inventory fields (Phase 3) live on the same Product row the POS/cart/receipt already
 // read — sku/min_stock/unit/purchase_price/stock_status/updated_at are additive, and
 // price/stock remain the single authoritative selling-price/current-stock values.
-export interface Product { id:number; category_id:number; category:CategoryInfo; name_display:string; price:number; /* paisa */ stock:number; image?:string|null; image_hash?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; sizes:ProductSize[]; /* size variants, empty if no sizes */ updated_at:string; }
+export interface Product { id:number; category_id:number; category:CategoryInfo; name_display:string; price:number; /* paisa */ stock:number; image?:string|null; image_hash?:string|null; available:boolean; status:string; sku:string; min_stock:number; unit:string; purchase_price:number; /* paisa */ stock_status:StockStatus; product_type:string; /* 'PRODUCT' or 'DEAL' */ sizes:ProductSize[]; /* size variants, empty if no sizes */ components:DealComponentOut[]; /* deal components, empty if not a deal */ updated_at:string; }
 export interface InventoryUpdateInput { name?:string; sku?:string; min_stock?:number; unit?:string; purchase_price?:number; /* paisa */ price?:number; /* paisa */ }
 // Stock operations (Phase 4–8) — every change to Product.stock writes one of
 // these ledger rows in the same backend transaction; Product.stock stays the only

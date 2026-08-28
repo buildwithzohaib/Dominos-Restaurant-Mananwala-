@@ -128,7 +128,9 @@ class ProductOut(BaseModel):
     unit: str
     purchase_price: int  # paisa
     stock_status: str
+    product_type: str  # "PRODUCT" or "DEAL" (Phase 11)
     sizes: list[ProductSizeOut] = []  # size variants, empty if product has no sizes
+    components: list["DealComponentOut"] = []  # deal components, empty if not a deal (Phase 11)
     updated_at: datetime
 
 # --- Deal Management (Phase 11) ---

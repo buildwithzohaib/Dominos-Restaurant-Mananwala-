@@ -1243,6 +1243,26 @@ h2 {
   margin-bottom: 5px;
 }
 
+.status-badge.deal-badge {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-weight: 600;
+  display: block;
+  margin-top: 5px;
+  margin-bottom: 5px;
+}
+
+.deal-components {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Size option button rows in modal — primary text on modal surface background */
 .size-option-button {
   color: var(--text);

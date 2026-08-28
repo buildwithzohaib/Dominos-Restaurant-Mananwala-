@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.models import Category, Product, RestaurantTable, User
 from app.schemas.schemas import CategoryOut, ProductOut, TableOut, TableCreate, TableRename
-from app.services import table_service
+from app.services import table_service, deal_service
 from app.routes.auth import get_current_user_dep
 
 router = APIRouter(prefix="/api", tags=["catalog"], dependencies=[Depends(get_current_user_dep)])
@@ -15,12 +15,52 @@ def catalog_categories(db: Session = Depends(get_db)):
 
 @router.get("/catalog/products", response_model=list[ProductOut])
 def catalog_products(db: Session = Depends(get_db)):
-    # Return only regular products (not deals) for the POS grid (Phase 11)
-    return db.query(Product)\
+    # Return both regular products and deals for the POS grid (Phase 11)
+    # Deals and products both filter by available and active category.
+    # Regular products return unchanged; deals have components transformed to include product/size names.
+    products = db.query(Product)\
+        .options(joinedload(Product.category), joinedload(Product.sizes), joinedload(Product.components))\
         .join(Category, Product.category_id == Category.id)\
-        .filter(Product.available.is_(True), Category.active.is_(True), Product.product_type == "PRODUCT")\
+        .filter(Product.available.is_(True), Category.active.is_(True))\
         .order_by(Product.name_display)\
         .all()
+
+    # For deals, transform components to include product_name and size_name
+    # (reuse the logic from deal_service to avoid duplication)
+    result = []
+    for product in products:
+        product_dict = {
+            "id": product.id,
+            "category_id": product.category_id,
+            "category": product.category,
+            "name_display": product.name_display,
+            "price": product.price,
+            "stock": product.stock,
+            "image": product.image,
+            "image_hash": product.image_hash,
+            "available": product.available,
+            "status": product.status,
+            "sku": product.sku,
+            "min_stock": product.min_stock,
+            "unit": product.unit,
+            "purchase_price": product.purchase_price,
+            "stock_status": product.stock_status,
+            "product_type": product.product_type,
+            "sizes": product.sizes,
+            "updated_at": product.updated_at,
+        }
+
+        # For deals, build components with product_name and size_name
+        if product.product_type == "DEAL":
+            # Transform each component to include product_name and size_name (Phase 11)
+            components = [deal_service._component_to_output(db, comp) for comp in product.components]
+            product_dict["components"] = components
+        else:
+            product_dict["components"] = []
+
+        result.append(product_dict)
+
+    return result
 
 @router.get("/tables", response_model=list[TableOut])
 def list_tables(
