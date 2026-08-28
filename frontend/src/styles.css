@@ -1343,6 +1343,122 @@ h2 {
   flex: 1;
 }
 
+/* Deal Modify Modal (Phase 11 Part 2) */
+.deal-modify-modal {
+  max-width: 500px;
+}
+
+.deal-modify-section {
+  margin-top: 20px;
+}
+
+.deal-modify-heading {
+  margin: 0 0 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deal-modify-components {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deal-modify-component {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+
+.deal-modify-component.removed {
+  opacity: 0.5;
+}
+
+.deal-modify-component-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.component-size {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.deal-modify-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+  padding: 12px;
+  background: var(--surface-alt);
+  border-radius: 6px;
+}
+
+.deal-modify-price-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.deal-modify-price-line.negative {
+  color: var(--danger-text);
+}
+
+.deal-modify-price-line.calculated {
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.deal-modify-price-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.deal-modify-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deal-modify-input {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1rem;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.deal-modify-input:focus {
+  outline: none;
+  border-color: var(--info);
+}
+
+.deal-modify-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.deal-modify-actions button {
+  flex: 1;
+}
+
+.deal-modify-error {
+  margin-top: 12px;
+}
+
 .stock-preview span {
   display: block;
   color: var(--text-muted);

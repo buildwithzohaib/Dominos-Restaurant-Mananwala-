@@ -1,4 +1,4 @@
-import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,DashboardRange,DealCreate,DealOut,DealUpdate,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
+import type {Category,Customer,CustomerCreateInput,CustomerSearchResult,CustomerUpdateInput,DashboardOverview,DashboardRange,DealCreate,DealOut,DealUpdate,DealModifications,InventoryUpdateInput,Order,OrderCancelInput,OrderType,PaymentMethod,Product,ProductCreateInput,ProductUpdateInput,RestaurantTable,Settings,SettingsUpdate,StockAdjustmentInput,StockMovement,StockPurchaseInput,StockReconciliationIn,User} from "../types";
 
 export const API_URL=import.meta.env.VITE_API_URL||"";
 
@@ -115,7 +115,7 @@ export const api={
   const qs=q.toString();
   return request<Order[]>(`/api/orders${qs?`?${qs}`:""}`);
  },
- createOrder:(p:{order_type:OrderType;table_id:number|null;customer_id?:number|null;delivery_address?:string|null;delivery_charge?:number|null;items:{product_id:number;quantity:number;size_id?:number}[];discount:number;payment_method:PaymentMethod;amount_received:number})=>request<Order>("/api/orders",{method:"POST",body:JSON.stringify(p)}),
+ createOrder:(p:{order_type:OrderType;table_id:number|null;customer_id?:number|null;delivery_address?:string|null;delivery_charge?:number|null;items:{product_id:number;quantity:number;size_id?:number;deal_modifications?:DealModifications}[];discount:number;payment_method:PaymentMethod;amount_received:number})=>request<Order>("/api/orders",{method:"POST",body:JSON.stringify(p)}),
  // Order cancellation (Phase 7) — never deletes the order, just flips status to
  // CANCELLED with a required reason; inventory restoration is a Phase 8 concern.
  cancelOrder:(id:number,payload:OrderCancelInput)=>request<Order>(`/api/orders/${id}/cancel`,{method:"POST",body:JSON.stringify(payload)}),
@@ -180,7 +180,7 @@ export const api={
  activateCustomer:(id:number)=>request<Customer>(`/api/customers/${id}/activate`,{method:"PATCH",body:JSON.stringify({})}),
  // DINE_IN running tab (Phase 4.D2)
  openOrder:(p:{table_id:number;customer_id?:number|null})=>request<Order>("/api/orders/open",{method:"POST",body:JSON.stringify(p)}),
- addItemsToOrder:(id:number,p:{items:{product_id:number;quantity:number;size_id?:number}[]})=>request<Order>(`/api/orders/${id}/items`,{method:"POST",body:JSON.stringify(p)}),
+ addItemsToOrder:(id:number,p:{items:{product_id:number;quantity:number;size_id?:number;deal_modifications?:DealModifications}[]})=>request<Order>(`/api/orders/${id}/items`,{method:"POST",body:JSON.stringify(p)}),
  updatePendingItem:(id:number,item_id:number,p:{quantity:number;reason?:string})=>request<Order>(`/api/orders/${id}/items/${item_id}`,{method:"PATCH",body:JSON.stringify(p)}),
  sendBatchToKitchen:(id:number)=>request<Order>(`/api/orders/${id}/send`,{method:"POST",body:JSON.stringify({})}),
  payOrderDineIn:(id:number,p:{payment_method:PaymentMethod;discount:number;amount_received:number})=>request<Order>(`/api/orders/${id}/pay`,{method:"POST",body:JSON.stringify(p)}),

@@ -16,19 +16,23 @@ from app.utils.normalization import derive_key, normalize_display
 def _component_to_output(db: Session, component: DealComponent) -> dict:
     """Transform a DealComponent to a dict suitable for DealComponentOut.
 
-    Fetches the component product name and size name for the response.
+    Fetches the component product name, size name, and component_price.
+    component_price is: size's price if size_id is set, otherwise product's base price.
     """
-    # Fetch component product name
+    # Fetch component product
     component_product = db.query(Product).filter(
         Product.id == component.component_product_id
     ).first()
     product_name = component_product.name_display if component_product else "Unknown"
+    component_price = component_product.price if component_product else 0
 
-    # Fetch size name if applicable
+    # Fetch size name and override price if applicable
     size_name = None
     if component.size_id:
         size = db.query(ProductSize).filter(ProductSize.id == component.size_id).first()
-        size_name = size.name if size else None
+        if size:
+            size_name = size.name
+            component_price = size.price  # Size price overrides product price
 
     return {
         "id": component.id,
@@ -37,6 +41,7 @@ def _component_to_output(db: Session, component: DealComponent) -> dict:
         "quantity": component.quantity,
         "size_id": component.size_id,
         "size_name": size_name,
+        "component_price": component_price,
     }
 
 

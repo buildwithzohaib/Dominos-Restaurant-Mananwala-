@@ -103,10 +103,11 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
             const productName=i.kind==="local"?i.product.name_display:i.productName;
             const sizeName=i.kind==="local"?i.sizeName:i.sizeName;
             const displayName=sizeName?`${productName} (${sizeName})`:productName;
-            const productPrice=i.kind==="local"?(i.sizePrice??i.product.price):i.price;
+            const productPrice=i.kind==="local"?(i.deal_modifications?.price??i.sizePrice??i.product.price):i.price;
             const rowKey=i.kind==="local"?`local-${i.product.id}-${i.sizeId??""}`:`server-${i.itemId}`;
             const isLocal=i.kind==="local";
-            const atStockLimit=isLocal&&i.quantity>=i.product.stock;
+            const isDeal=isLocal&&i.product.product_type==="DEAL";
+            const atStockLimit=isLocal&&!isDeal&&i.quantity>=i.product.stock;
 
             const isSent = i.kind === "server" && i.batchId !== null;
 
@@ -119,7 +120,7 @@ export function OrderPanel({ onPay, onCancelSuccess }: { onPay: () => void; onCa
                     {formatCurrency(productPrice)} each
                   </span>
 
-                  {isLocal&&atStockLimit && (
+                  {atStockLimit && (
                     <span className="cart-stock-hint">
                       Only {i.product.stock} in stock
                     </span>

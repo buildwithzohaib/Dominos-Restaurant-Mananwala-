@@ -186,15 +186,16 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
             raise HTTPException(400, f'"{customer.name_display}" is inactive.')
 
     # Validate sizes and resolve prices for each item; separate regular products from deals
-    item_details: list[tuple[int, int, int | None, int, str | None, bool]] = []  # (product_id, quantity, size_id, price, size_name, is_deal)
+    # item_details tuple: (product_id, quantity, size_id, price, size_name, is_deal, deal_modifications, price_override)
+    item_details: list[tuple[int, int, int | None, int, str | None, bool, dict | None, int | None]] = []
     requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity (regular products only)
-    deal_requests: list[tuple[Product, int]] = []  # (deal Product, quantity) for deal items
+    deal_requests: list[tuple[Product, int, dict | None]] = []  # (deal Product, quantity, deal_modifications or None)
     products: dict[int, Product] = {}  # product_id -> Product (regular products only)
     deals: dict[int, Product] = {}  # product_id -> Product (deals only)
     subtotal = 0
 
     for item in payload.items:
-        product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes)).filter(Product.id == item.product_id).first()
+        product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes), joinedload(Product.components)).filter(Product.id == item.product_id).first()
         if not product:
             raise HTTPException(400, "Product not found.")
         if not product.available:
@@ -205,17 +206,57 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
         is_deal = product.product_type == "DEAL"
 
         if is_deal:
-            # For deals, price is the deal's price (not sum of components)
-            price = product.price
-            size_name = None  # Deals don't have sizes
-            item_details.append((item.product_id, item.quantity, None, price, size_name, True))
-            deal_requests.append((product, item.quantity))
-            deals[item.product_id] = product
-            subtotal += price * item.quantity
+            # Check if this deal has modifications
+            if item.deal_modifications:
+                # Modified deal: validate and use charged price
+                charged_price = item.deal_modifications.price
+                standard_price = product.price
+                price_override = standard_price if charged_price != standard_price else None
+
+                # Validate each component in deal_modifications
+                for comp_mod in item.deal_modifications.components:
+                    comp_product = db.get(Product, comp_mod.product_id)
+                    if not comp_product:
+                        raise HTTPException(400, f'Component product {comp_mod.product_id} not found.')
+                    if comp_product.product_type == "DEAL":
+                        raise HTTPException(400, f'Component "{comp_product.name_display}" is a deal. Deals cannot contain other deals.')
+                    if not comp_product.available:
+                        raise HTTPException(400, f'Component "{comp_product.name_display}" is disabled.')
+                    if not comp_product.category.active:
+                        raise HTTPException(400, f'Component "{comp_product.name_display}" is in a disabled category.')
+
+                    # Validate size if provided
+                    if comp_mod.size_id:
+                        size = db.query(ProductSize).filter(
+                            ProductSize.id == comp_mod.size_id,
+                            ProductSize.product_id == comp_mod.product_id
+                        ).first()
+                        if not size:
+                            raise HTTPException(400, f'Selected size does not exist or does not belong to "{comp_product.name_display}".')
+
+                # Validate that not all components are removed
+                active_comps = [c for c in item.deal_modifications.components if not c.was_removed]
+                if not active_comps:
+                    raise HTTPException(400, "Deal cannot have all components removed.")
+
+                price = charged_price
+                size_name = None
+                item_details.append((item.product_id, item.quantity, None, price, size_name, True, item.deal_modifications, price_override))
+                deal_requests.append((product, item.quantity, item.deal_modifications))
+                deals[item.product_id] = product
+                subtotal += price * item.quantity
+            else:
+                # Unmodified deal: existing logic
+                price = product.price
+                size_name = None
+                item_details.append((item.product_id, item.quantity, None, price, size_name, True, None, None))
+                deal_requests.append((product, item.quantity, None))
+                deals[item.product_id] = product
+                subtotal += price * item.quantity
         else:
             # Regular product: validate size and get price
             price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
-            item_details.append((item.product_id, item.quantity, item.size_id, price, size_name, False))
+            item_details.append((item.product_id, item.quantity, item.size_id, price, size_name, False, None, None))
             requested[item.product_id] += item.quantity
             products[item.product_id] = product
             subtotal += price * item.quantity
@@ -230,9 +271,11 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
 
     # Stock validation for deals (and fetch component info for later decrement)
     deal_components_data: dict[int, list[tuple[DealComponent, int]]] = {}  # deal_id -> components_data
-    for deal, quantity in deal_requests:
+    deal_modifications_map: dict[int, dict | None] = {}  # deal_id -> deal_modifications or None
+    for deal, quantity, deal_mods in deal_requests:
         components_data = _validate_deal_components(db, deal, quantity)
         deal_components_data[deal.id] = components_data
+        deal_modifications_map[deal.id] = deal_mods
 
     # Get tax_rate and delivery_charge from settings (Rule 7: snapshot at order time)
     settings = db.query(Settings).filter(Settings.id == 1).first()
@@ -339,15 +382,27 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
     # Stock decrement for deals: each component is decremented separately (Phase 11)
     # All-or-nothing: if ANY component fails, the entire order is rolled back
     deal_item_components: dict[int, list[OrderItemComponent]] = {}  # item_index -> components
-    for i, (product_id, quantity, size_id, price, size_name, is_deal) in enumerate(item_details):
+    for i, (product_id, quantity, size_id, price, size_name, is_deal, deal_mods, price_override) in enumerate(item_details):
         if is_deal:
             deal = deals[product_id]
             components_data = deal_components_data[deal.id]
-            item_components = _decrement_deal_components(db, deal, components_data, quantity, order.order_number)
+
+            # If deal has modifications, filter components to only those not removed
+            if deal_mods:
+                components_to_decrement = []
+                # Build a map of component_product_id -> was_removed for quick lookup
+                removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
+                for comp, stock in components_data:
+                    if comp.component_product_id not in removed_map or not removed_map[comp.component_product_id]:
+                        components_to_decrement.append((comp, stock))
+            else:
+                components_to_decrement = components_data
+
+            item_components = _decrement_deal_components(db, deal, components_to_decrement, quantity, order.order_number)
             deal_item_components[i] = item_components
 
     # Create OrderItem rows for each item (including deals)
-    for i, (product_id, quantity, size_id, price, size_name, is_deal) in enumerate(item_details):
+    for i, (product_id, quantity, size_id, price, size_name, is_deal, deal_mods, price_override) in enumerate(item_details):
         if is_deal:
             deal = deals[product_id]
             order_item = OrderItem(
@@ -356,24 +411,57 @@ def create_order(db: Session, payload: OrderCreate, performed_by_user_id: int | 
                 product_name=deal.name_display,
                 size_name=None,
                 quantity=quantity,
-                price=price,  # deal's price
+                price=price,  # charged price (may differ from standard if modified)
                 line_total=price * quantity,
                 cost=deal.purchase_price,
                 deal_id=deal.id,
+                price_override=price_override,  # standard price from DB, only if differs
             )
             db.add(order_item)
             db.flush()  # Get the order_item.id before adding components
 
-            # Create OrderItemComponent rows for each deal component
-            for comp_data in deal_item_components.get(i, []):
-                db.add(OrderItemComponent(
-                    order_item_id=order_item.id,
-                    deal_component_id=comp_data["deal_component_id"],
-                    product_id=comp_data["product_id"],
-                    product_name=comp_data["product_name"],
-                    quantity=comp_data["quantity"],
-                    size_id=comp_data["size_id"],
-                ))
+            # Create OrderItemComponent rows for each deal component (including removed ones)
+            if deal_mods:
+                # For modified deals, create components with was_removed flag
+                removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
+                for comp_data in deal_item_components.get(i, []):
+                    was_removed = removed_map.get(comp_data["product_id"], False)
+                    db.add(OrderItemComponent(
+                        order_item_id=order_item.id,
+                        deal_component_id=comp_data["deal_component_id"],
+                        product_id=comp_data["product_id"],
+                        product_name=comp_data["product_name"],
+                        quantity=comp_data["quantity"],
+                        size_id=comp_data["size_id"],
+                        was_removed=was_removed,
+                    ))
+                # Also create OrderItemComponent rows for removed components (these won't have stock decrements)
+                for comp_mod in deal_mods.components:
+                    if comp_mod.was_removed:
+                        # Find the original component definition to get its data
+                        orig_comp = next((c for c in deal.components if c.component_product_id == comp_mod.product_id), None)
+                        if orig_comp:
+                            comp_product = db.get(Product, comp_mod.product_id)
+                            db.add(OrderItemComponent(
+                                order_item_id=order_item.id,
+                                deal_component_id=orig_comp.id,
+                                product_id=comp_mod.product_id,
+                                product_name=comp_product.name_display if comp_product else "Unknown",
+                                quantity=orig_comp.quantity * quantity,
+                                size_id=comp_mod.size_id,
+                                was_removed=True,
+                            ))
+            else:
+                # For unmodified deals, create components normally
+                for comp_data in deal_item_components.get(i, []):
+                    db.add(OrderItemComponent(
+                        order_item_id=order_item.id,
+                        deal_component_id=comp_data["deal_component_id"],
+                        product_id=comp_data["product_id"],
+                        product_name=comp_data["product_name"],
+                        quantity=comp_data["quantity"],
+                        size_id=comp_data["size_id"],
+                    ))
         else:
             product = products[product_id]
             db.add(OrderItem(
@@ -621,14 +709,14 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
         raise HTTPException(400, "Only an open order can be modified.")
 
     # Validate sizes and resolve prices for each item; separate regular products from deals
-    item_details: list[tuple[int, int, int | None, int, str | None, bool]] = []  # (product_id, quantity, size_id, price, size_name, is_deal)
+    item_details: list[tuple[int, int, int | None, int, str | None, bool, dict | None, int | None]] = []
     requested: dict[int, int] = defaultdict(int)  # product_id -> total quantity (regular products only)
-    deal_requests: list[tuple[Product, int]] = []  # (deal Product, quantity) for deal items
+    deal_requests: list[tuple[Product, int, dict | None]] = []  # (deal Product, quantity, deal_modifications or None)
     products: dict[int, Product] = {}  # product_id -> Product (regular products only)
     deals: dict[int, Product] = {}  # product_id -> Product (deals only)
 
     for item in payload.items:
-        product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes)).filter(Product.id == item.product_id).first()
+        product = db.query(Product).options(joinedload(Product.category), joinedload(Product.sizes), joinedload(Product.components)).filter(Product.id == item.product_id).first()
         if not product:
             raise HTTPException(400, "Product not found.")
         if not product.available:
@@ -639,16 +727,55 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
         is_deal = product.product_type == "DEAL"
 
         if is_deal:
-            # For deals, price is the deal's price (not sum of components)
-            price = product.price
-            size_name = None  # Deals don't have sizes
-            item_details.append((item.product_id, item.quantity, None, price, size_name, True))
-            deal_requests.append((product, item.quantity))
-            deals[item.product_id] = product
+            # Check if this deal has modifications
+            if item.deal_modifications:
+                # Modified deal: validate and use charged price
+                charged_price = item.deal_modifications.price
+                standard_price = product.price
+                price_override = standard_price if charged_price != standard_price else None
+
+                # Validate each component in deal_modifications
+                for comp_mod in item.deal_modifications.components:
+                    comp_product = db.get(Product, comp_mod.product_id)
+                    if not comp_product:
+                        raise HTTPException(400, f'Component product {comp_mod.product_id} not found.')
+                    if comp_product.product_type == "DEAL":
+                        raise HTTPException(400, f'Component "{comp_product.name_display}" is a deal. Deals cannot contain other deals.')
+                    if not comp_product.available:
+                        raise HTTPException(400, f'Component "{comp_product.name_display}" is disabled.')
+                    if not comp_product.category.active:
+                        raise HTTPException(400, f'Component "{comp_product.name_display}" is in a disabled category.')
+
+                    # Validate size if provided
+                    if comp_mod.size_id:
+                        size = db.query(ProductSize).filter(
+                            ProductSize.id == comp_mod.size_id,
+                            ProductSize.product_id == comp_mod.product_id
+                        ).first()
+                        if not size:
+                            raise HTTPException(400, f'Selected size does not exist or does not belong to "{comp_product.name_display}".')
+
+                # Validate that not all components are removed
+                active_comps = [c for c in item.deal_modifications.components if not c.was_removed]
+                if not active_comps:
+                    raise HTTPException(400, "Deal cannot have all components removed.")
+
+                price = charged_price
+                size_name = None
+                item_details.append((item.product_id, item.quantity, None, price, size_name, True, item.deal_modifications, price_override))
+                deal_requests.append((product, item.quantity, item.deal_modifications))
+                deals[item.product_id] = product
+            else:
+                # Unmodified deal: existing logic
+                price = product.price
+                size_name = None
+                item_details.append((item.product_id, item.quantity, None, price, size_name, True, None, None))
+                deal_requests.append((product, item.quantity, None))
+                deals[item.product_id] = product
         else:
             # Regular product: validate size and get price
             price, size_name = _validate_and_resolve_item_price(db, product, item.size_id)
-            item_details.append((item.product_id, item.quantity, item.size_id, price, size_name, False))
+            item_details.append((item.product_id, item.quantity, item.size_id, price, size_name, False, None, None))
             requested[item.product_id] += item.quantity
             products[item.product_id] = product
 
@@ -675,14 +802,16 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
     # Validate deals (no stock check for PENDING items; stock is checked at send time)
     # But we DO validate that deal and components exist and have definitions
     deal_components_data: dict[int, list[tuple[DealComponent, int]]] = {}
-    for deal, quantity in deal_requests:
+    deal_modifications_map: dict[int, dict | None] = {}
+    for deal, quantity, deal_mods in deal_requests:
         components_data = _validate_deal_components(db, deal, quantity)
         deal_components_data[deal.id] = components_data
+        deal_modifications_map[deal.id] = deal_mods
 
     # Add or merge OrderItem rows for each item (do NOT decrement stock; PENDING items)
     # For regular products: merge key is product + size.
     # For deals: do not merge; each deal is a separate line with its components.
-    for i, (product_id, quantity, size_id, price, size_name, is_deal) in enumerate(item_details):
+    for i, (product_id, quantity, size_id, price, size_name, is_deal, deal_mods, price_override) in enumerate(item_details):
         if is_deal:
             # Deals are never merged; always create a new line
             deal = deals[product_id]
@@ -692,29 +821,64 @@ def add_items_to_order(db: Session, order_id: int, payload: AddItemsIn) -> Order
                 product_name=deal.name_display,
                 size_name=None,
                 quantity=quantity,
-                price=price,  # deal's price
+                price=price,  # charged price (may differ from standard if modified)
                 line_total=price * quantity,
                 cost=deal.purchase_price,
                 batch_id=None,
                 sent_at=None,
                 deal_id=deal.id,
+                price_override=price_override,  # standard price from DB, only if differs
             )
             db.add(order_item)
             db.flush()  # Get the order_item.id before adding components
 
-            # Create OrderItemComponent rows for each deal component
-            for comp_data in deal_components_data[deal.id]:
-                # Calculate component quantity for THIS deal line (component qty × line qty)
-                component_qty = comp_data[0].quantity * quantity
+            # Create OrderItemComponent rows for each deal component (including removed ones)
+            if deal_mods:
+                # For modified deals, create components with was_removed flag
+                removed_map = {c.product_id: c.was_removed for c in deal_mods.components}
+                for comp_data in deal_components_data[deal.id]:
+                    # Calculate component quantity for THIS deal line (component qty × line qty)
+                    component_qty = comp_data[0].quantity * quantity
+                    was_removed = removed_map.get(comp_data[0].component_product_id, False)
 
-                db.add(OrderItemComponent(
-                    order_item_id=order_item.id,
-                    deal_component_id=comp_data[0].id,
-                    product_id=comp_data[0].component_product_id,
-                    product_name=db.get(Product, comp_data[0].component_product_id).name_display,
-                    quantity=component_qty,
-                    size_id=comp_data[0].size_id,
-                ))
+                    db.add(OrderItemComponent(
+                        order_item_id=order_item.id,
+                        deal_component_id=comp_data[0].id,
+                        product_id=comp_data[0].component_product_id,
+                        product_name=db.get(Product, comp_data[0].component_product_id).name_display,
+                        quantity=component_qty,
+                        size_id=comp_data[0].size_id,
+                        was_removed=was_removed,
+                    ))
+                # Also create OrderItemComponent rows for removed components
+                for comp_mod in deal_mods.components:
+                    if comp_mod.was_removed:
+                        orig_comp = next((c for c in deal.components if c.component_product_id == comp_mod.product_id), None)
+                        if orig_comp:
+                            comp_product = db.get(Product, comp_mod.product_id)
+                            db.add(OrderItemComponent(
+                                order_item_id=order_item.id,
+                                deal_component_id=orig_comp.id,
+                                product_id=comp_mod.product_id,
+                                product_name=comp_product.name_display if comp_product else "Unknown",
+                                quantity=orig_comp.quantity * quantity,
+                                size_id=comp_mod.size_id,
+                                was_removed=True,
+                            ))
+            else:
+                # For unmodified deals, create components normally
+                for comp_data in deal_components_data[deal.id]:
+                    # Calculate component quantity for THIS deal line (component qty × line qty)
+                    component_qty = comp_data[0].quantity * quantity
+
+                    db.add(OrderItemComponent(
+                        order_item_id=order_item.id,
+                        deal_component_id=comp_data[0].id,
+                        product_id=comp_data[0].component_product_id,
+                        product_name=db.get(Product, comp_data[0].component_product_id).name_display,
+                        quantity=component_qty,
+                        size_id=comp_data[0].size_id,
+                    ))
         else:
             # Regular product: merge if PENDING line with same product+size exists
             product = products[product_id]

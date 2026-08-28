@@ -147,6 +147,8 @@ class DealComponentOut(BaseModel):
     product_id is the component's product ID (not the deal's ID).
     product_name is the component product's display name.
     size_name is the component's size name (if applicable).
+    component_price is the unit price in paisa: size's price if size_id is set,
+      otherwise the component product's base price.
     """
     id: int
     product_id: int  # The component product's ID
@@ -154,6 +156,7 @@ class DealComponentOut(BaseModel):
     quantity: int
     size_id: int | None = None
     size_name: str | None = None  # Size display name, if a size is set
+    component_price: int  # paisa: size price (if sized) or product price (if unsized)
 
 class DealCreate(BaseModel):
     """Create a new deal. A deal is a Product with product_type='DEAL'."""
@@ -196,12 +199,26 @@ class TableRename(BaseModel):
     """Rename a table."""
     name: str = Field(max_length=50)
 
+class DealModificationComponent(BaseModel):
+    """A component of a deal as modified by cashier (Phase 11 Part 2)."""
+    product_id: int
+    quantity: int = Field(gt=0)
+    size_id: int | None = Field(default=None)
+    was_removed: bool = Field(default=False)
+
+class DealModifications(BaseModel):
+    """Deal modifications: components as modified, and final price (Phase 11 Part 2)."""
+    components: list[DealModificationComponent] = Field(min_length=1)
+    price: int = Field(gt=0)  # paisa - final price (may differ from standard)
+    standard_price: int = Field(gt=0)  # paisa - deal's standard price at sale time
+
 class OrderItemCreate(BaseModel):
     """Create or add an order item. If product has sizes, size_id is required.
-    If product has no sizes, size_id must be omitted."""
+    If product has no sizes, size_id must be omitted. For deals, deal_modifications may be present."""
     product_id: int
     quantity: int = Field(gt=0)
     size_id: int | None = Field(default=None)  # required for sized products, forbidden for unsized
+    deal_modifications: DealModifications | None = Field(default=None)  # Phase 11 Part 2: modified deal
 
 class OrderCreate(BaseModel):
     """Create a new order. All money values in paisa.

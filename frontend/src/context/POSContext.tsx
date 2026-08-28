@@ -1,16 +1,16 @@
 import {createContext,useCallback,useContext,useMemo,useReducer,type ReactNode} from "react";
-import type {CartItem,Customer,Order,OrderItem,OrderType,PaymentMethod,Product,RestaurantTable} from "../types";
+import type {CartItem,Customer,Order,OrderItem,OrderType,PaymentMethod,Product,RestaurantTable,DealModifications} from "../types";
 import { SettingsContext } from "./SettingsContext";
 import { api } from "../services/api";
 interface State{cart:CartItem[];orderType:OrderType;selectedTable:RestaurantTable|null;discount:number;paymentMethod:PaymentMethod;selectedCustomer:Customer|null;deliveryAddress:string;deliveryChargeText:string;serverId?:number;order?:Order}
-type Action={type:"ADD";product:Product;sizeId?:number;sizeName?:string;sizePrice?:number}|{type:"SET_QTY";productId:number;quantity:number;sizeId?:number}|{type:"REMOVE";productId:number;sizeId?:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]}|{type:"CUSTOMER";value:Customer|null}|{type:"DELIVERY_ADDRESS";value:string}|{type:"DELIVERY_CHARGE";value:string}|{type:"OPEN_ORDER";serverId:number}|{type:"LOAD_ORDER";order:Order};
+type Action={type:"ADD";product:Product;sizeId?:number;sizeName?:string;sizePrice?:number;deal_modifications?:DealModifications}|{type:"SET_QTY";productId:number;quantity:number;sizeId?:number}|{type:"REMOVE";productId:number;sizeId?:number}|{type:"CLEAR"}|{type:"ORDER_TYPE";value:OrderType}|{type:"TABLE";value:RestaurantTable|null}|{type:"DISCOUNT";value:number}|{type:"PAYMENT";value:PaymentMethod}|{type:"SYNC_PRODUCTS";products:Product[]}|{type:"CUSTOMER";value:Customer|null}|{type:"DELIVERY_ADDRESS";value:string}|{type:"DELIVERY_CHARGE";value:string}|{type:"OPEN_ORDER";serverId:number}|{type:"LOAD_ORDER";order:Order};
 const initialState:State={cart:[],orderType:"TAKEAWAY",selectedTable:null,discount:0,paymentMethod:"CASH",selectedCustomer:null,deliveryAddress:"",deliveryChargeText:""};
 function reducer(s:State,a:Action):State{
  switch(a.type){
  // Soft, UI-side stock cap — mirrors the backend's authoritative check (order_service)
  // so a customer can't queue up more than is on hand. The backend still re-validates
  // at order time, since this cart snapshot's stock can go stale between fetches.
- case"ADD":{const isDeal=a.product.product_type==="DEAL";if(!isDeal&&a.product.stock<=0)return s;const e=s.cart.find(i=>i.kind==="local"&&i.product.id===a.product.id&&i.sizeId===a.sizeId);if(e&&e.kind==="local"){if(!isDeal&&e.quantity>=a.product.stock)return s;return{...s,cart:s.cart.map(i=>i.kind==="local"&&i.product.id===a.product.id&&i.sizeId===a.sizeId?{...i,quantity:i.quantity+1}:i)};}return{...s,cart:[...s.cart,{kind:"local",product:a.product,quantity:1,sizeId:a.sizeId,sizeName:a.sizeName,sizePrice:a.sizePrice}]};}
+ case"ADD":{const isDeal=a.product.product_type==="DEAL";if(!isDeal&&a.product.stock<=0)return s;const e=s.cart.find(i=>i.kind==="local"&&i.product.id===a.product.id&&i.sizeId===a.sizeId&&!i.deal_modifications&&!a.deal_modifications);if(e&&e.kind==="local"){if(!isDeal&&e.quantity>=a.product.stock)return s;return{...s,cart:s.cart.map(i=>i.kind==="local"&&i.product.id===a.product.id&&i.sizeId===a.sizeId&&!i.deal_modifications?{...i,quantity:i.quantity+1}:i)};}return{...s,cart:[...s.cart,{kind:"local",product:a.product,quantity:1,sizeId:a.sizeId,sizeName:a.sizeName,sizePrice:a.sizePrice,deal_modifications:a.deal_modifications}]};}
  case"SET_QTY":if(a.quantity<=0)return{...s,cart:s.cart.filter(i=>!(i.kind==="local"&&i.product.id===a.productId&&i.sizeId===a.sizeId))};return{...s,cart:s.cart.map(i=>i.kind==="local"&&i.product.id===a.productId&&i.sizeId===a.sizeId?{...i,quantity:i.product.product_type==="DEAL"?a.quantity:Math.min(a.quantity,i.product.stock)}:i)};
  case"REMOVE":return{...s,cart:s.cart.filter(i=>!(i.kind==="local"&&i.product.id===a.productId&&i.sizeId===a.sizeId))};
  case"CLEAR":return{...initialState,orderType:s.orderType,selectedTable:s.orderType==="DINE_IN"?s.selectedTable:null};
@@ -39,7 +39,7 @@ interface POSContextValue {
   tax: number;
   deliveryCharge: number;
   total: number;
-  addProduct: (product: Product, sizeId?: number, sizeName?: string, sizePrice?: number) => void;
+  addProduct: (product: Product, sizeId?: number, sizeName?: string, sizePrice?: number, deal_modifications?: DealModifications) => void;
   setQty: (productId: number, quantity: number, sizeId?: number) => void;
   removeProduct: (productId: number, sizeId?: number) => void;
   clear: () => void;
@@ -53,7 +53,7 @@ interface POSContextValue {
   setDeliveryCharge: (value: string) => void;
   setQtyOnServerItem: (orderId: number, itemId: number, quantity: number) => Promise<void>;
   removeServerItem: (orderId: number, itemId: number) => Promise<void>;
-  addProductToDineIn: (tableId: number, product: Product, sizeId?: number) => Promise<void>;
+  addProductToDineIn: (tableId: number, product: Product, sizeId?: number, deal_modifications?: DealModifications) => Promise<void>;
   sendBatchAndLoad: (orderId: number) => Promise<void>;
   loadOrder: (order: Order) => void;
   openOrder: (serverId: number) => void;
@@ -64,7 +64,7 @@ export function POSProvider({children}:{children:ReactNode}){
  const settingsContext=useContext(SettingsContext);
  const settings=settingsContext?.settings;
  const[state,dispatch]=useReducer(reducer,initialState);
- const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+(i.kind==="local"?(i.sizePrice??i.product.price):i.price)*i.quantity,0),[state.cart]);
+ const subtotal=useMemo(()=>state.cart.reduce((x,i)=>x+(i.kind==="local"?(i.deal_modifications?.price??i.sizePrice??i.product.price):i.price)*i.quantity,0),[state.cart]);
  const discountAmount=Math.min(state.discount,subtotal);
  const taxable=subtotal-discountAmount;
  const taxRate = state.serverId && state.order
@@ -75,7 +75,7 @@ export function POSProvider({children}:{children:ReactNode}){
  const total=taxable+tax+deliveryChargeAmount;
  const discount=discountAmount;
  const value={state,subtotal,discount,tax,deliveryCharge:deliveryChargeAmount,total,
- addProduct:useCallback((product:Product,sizeId?:number,sizeName?:string,sizePrice?:number)=>dispatch({type:"ADD",product,sizeId,sizeName,sizePrice}),[]),
+ addProduct:useCallback((product:Product,sizeId?:number,sizeName?:string,sizePrice?:number,deal_modifications?:DealModifications)=>dispatch({type:"ADD",product,sizeId,sizeName,sizePrice,deal_modifications}),[]),
  setQty:useCallback((productId:number,quantity:number,sizeId?:number)=>dispatch({type:"SET_QTY",productId,quantity,sizeId}),[]),
  removeProduct:useCallback((productId:number,sizeId?:number)=>dispatch({type:"REMOVE",productId,sizeId}),[]),
  clear:useCallback(()=>dispatch({type:"CLEAR"}),[]),
@@ -89,7 +89,7 @@ export function POSProvider({children}:{children:ReactNode}){
  setDeliveryCharge:useCallback((value:string)=>dispatch({type:"DELIVERY_CHARGE",value}),[]),
  setQtyOnServerItem:useCallback(async(orderId:number,itemId:number,quantity:number)=>{const updated=await api.updatePendingItem(orderId,itemId,{quantity});dispatch({type:"LOAD_ORDER",order:updated});},[]),
  removeServerItem:useCallback(async(orderId:number,itemId:number)=>{const updated=await api.updatePendingItem(orderId,itemId,{quantity:0});dispatch({type:"LOAD_ORDER",order:updated});},[]),
- addProductToDineIn:useCallback(async(tableId:number,product:Product,sizeId?:number)=>{if(!state.serverId){const order=await api.openOrder({table_id:tableId});dispatch({type:"OPEN_ORDER",serverId:order.id});const updated=await api.addItemsToOrder(order.id,{items:[{product_id:product.id,quantity:1,size_id:sizeId}]});dispatch({type:"LOAD_ORDER",order:updated});}else{const updated=await api.addItemsToOrder(state.serverId,{items:[{product_id:product.id,quantity:1,size_id:sizeId}]});dispatch({type:"LOAD_ORDER",order:updated});}},[state.serverId]),
+ addProductToDineIn:useCallback(async(tableId:number,product:Product,sizeId?:number,deal_modifications?:DealModifications)=>{if(!state.serverId){const order=await api.openOrder({table_id:tableId});dispatch({type:"OPEN_ORDER",serverId:order.id});const updated=await api.addItemsToOrder(order.id,{items:[{product_id:product.id,quantity:1,size_id:sizeId,deal_modifications}]});dispatch({type:"LOAD_ORDER",order:updated});}else{const updated=await api.addItemsToOrder(state.serverId,{items:[{product_id:product.id,quantity:1,size_id:sizeId,deal_modifications}]});dispatch({type:"LOAD_ORDER",order:updated});}},[state.serverId]),
  sendBatchAndLoad:useCallback(async(orderId:number)=>{const updated=await api.sendBatchToKitchen(orderId);dispatch({type:"LOAD_ORDER",order:updated});},[]),
  loadOrder:useCallback((order:Order)=>{dispatch({type:"LOAD_ORDER",order});},[]),
  openOrder:useCallback((serverId:number)=>{dispatch({type:"OPEN_ORDER",serverId});},[])};

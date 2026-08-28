@@ -101,6 +101,7 @@ export function PaymentModal({
             product_id: i.kind==="local"?i.product.id:i.productId,
             quantity: i.quantity,
             size_id: i.kind==="local"?i.sizeId:undefined,
+            deal_modifications: i.kind==="local"?i.deal_modifications:undefined,
           })),
 
           discount: discountToSubmit,
