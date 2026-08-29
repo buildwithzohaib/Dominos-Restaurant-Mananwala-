@@ -899,3 +899,42 @@ fastapi.exceptions.ResponseValidationError: 5 validation errors:
 2026-08-29 09:15:58 [INFO] Application startup complete.
 2026-08-29 09:15:58 [INFO] Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 2026-08-29 09:15:58 [INFO] Server is healthy, opening window
+2026-08-29 09:27:53 [INFO] Window closed, shutting down server
+2026-08-29 09:27:54 [INFO] Shutting down
+2026-08-29 09:27:54 [INFO] Waiting for application shutdown.
+2026-08-29 09:27:54 [INFO] Application shutdown complete.
+2026-08-29 09:27:54 [INFO] Finished server process [1540]
+2026-08-29 09:27:54 [INFO] Restaurant POS shut down cleanly
+2026-08-29 09:30:21 [INFO] Starting Restaurant POS server on 127.0.0.1:8000
+2026-08-29 09:30:21 [INFO] App started. Database at head revision: 14e6f7a1...
+2026-08-29 09:30:21 [INFO] Application startup complete.
+2026-08-29 09:30:21 [INFO] Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-08-29 09:30:22 [INFO] Server is healthy, opening window
+2026-08-29 09:43:18 [INFO] Window closed, shutting down server
+2026-08-29 09:43:18 [INFO] Shutting down
+2026-08-29 09:43:18 [INFO] Waiting for application shutdown.
+2026-08-29 09:43:18 [INFO] Application shutdown complete.
+2026-08-29 09:43:18 [INFO] Finished server process [3848]
+2026-08-29 09:43:18 [INFO] Restaurant POS shut down cleanly
+2026-08-29 09:43:31 [INFO] Starting Restaurant POS server on 127.0.0.1:8000
+2026-08-29 09:43:31 [INFO] App started. Database at head revision: 14e6f7a1...
+2026-08-29 09:43:31 [INFO] Application startup complete.
+2026-08-29 09:43:31 [INFO] Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-08-29 09:43:32 [INFO] Server is healthy, opening window
+2026-08-29 09:49:02 [INFO] Window closed, shutting down server
+2026-08-29 09:49:02 [INFO] Shutting down
+2026-08-29 09:49:02 [INFO] Waiting for application shutdown.
+2026-08-29 09:49:02 [INFO] Application shutdown complete.
+2026-08-29 09:49:02 [INFO] Finished server process [4700]
+2026-08-29 09:49:02 [INFO] Restaurant POS shut down cleanly
+2026-08-29 09:49:37 [INFO] Starting Restaurant POS server on 127.0.0.1:8000
+2026-08-29 09:49:37 [INFO] App started. Database at head revision: 14e6f7a1...
+2026-08-29 09:49:37 [INFO] Application startup complete.
+2026-08-29 09:49:37 [INFO] Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+2026-08-29 09:49:38 [INFO] Server is healthy, opening window
+2026-08-29 10:05:42 [INFO] Window closed, shutting down server
+2026-08-29 10:05:42 [INFO] Shutting down
+2026-08-29 10:05:42 [INFO] Waiting for application shutdown.
+2026-08-29 10:05:42 [INFO] Application shutdown complete.
+2026-08-29 10:05:42 [INFO] Finished server process [4332]
+2026-08-29 10:05:42 [INFO] Restaurant POS shut down cleanly

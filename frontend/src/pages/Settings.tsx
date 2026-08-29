@@ -440,7 +440,7 @@ export function Settings() {
             </label>
             <button
               type="button"
-              className="pay-button"
+              className="add-stock-button"
               onClick={handleAddTable}
               disabled={tableLoading || !newTableName.trim()}
             >
@@ -497,7 +497,7 @@ export function Settings() {
                         />
                         <button
                           type="button"
-                          className="pay-button table-item-button-small"
+                          className="add-stock-button table-item-button-small"
                           onClick={() => handleRenameTable(table.id)}
                           disabled={tableLoading}
                         >
